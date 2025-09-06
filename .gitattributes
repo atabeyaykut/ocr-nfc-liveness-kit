@@ -1,0 +1,2 @@
+*.onnx filter=lfs diff=lfs merge=lfs -text
+*.onnx.jar filter=lfs diff=lfs merge=lfs -text
