@@ -1,0 +1,26 @@
+// OCR Module Type Definitions
+
+export const OCR_STATUS = {
+  IDLE: 'idle',
+  INITIALIZING: 'initializing',
+  READY: 'ready',
+  CAPTURING: 'capturing',
+  PROCESSING: 'processing',
+  SUCCESS: 'success',
+  ERROR: 'error'
+};
+
+export const OCR_ERROR_CODES = {
+  CAMERA_PERMISSION_DENIED: 'CAMERA_PERMISSION_DENIED',
+  CAMERA_NOT_AVAILABLE: 'CAMERA_NOT_AVAILABLE',
+  IMAGE_CAPTURE_FAILED: 'IMAGE_CAPTURE_FAILED',
+  TEXT_EXTRACTION_FAILED: 'TEXT_EXTRACTION_FAILED',
+  INVALID_IMAGE_FORMAT: 'INVALID_IMAGE_FORMAT'
+};
+
+export const OCR_CONFIG = {
+  DEFAULT_LANGUAGE: 'en',
+  SUPPORTED_LANGUAGES: ['en', 'tr', 'de', 'fr', 'es'],
+  IMAGE_QUALITY: 0.8,
+  MAX_IMAGE_SIZE: 1920
+};
