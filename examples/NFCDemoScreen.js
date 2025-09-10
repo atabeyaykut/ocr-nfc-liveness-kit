@@ -205,6 +205,108 @@ const NFCDemoScreen = () => {
     addLog('NFC sıfırlandı', 'info');
   };
 
+  const handlePerformanceTest = async () => {
+    try {
+      addLog('🚀 NFC Performans Testi başlatılıyor...', 'info');
+      
+      // Initialize NFC if not already done
+      if (nfcStatus === 'idle') {
+        await nfcReader.startNFC();
+      }
+      
+      // Run multiple performance tests
+      const testResults = [];
+      const testCount = 3;
+      
+      for (let i = 1; i <= testCount; i++) {
+        addLog(`📊 Test ${i}/${testCount} çalıştırılıyor...`, 'info');
+        
+        const startTime = Date.now();
+        try {
+          const result = await nfcReader.readNFCData({ 
+            useRealNFC: false, // Use mock data for consistent testing
+            timeout: 5000 
+          });
+          
+          const duration = Date.now() - startTime;
+          const dataSize = JSON.stringify(result).length;
+          
+          testResults.push({
+            test: i,
+            duration,
+            dataSize,
+            success: true,
+            fieldsCount: Object.keys(result).length
+          });
+          
+          addLog(`✅ Test ${i} tamamlandı: ${duration}ms, ${dataSize} bytes`, 'success');
+          
+        } catch (error) {
+          const duration = Date.now() - startTime;
+          testResults.push({
+            test: i,
+            duration,
+            success: false,
+            error: error.message
+          });
+          
+          addLog(`❌ Test ${i} başarısız: ${error.message}`, 'error');
+        }
+        
+        // Small delay between tests
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      // Get performance logs from NFC Reader
+      const performanceLogs = nfcReader.getPerformanceLogs();
+      
+      // Calculate statistics
+      const successfulTests = testResults.filter(t => t.success);
+      const avgDuration = successfulTests.length > 0 
+        ? successfulTests.reduce((sum, t) => sum + t.duration, 0) / successfulTests.length 
+        : 0;
+      
+      const avgDataSize = successfulTests.length > 0
+        ? successfulTests.reduce((sum, t) => sum + t.dataSize, 0) / successfulTests.length
+        : 0;
+      
+      // Display performance results
+      addLog('📈 Performans Testi Sonuçları:', 'info');
+      addLog(`✅ Başarılı: ${successfulTests.length}/${testCount}`, 'success');
+      addLog(`⏱️ Ortalama Süre: ${Math.round(avgDuration)}ms`, 'info');
+      addLog(`📦 Ortalama Veri Boyutu: ${Math.round(avgDataSize)} bytes`, 'info');
+      addLog(`📊 Performans Log Sayısı: ${performanceLogs.length}`, 'info');
+      
+      if (performanceLogs.length > 0) {
+        const latestLog = performanceLogs[performanceLogs.length - 1];
+        addLog(`🔍 Son İşlem: ${latestLog.operation} - ${latestLog.duration}ms`, 'info');
+      }
+      
+      // Show detailed alert
+      Alert.alert(
+        '🚀 Performans Testi Tamamlandı',
+        `Başarılı Testler: ${successfulTests.length}/${testCount}\n` +
+        `Ortalama Süre: ${Math.round(avgDuration)}ms\n` +
+        `Ortalama Veri: ${Math.round(avgDataSize)} bytes\n` +
+        `Performans Logları: ${performanceLogs.length} kayıt`,
+        [
+          {
+            text: 'Logları Temizle',
+            onPress: () => {
+              nfcReader.clearPerformanceLogs();
+              addLog('🧹 Performans logları temizlendi', 'info');
+            }
+          },
+          { text: 'Tamam', style: 'default' }
+        ]
+      );
+      
+    } catch (error) {
+      addLog(`❌ Performans testi hatası: ${error.message}`, 'error');
+      Alert.alert('Hata', `Performans testi sırasında hata oluştu:\n${error.message}`);
+    }
+  };
+
   const renderNFCResult = () => {
     if (!nfcData) return null;
 
@@ -394,10 +496,17 @@ const NFCDemoScreen = () => {
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.button, styles.resetButton]} 
+            style={[styles.button, styles.resetButton]}
             onPress={handleReset}
           >
-            <Text style={styles.buttonText}>🔄 Sıfırla</Text>
+            <Text style={styles.buttonText}>Sıfırla</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.performanceButton]}
+            onPress={handlePerformanceTest}
+          >
+            <Text style={styles.buttonText}>NFC Performans Testi</Text>
           </TouchableOpacity>
         </View>
 
@@ -534,6 +643,9 @@ const styles = StyleSheet.create({
   },
   resetButton: {
     backgroundColor: '#9e9e9e',
+  },
+  performanceButton: {
+    backgroundColor: '#673ab7',
   },
   disabledButton: {
     opacity: 0.6,
