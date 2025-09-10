@@ -1,8 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.ocrmobilesdk">
 
-    <!-- Camera permissions for OCR functionality -->
+    <!-- Camera permissions for OCR and Liveness Detection -->
     <uses-permission android:name="android.permission.CAMERA" />
+    
+    <!-- Front camera feature for liveness detection -->
+    <uses-feature
+        android:name="android.hardware.camera.front"
+        android:required="false" />
     
     <!-- Storage permissions for image processing -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
@@ -16,6 +21,14 @@
     
     <!-- Vibration for user feedback -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    
+    <!-- NFC permissions for Turkish ID card reading -->
+    <uses-permission android:name="android.permission.NFC" />
+    
+    <!-- NFC feature requirement -->
+    <uses-feature
+        android:name="android.hardware.nfc"
+        android:required="false" />
     
     <!-- Required camera features -->
     <uses-feature
