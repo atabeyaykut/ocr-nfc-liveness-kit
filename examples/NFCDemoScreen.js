@@ -22,26 +22,99 @@ import { Logger } from '../utils/logger';
 const { width, height } = Dimensions.get('window');
 
 const NFCDemoScreen = () => {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [nfcResult, setNfcResult] = useState(null);
-  const [processingStatus, setProcessingStatus] = useState('');
+  const [nfcData, setNfcData] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [isReading, setIsReading] = useState(false);
+  const [nfcStatus, setNfcStatus] = useState('idle');
+  const [progress, setProgress] = useState('');
+  const [useRealNFC, setUseRealNFC] = useState(true); // Default to real NFC for Day 5
+  const [errorCount, setErrorCount] = useState(0);
+  const [lastError, setLastError] = useState(null);
   const [isNFCSupported, setIsNFCSupported] = useState(null);
   
   const nfcReaderRef = useRef(null);
 
   // Initialize NFC Reader with callbacks
-  const initializeNFC = () => {
-    if (!nfcReaderRef.current) {
-      nfcReaderRef.current = new NFCReader({
-        onSuccess: handleNFCSuccess,
-        onError: handleNFCError,
-        onStatusChange: handleStatusChange,
-        onProgress: handleProgress
-      });
-    }
-    return nfcReaderRef.current;
-  };
+  const nfcReader = useMemo(() => {
+    const reader = new NFCReader();
+    
+    reader.onSuccess = (data) => {
+      const readMethod = data.verification?.readMethod || 'UNKNOWN';
+      addLog(`✅ NFC okuma başarılı! (${readMethod})`, 'success');
+      setNfcData(data);
+      setIsReading(false);
+      setErrorCount(0); // Reset error count on success
+      setLastError(null);
+    };
+    
+    reader.onError = (error) => {
+      const newErrorCount = errorCount + 1;
+      setErrorCount(newErrorCount);
+      setLastError(error.message);
+      
+      addLog(`❌ Hata (${newErrorCount}): ${error.message}`, 'error');
+      setIsReading(false);
+      
+      // Enhanced error handling with suggestions
+      let errorTitle = 'NFC Hatası';
+      let errorMessage = error.message;
+      let suggestions = [];
+      
+      if (error.message.includes('Timeout')) {
+        errorTitle = 'Zaman Aşımı';
+        suggestions = [
+          '• Kimliği telefona daha yakın tutun',
+          '• Kimliği sabit pozisyonda bekletin',
+          '• NFC alanının ortasına yerleştirin'
+        ];
+      } else if (error.message.includes('Connection lost')) {
+        errorTitle = 'Bağlantı Kesildi';
+        suggestions = [
+          '• Kimliği hareket ettirmeyin',
+          '• Telefonu sabit tutun',
+          '• Metal nesnelerden uzak durun'
+        ];
+      } else if (error.message.includes('okunamadı')) {
+        errorTitle = 'Okuma Hatası';
+        suggestions = [
+          '• Kimliği doğru yöne çevirin',
+          '• Telefon kasasını çıkarın',
+          '• Farklı açıda deneyin'
+        ];
+      }
+      
+      const fullMessage = suggestions.length > 0 
+        ? `${errorMessage}\n\nÖneriler:\n${suggestions.join('\n')}`
+        : errorMessage;
+      
+      Alert.alert(errorTitle, fullMessage, [
+        { text: 'Tamam', style: 'default' },
+        { text: 'Tekrar Dene', onPress: () => handleNFCRead(), style: 'default' }
+      ]);
+    };
+    
+    reader.onStatusChange = (status) => {
+      setNfcStatus(status);
+      const statusMessages = {
+        'idle': '⚪ Beklemede',
+        'initializing': '🔄 Başlatılıyor',
+        'ready': '🟢 Hazır',
+        'scanning': '🔍 Taranıyor',
+        'reading': '📖 Okunuyor',
+        'processing': '⚙️ İşleniyor',
+        'success': '✅ Başarılı',
+        'error': '❌ Hatalı'
+      };
+      addLog(`📊 ${statusMessages[status] || status}`, 'info');
+    };
+    
+    reader.onProgress = (message) => {
+      setProgress(message);
+      addLog(`🔄 ${message}`, 'info');
+    };
+    
+    return reader;
+  }, [errorCount]);  // Include errorCount in dependency
 
   const addLog = (message, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString('tr-TR');
@@ -54,72 +127,43 @@ const NFCDemoScreen = () => {
     setLogs(prev => [newLog, ...prev].slice(0, 50)); // Keep last 50 logs
   };
 
-  const handleNFCSuccess = (result) => {
-    addLog('NFC okuma başarıyla tamamlandı', 'success');
-    setNfcResult(result);
-    setIsProcessing(false);
-    
-    Alert.alert(
-      'NFC Başarılı! 🎉',
-      `Kart okundu: ${result.name} ${result.surname}\nT.C. No: ${result.idNumber}`,
-      [{ text: 'Tamam', style: 'default' }]
-    );
-  };
-
-  const handleNFCError = (error) => {
-    addLog(`NFC hatası: ${error.message}`, 'error');
-    setIsProcessing(false);
-    
-    Alert.alert(
-      'NFC Hatası ❌',
-      error.message,
-      [
-        { text: 'Tekrar Dene', onPress: startNFCReading },
-        { text: 'İptal', style: 'cancel' }
-      ]
-    );
-  };
-
-  const handleStatusChange = (newStatus, oldStatus) => {
-    setProcessingStatus(newStatus);
-    addLog(`Durum değişti: ${oldStatus} → ${newStatus}`, 'info');
-  };
-
-  const handleProgress = (message) => {
-    addLog(`İlerleme: ${message}`, 'progress');
-  };
-
-  const startNFCReading = async () => {
+  // Handle NFC Read with enhanced error handling
+  const handleNFCRead = async () => {
     try {
-      setIsProcessing(true);
-      setNfcResult(null);
-      addLog('NFC okuma işlemi başlatılıyor...', 'info');
-
-      const nfcReader = initializeNFC();
+      setIsReading(true);
+      setNfcData(null);
+      setProgress('');
       
-      // Initialize NFC
-      const isInitialized = await nfcReader.startNFC();
-      if (!isInitialized) {
-        return; // Error handled by callback
+      const readType = useRealNFC ? 'Gerçek NFC' : 'Mock NFC';
+      addLog(`🚀 ${readType} okuma başlatıldı...`, 'info');
+      
+      // Start NFC if not already started
+      const isStarted = await nfcReader.startNFC();
+      if (!isStarted) {
+        throw new Error('NFC başlatılamadı. Cihazınızda NFC özelliği bulunmuyor veya kapalı.');
       }
-
-      setIsNFCSupported(true);
-      addLog('NFC başarıyla başlatıldı', 'success');
-
-      // Start reading NFC data
-      await nfcReader.readNFCData();
-
+      
+      // Read NFC data with real/mock option
+      await nfcReader.readNFCData({ 
+        useRealNFC: useRealNFC,
+        timeout: 10000, // 10 second timeout as per Day 5 requirement
+        alertMessage: 'Lütfen kimliğinizi telefonun arkasına yaklaştırın ve sabit tutun.'
+      });
+      
     } catch (error) {
-      handleNFCError(error);
+      addLog(`❌ NFC okuma hatası: ${error.message}`, 'error');
+      setIsReading(false);
+      
+      // Don't show alert here as it's handled in onError callback
+      console.error('NFC Read Error:', error);
     }
   };
 
-  const testNFCSupport = async () => {
+  const handleNFCSupportCheck = async () => {
     try {
-      setIsProcessing(true);
+      setIsNFCSupported(null);
       addLog('NFC desteği kontrol ediliyor...', 'info');
 
-      const nfcReader = initializeNFC();
       const isSupported = await nfcReader.startNFC();
       
       setIsNFCSupported(isSupported);
@@ -131,112 +175,124 @@ const NFCDemoScreen = () => {
         addLog('❌ NFC desteklenmiyor veya etkin değil', 'error');
       }
       
-      setIsProcessing(false);
-
     } catch (error) {
-      handleNFCError(error);
+      addLog(`NFC desteği kontrol hatası: ${error.message}`, 'error');
     }
   };
 
-  const stopNFC = async () => {
+  const toggleNFCMode = () => {
+    setUseRealNFC(!useRealNFC);
+  };
+
+  const handleStopNFC = async () => {
     try {
-      if (nfcReaderRef.current) {
-        await nfcReaderRef.current.stopNFC();
-        addLog('NFC işlemleri durduruldu', 'info');
-      }
-      setIsProcessing(false);
-      setProcessingStatus('');
+      await nfcReader.stopNFC();
+      addLog('NFC işlemleri durduruldu', 'info');
     } catch (error) {
       addLog(`NFC durdurma hatası: ${error.message}`, 'error');
     }
   };
 
-  const resetNFC = () => {
-    if (nfcReaderRef.current) {
-      nfcReaderRef.current.reset();
-    }
-    setNfcResult(null);
-    setIsProcessing(false);
-    setProcessingStatus('');
+  const handleReset = () => {
+    setNfcData(null);
+    setIsReading(false);
+    setNfcStatus('idle');
+    setProgress('');
+    setErrorCount(0);
+    setLastError(null);
     setIsNFCSupported(null);
     setLogs([]);
     addLog('NFC sıfırlandı', 'info');
   };
 
   const renderNFCResult = () => {
-    if (!nfcResult) return null;
+    if (!nfcData) return null;
 
     return (
       <View style={styles.resultContainer}>
         <Text style={styles.resultTitle}>📱 NFC Okuma Sonucu</Text>
         
+        {/* Status and Progress */}
+        <View style={styles.statusContainer}>
+          <Text style={styles.statusTitle}>📊 Durum ve İlerleme</Text>
+          <Text style={styles.statusText}>Durum: {nfcStatus}</Text>
+          <Text style={styles.statusText}>Mod: {useRealNFC ? 'Gerçek NFC' : 'Mock NFC'}</Text>
+          {errorCount > 0 && (
+            <Text style={styles.errorCountText}>Hata Sayısı: {errorCount}</Text>
+          )}
+          {progress ? <Text style={styles.progressText}>{progress}</Text> : null}
+          {lastError && (
+            <Text style={styles.lastErrorText}>Son Hata: {lastError}</Text>
+          )}
+        </View>
+
         {/* Personal Information */}
         <View style={styles.personalInfoContainer}>
           <Text style={styles.sectionTitle}>👤 Kişisel Bilgiler:</Text>
           <View style={styles.fieldRow}>
             <Text style={styles.fieldKey}>Ad:</Text>
-            <Text style={styles.fieldValue}>{nfcResult.name}</Text>
+            <Text style={styles.fieldValue}>{nfcData.name}</Text>
           </View>
           <View style={styles.fieldRow}>
             <Text style={styles.fieldKey}>Soyad:</Text>
-            <Text style={styles.fieldValue}>{nfcResult.surname}</Text>
+            <Text style={styles.fieldValue}>{nfcData.surname}</Text>
           </View>
           <View style={styles.fieldRow}>
             <Text style={styles.fieldKey}>T.C. No:</Text>
-            <Text style={styles.fieldValue}>{nfcResult.idNumber}</Text>
+            <Text style={styles.fieldValue}>{nfcData.idNumber}</Text>
           </View>
           <View style={styles.fieldRow}>
             <Text style={styles.fieldKey}>Doğum Tarihi:</Text>
-            <Text style={styles.fieldValue}>{nfcResult.birthDate}</Text>
+            <Text style={styles.fieldValue}>{nfcData.birthDate}</Text>
           </View>
           <View style={styles.fieldRow}>
             <Text style={styles.fieldKey}>Doğum Yeri:</Text>
-            <Text style={styles.fieldValue}>{nfcResult.birthPlace}</Text>
+            <Text style={styles.fieldValue}>{nfcData.birthPlace}</Text>
           </View>
         </View>
 
         {/* NFC Technical Data */}
-        {nfcResult.nfcData && (
+        {nfcData.nfcData && (
           <View style={styles.technicalContainer}>
             <Text style={styles.sectionTitle}>🔧 NFC Teknik Bilgiler:</Text>
             <View style={styles.fieldRow}>
               <Text style={styles.fieldKey}>UID:</Text>
-              <Text style={styles.fieldValue}>{nfcResult.nfcData.uid}</Text>
+              <Text style={styles.fieldValue}>{nfcData.nfcData.uid}</Text>
             </View>
             <View style={styles.fieldRow}>
               <Text style={styles.fieldKey}>Teknoloji:</Text>
-              <Text style={styles.fieldValue}>{nfcResult.nfcData.technology}</Text>
+              <Text style={styles.fieldValue}>{nfcData.nfcData.technology}</Text>
             </View>
             <View style={styles.fieldRow}>
               <Text style={styles.fieldKey}>Sinyal Gücü:</Text>
-              <Text style={styles.fieldValue}>{nfcResult.nfcData.signalStrength}%</Text>
+              <Text style={styles.fieldValue}>{nfcData.nfcData.signalStrength}%</Text>
             </View>
             <View style={styles.fieldRow}>
               <Text style={styles.fieldKey}>Okuma Zamanı:</Text>
               <Text style={styles.fieldValue}>
-                {new Date(nfcResult.nfcData.readTime).toLocaleString('tr-TR')}
+                {new Date(nfcData.nfcData.readTime).toLocaleString('tr-TR')}
               </Text>
             </View>
           </View>
         )}
 
         {/* Verification Status */}
-        {nfcResult.verification && (
+        {nfcData.verification && (
           <View style={styles.verificationContainer}>
             <Text style={styles.sectionTitle}>✅ Doğrulama Durumu:</Text>
             <View style={styles.fieldRow}>
               <Text style={styles.fieldKey}>Geçerli:</Text>
               <Text style={[styles.fieldValue, styles.validStatus]}>
-                {nfcResult.verification.isValid ? '✅ Geçerli' : '❌ Geçersiz'}
+                {nfcData.verification.isValid ? '✅ Geçerli' : '❌ Geçersiz'}
               </Text>
             </View>
             <View style={styles.fieldRow}>
               <Text style={styles.fieldKey}>Checksum:</Text>
-              <Text style={styles.fieldValue}>{nfcResult.verification.checksum}</Text>
+              <Text style={styles.fieldValue}>{nfcData.verification.checksum}</Text>
             </View>
             <View style={styles.fieldRow}>
               <Text style={styles.fieldKey}>Dijital İmza:</Text>
-              <Text style={styles.fieldValue}>{nfcResult.verification.digitalSignature}</Text>
+              <Text style={styles.fieldValue}>{nfcData.verification.digitalSignature}</Text>
             </View>
           </View>
         )}
@@ -246,7 +302,7 @@ const NFCDemoScreen = () => {
           <Text style={styles.jsonTitle}>🔧 Ham JSON Verisi:</Text>
           <ScrollView style={styles.jsonScroll} nestedScrollEnabled>
             <Text style={styles.jsonText}>
-              {JSON.stringify(nfcResult, null, 2)}
+              {JSON.stringify(nfcData, null, 2)}
             </Text>
           </ScrollView>
         </View>
@@ -296,44 +352,50 @@ const NFCDemoScreen = () => {
         {renderSupportStatus()}
 
         {/* Status Display */}
-        {processingStatus && (
+        {nfcStatus && (
           <View style={styles.statusContainer}>
-            <Text style={styles.statusText}>Durum: {processingStatus}</Text>
+            <Text style={styles.statusText}>Durum: {nfcStatus}</Text>
           </View>
         )}
 
         {/* Action Buttons */}
-        <View style={styles.buttonsContainer}>
-          <TouchableOpacity
-            style={[styles.button, styles.primaryButton, isProcessing && styles.disabledButton]}
-            onPress={startNFCReading}
-            disabled={isProcessing}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity 
+            style={[styles.button, styles.primaryButton, isReading && styles.disabledButton]} 
+            onPress={handleNFCRead}
+            disabled={isReading}
           >
-            {isProcessing ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.buttonText}>📱 NFC Oku</Text>
-            )}
+            <Text style={styles.buttonText}>
+              {isReading ? '⏳ Okunuyor...' : `📱 NFC Oku (${useRealNFC ? 'Gerçek' : 'Mock'})`}
+            </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton, isProcessing && styles.disabledButton]}
-            onPress={testNFCSupport}
-            disabled={isProcessing}
+          <TouchableOpacity 
+            style={[styles.button, styles.secondaryButton]} 
+            onPress={handleNFCSupportCheck}
           >
             <Text style={styles.buttonText}>🔍 NFC Desteği Kontrol Et</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.button, styles.warningButton]}
-            onPress={stopNFC}
+          <TouchableOpacity 
+            style={[styles.button, useRealNFC ? styles.successButton : styles.infoButton]} 
+            onPress={toggleNFCMode}
+          >
+            <Text style={styles.buttonText}>
+              {useRealNFC ? '🔄 Mock Moda Geç' : '🔄 Gerçek NFC Moda Geç'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.button, styles.warningButton]} 
+            onPress={handleStopNFC}
           >
             <Text style={styles.buttonText}>⏹️ NFC Durdur</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.button, styles.resetButton]}
-            onPress={resetNFC}
+          <TouchableOpacity 
+            style={[styles.button, styles.resetButton]} 
+            onPress={handleReset}
           >
             <Text style={styles.buttonText}>🔄 Sıfırla</Text>
           </TouchableOpacity>
@@ -411,12 +473,36 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#2196f3',
   },
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
   statusText: {
     fontSize: 14,
     color: '#1976d2',
     fontWeight: '500',
   },
-  buttonsContainer: {
+  progressText: {
+    fontSize: 14,
+    color: '#007bff',
+    fontStyle: 'italic',
+    marginTop: 5,
+  },
+  errorCountText: {
+    fontSize: 14,
+    color: '#dc3545',
+    fontWeight: 'bold',
+    marginTop: 5,
+  },
+  lastErrorText: {
+    fontSize: 12,
+    color: '#6c757d',
+    fontStyle: 'italic',
+    marginTop: 5,
+  },
+  buttonContainer: {
     marginBottom: 24,
   },
   button: {
@@ -436,6 +522,12 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     backgroundColor: '#4caf50',
+  },
+  successButton: {
+    backgroundColor: '#28a745',
+  },
+  infoButton: {
+    backgroundColor: '#17a2b8',
   },
   warningButton: {
     backgroundColor: '#ff9800',
