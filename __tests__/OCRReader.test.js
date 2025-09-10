@@ -6,6 +6,7 @@ import { OCR_STATUS, OCR_ERROR_CODES } from '../modules/ocr/types';
 jest.mock('../utils/logger');
 jest.mock('../utils/permissions');
 jest.mock('../utils/imageProcessor');
+jest.mock('react-native-text-recognition');
 
 describe('OCRReader', () => {
   let ocrReader;
@@ -105,28 +106,113 @@ describe('OCRReader', () => {
   describe('extractText', () => {
     beforeEach(async () => {
       const PermissionManager = require('../utils/permissions').default;
+      const TextRecognition = require('react-native-text-recognition').default;
+      const ImageProcessor = require('../utils/imageProcessor').ImageProcessor;
+      
       PermissionManager.requestCameraPermission.mockResolvedValue(true);
       PermissionManager.requestStoragePermission.mockResolvedValue(true);
+      
+      // Mock TextRecognition
+      TextRecognition.recognize.mockResolvedValue({
+        text: 'TÜRKIYE CUMHURIYETI KIMLIK KARTI\nAD: MEHMET\nSOYAD: YILMAZ\nT.C. KIMLIK NO: 12345678901',
+        blocks: [
+          {
+            text: 'TÜRKIYE CUMHURIYETI KIMLIK KARTI',
+            confidence: 0.95,
+            boundingBox: { x: 10, y: 10, width: 300, height: 30 }
+          },
+          {
+            text: 'AD: MEHMET',
+            confidence: 0.92,
+            boundingBox: { x: 10, y: 50, width: 150, height: 25 }
+          },
+          {
+            text: 'SOYAD: YILMAZ',
+            confidence: 0.90,
+            boundingBox: { x: 10, y: 80, width: 160, height: 25 }
+          },
+          {
+            text: 'T.C. KIMLIK NO: 12345678901',
+            confidence: 0.88,
+            boundingBox: { x: 10, y: 110, width: 250, height: 25 }
+          }
+        ]
+      });
+      
+      // Mock ImageProcessor
+      ImageProcessor.enhanceImage.mockResolvedValue('file:///test/enhanced_image.jpg');
+      
       await ocrReader.startOCR();
     });
 
-    test('should extract text successfully', async () => {
+    test('should extract text successfully with real OCR integration', async () => {
       const mockImageUri = 'file:///test/image.jpg';
       
       const result = await ocrReader.extractText(mockImageUri);
 
       expect(result).toBeDefined();
-      expect(result.text).toBeDefined();
+      expect(result.text).toContain('TÜRKIYE CUMHURIYETI');
       expect(result.confidence).toBeGreaterThan(0);
       expect(result.blocks).toBeDefined();
       expect(Array.isArray(result.blocks)).toBe(true);
+      expect(result.blocks.length).toBe(4);
       expect(ocrReader.getStatus()).toBe(OCR_STATUS.SUCCESS);
     });
 
-    test('should use current image when no imageUri provided', async () => {
-      // First capture an image
-      await ocrReader.captureImage();
+    test('should enhance image before OCR processing', async () => {
+      const ImageProcessor = require('../utils/imageProcessor').ImageProcessor;
+      const mockImageUri = 'file:///test/image.jpg';
       
+      await ocrReader.extractText(mockImageUri, { enhanceImage: true });
+      
+      expect(ImageProcessor.enhanceImage).toHaveBeenCalledWith(mockImageUri);
+    });
+
+    test('should filter results by confidence threshold', async () => {
+      const mockImageUri = 'file:///test/image.jpg';
+      const options = { confidence: 0.93 };
+      
+      const result = await ocrReader.extractText(mockImageUri, options);
+      
+      // Only blocks with confidence >= 0.93 should remain
+      expect(result.blocks.length).toBe(1); // Only first block has 0.95 confidence
+      expect(result.blocks[0].confidence).toBeGreaterThanOrEqual(0.93);
+    });
+
+    test('should call success callback when provided', async () => {
+      const onSuccess = jest.fn();
+      const ocrReaderWithCallback = new OCRReader({ onSuccess });
+      
+      const PermissionManager = require('../utils/permissions').default;
+      PermissionManager.requestCameraPermission.mockResolvedValue(true);
+      PermissionManager.requestStoragePermission.mockResolvedValue(true);
+      
+      await ocrReaderWithCallback.startOCR();
+      await ocrReaderWithCallback.extractText('file:///test/image.jpg');
+      
+      expect(onSuccess).toHaveBeenCalled();
+    });
+
+    test('should call error callback on failure', async () => {
+      const onError = jest.fn();
+      const ocrReaderWithCallback = new OCRReader({ onError });
+      
+      // Mock TextRecognition to throw error
+      const TextRecognition = require('react-native-text-recognition').default;
+      TextRecognition.recognize.mockRejectedValue(new Error('OCR processing failed'));
+      
+      const PermissionManager = require('../utils/permissions').default;
+      PermissionManager.requestCameraPermission.mockResolvedValue(true);
+      PermissionManager.requestStoragePermission.mockResolvedValue(true);
+      
+      await ocrReaderWithCallback.startOCR();
+      
+      await expect(ocrReaderWithCallback.extractText('file:///test/image.jpg')).rejects.toThrow();
+      expect(onError).toHaveBeenCalled();
+    });
+
+    test('should use current image when no imageUri provided', async () => {
+      await ocrReader.captureImage();
       const result = await ocrReader.extractText();
       expect(result).toBeDefined();
     });
@@ -134,16 +220,37 @@ describe('OCRReader', () => {
     test('should throw error when no image available', async () => {
       await expect(ocrReader.extractText()).rejects.toThrow('No image available for text extraction');
     });
-
-    test('should use custom OCR options', async () => {
-      const mockImageUri = 'file:///test/image.jpg';
-      const options = {
-        language: 'tr',
-        confidence: 0.8
-      };
-
-      const result = await ocrReader.extractText(mockImageUri, options);
-      expect(result.language).toBe('tr');
+  });
+  
+  describe('extractField', () => {
+    test('should extract Turkish ID number correctly', () => {
+      const text = 'T.C. KIMLIK NO: 12345678901 AD: MEHMET';
+      const tcNo = ocrReader.extractField(text, 'tc_no');
+      expect(tcNo).toBe('12345678901');
+    });
+    
+    test('should extract name correctly', () => {
+      const text = 'AD: MEHMET SOYAD: YILMAZ';
+      const name = ocrReader.extractField(text, 'name');
+      expect(name).toBe('MEHMET');
+    });
+    
+    test('should extract surname correctly', () => {
+      const text = 'AD: MEHMET SOYAD: YILMAZ';
+      const surname = ocrReader.extractField(text, 'surname');
+      expect(surname).toBe('YILMAZ');
+    });
+    
+    test('should return null for unknown field type', () => {
+      const text = 'Some random text';
+      const result = ocrReader.extractField(text, 'unknown_field');
+      expect(result).toBeNull();
+    });
+    
+    test('should return null when field not found', () => {
+      const text = 'Some text without ID number';
+      const tcNo = ocrReader.extractField(text, 'tc_no');
+      expect(tcNo).toBeNull();
     });
   });
 
