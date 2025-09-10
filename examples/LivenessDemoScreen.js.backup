@@ -1,0 +1,860 @@
+/**
+ * Liveness Demo Screen - Day 9 Real-time Face Detection Demo
+ * Canlılık Testi demo ekranı - real-time face tracking with camera feed
+ */
+
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  SafeAreaView,
+  Dimensions
+} from 'react-native';
+import { Camera, useCameraDevices } from 'react-native-vision-camera';
+
+import LivenessDetector, { LIVENESS_STATUS, LIVENESS_INSTRUCTIONS } from '../modules/liveness/LivenessDetector';
+import { getRandomCommand, getAvailableCommandTypes, generateCommandSequence } from '../modules/liveness/commands';
+import { validateResponse } from '../modules/liveness/validator';
+import Logger from '../utils/logger';
+
+const { width, height } = Dimensions.get('window');
+
+const LivenessDemoScreen = () => {
+  const [livenessData, setLivenessData] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [livenessStatus, setLivenessStatus] = useState('idle');
+  const [progress, setProgress] = useState('');
+  const [currentInstruction, setCurrentInstruction] = useState(null);
+  const [capturedImages, setCapturedImages] = useState(0);
+  const [testResults, setTestResults] = useState(null);
+  const [currentCommand, setCurrentCommand] = useState(null);
+  const [validationResult, setValidationResult] = useState(null);
+  const [commandSequence, setCommandSequence] = useState([]);
+  const [difficulty, setDifficulty] = useState('easy');
+  
+  // Day 9: Real-time camera and face detection states
+  const [cameraPermission, setCameraPermission] = useState(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [realTimeMode, setRealTimeMode] = useState(true);
+  const [faceDetectionState, setFaceDetectionState] = useState(null);
+  const [motionDetected, setMotionDetected] = useState(null);
+  
+  const livenessDetectorRef = useRef(null);
+  const cameraRef = useRef(null);
+  const devices = useCameraDevices();
+
+  // Day 9: Camera permission check
+  useEffect(() => {
+    checkCameraPermission();
+  }, []);
+
+  const checkCameraPermission = async () => {
+    try {
+      const permission = await Camera.getCameraPermissionStatus();
+      setCameraPermission(permission);
+      
+      if (permission !== 'authorized') {
+        const newPermission = await Camera.requestCameraPermission();
+        setCameraPermission(newPermission);
+      }
+    } catch (error) {
+      addLog(`❌ Kamera izni hatası: ${error.message}`, 'error');
+    }
+  };
+
+  // Initialize Liveness Detector with callbacks (Day 9 Enhanced)
+  const livenessDetector = useMemo(() => {
+    const detector = new LivenessDetector({ realTimeMode });
+    
+    detector.onSuccess = (data) => {
+      addLog(`✅ Canlılık testi başarılı! (${data.realTimeMode ? 'Gerçek Zamanlı' : 'Mock'})`, 'success');
+      setLivenessData(data);
+      setIsProcessing(false);
+      setTestResults(data);
+      setShowCamera(false);
+    };
+    
+    detector.onError = (error) => {
+      addLog(`❌ Canlılık testi hatası: ${error.message}`, 'error');
+      setIsProcessing(false);
+      setShowCamera(false);
+      
+      Alert.alert(
+        'Canlılık Testi Hatası',
+        error.message,
+        [
+          { text: 'Tekrar Dene', onPress: handleLivenessTest },
+          { text: 'İptal', style: 'cancel' }
+        ]
+      );
+    };
+    
+    detector.onStatusChange = (newStatus, oldStatus) => {
+      setLivenessStatus(newStatus);
+      addLog(`📊 Durum değişti: ${oldStatus} → ${newStatus}`, 'info');
+    };
+    
+    detector.onProgress = (message) => {
+      setProgress(message);
+      addLog(`⏳ ${message}`, 'progress');
+    };
+    
+    detector.onInstructionGiven = (data) => {
+      addLog(`📋 Talimat: ${data.message} ${data.realTimeMode ? '(Gerçek Zamanlı)' : '(Mock)'}`, 'instruction');
+      setCurrentInstruction(data.instruction);
+      setCurrentCommand(data.command);
+    };
+    
+    detector.onCaptureComplete = (data) => {
+      setCapturedImages(data.imageCount || 0);
+      addLog(`📸 Görüntü yakalandı: ${data.imageCount || 0}`, 'capture');
+    };
+    
+    // Day 9: Motion detection callback
+    detector.onMotionDetected = (motionData) => {
+      setMotionDetected(motionData);
+      addLog(`🎯 Hareket algılandı: ${motionData.motionType} (Güven: ${motionData.confidence.overall.toFixed(2)})`, 'motion');
+    };
+    
+    livenessDetectorRef.current = detector;
+    return detector;
+  }, [realTimeMode]);
+
+  // Add log entry
+  const addLog = (message, type = 'info') => {
+    const timestamp = new Date().toLocaleTimeString('tr-TR');
+    const logEntry = {
+      id: Date.now(),
+      message,
+      type,
+      timestamp
+    };
+    
+    setLogs(prevLogs => [logEntry, ...prevLogs.slice(0, 49)]); // Keep last 50 logs
+    Logger.info(`[LivenessDemo] ${message}`);
+  };
+
+  // Get Random Command for Manual Testing
+  const handleRandomCommand = () => {
+    try {
+      const randomCommand = getRandomCommand();
+      setCurrentCommand(randomCommand);
+      addLog(`🎲 Rastgele komut seçildi: ${randomCommand.icon} ${randomCommand.message}`, 'info');
+    } catch (error) {
+      addLog(`❌ Rastgele komut seçimi hatası: ${error.message}`, 'error');
+    }
+  };
+
+  // Manual Command Validation
+  const handleManualValidation = async () => {
+    if (!currentCommand) {
+      Alert.alert('Hata', 'Önce bir komut seçin!');
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      addLog(`🔍 ${currentCommand.type} komutu doğrulanıyor...`, 'info');
+      
+      const result = await validateResponse(currentCommand.type);
+      setValidationResult(result);
+      
+      if (result.isValid) {
+        addLog(`✅ Doğrulama başarılı! Güven: ${result.confidence}`, 'success');
+        Alert.alert(
+          '✅ Başarılı!', 
+          `${currentCommand.message} komutu başarıyla doğrulandı.\nGüven skoru: ${result.confidence}`,
+          [{ text: 'Tamam' }]
+        );
+      } else {
+        addLog(`❌ Doğrulama başarısız: ${result.error}`, 'error');
+        Alert.alert(
+          '❌ Başarısız!', 
+          `${result.error}\nGüven skoru: ${result.confidence}`,
+          [{ text: 'Tekrar Dene', onPress: handleManualValidation }, { text: 'İptal' }]
+        );
+      }
+    } catch (error) {
+      addLog(`❌ Doğrulama hatası: ${error.message}`, 'error');
+      Alert.alert('Hata', error.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Generate Command Sequence
+  const handleGenerateSequence = () => {
+    try {
+      const sequence = generateCommandSequence(3, difficulty);
+      setCommandSequence(sequence);
+      addLog(`📋 ${difficulty} seviyesinde ${sequence.length} komutluk sıra oluşturuldu`, 'info');
+    } catch (error) {
+      addLog(`❌ Komut sırası oluşturma hatası: ${error.message}`, 'error');
+    }
+  };
+
+  // Start liveness test (Day 9 Enhanced)
+  const handleLivenessTest = async () => {
+    try {
+      setIsProcessing(true);
+      setLogs([]);
+      setLivenessData(null);
+      setTestResults(null);
+      setValidationResult(null);
+      setCurrentCommand(null);
+      setCurrentInstruction(null);
+      setProgress('');
+      setMotionDetected(null);
+      
+      addLog(`🚀 Canlılık testi başlatılıyor... (${realTimeMode ? 'Gerçek Zamanlı' : 'Mock'} Mod)`, 'info');
+      
+      // Show camera for real-time mode
+      if (realTimeMode && cameraPermission === 'authorized') {
+        setShowCamera(true);
+      }
+      
+      const options = {
+        difficulty,
+        commandCount: 3,
+        maxRetries: 2,
+        realTimeMode
+      };
+      
+      await livenessDetector.startLivenessTest(options);
+      
+    } catch (error) {
+      addLog(`❌ Test başlatma hatası: ${error.message}`, 'error');
+      setIsProcessing(false);
+      setShowCamera(false);
+      
+      Alert.alert(
+        'Test Hatası',
+        `Canlılık testi başlatılamadı: ${error.message}`,
+        [{ text: 'Tamam' }]
+      );
+    }
+  };
+
+  // Handle Stop Liveness Test (Day 9 Enhanced)
+  const handleStopLivenessTest = async () => {
+    try {
+      await livenessDetector.stopLivenessTest();
+      addLog('⏹️ Canlılık testi durduruldu', 'info');
+      setIsProcessing(false);
+      setShowCamera(false);
+    } catch (error) {
+      addLog(`❌ Durdurma hatası: ${error.message}`, 'error');
+    }
+  };
+
+  // Handle Reset (Day 9 Enhanced)
+  const handleReset = () => {
+    livenessDetector.reset();
+    setLivenessData(null);
+    setIsProcessing(false);
+    setShowCamera(false);
+    setMotionDetected(null);
+    setFaceDetectionState(null);
+    setLivenessStatus('idle');
+    setProgress('');
+    setCurrentInstruction(null);
+    setCapturedImages(0);
+    setTestResults(null);
+    setLogs([]);
+    addLog('🔄 Canlılık testi sıfırlandı', 'info');
+  };
+
+  // Handle Manual Instruction Test
+  const handleManualInstruction = async (commandType) => {
+    if (isProcessing) {
+      Alert.alert('Uyarı', 'Lütfen mevcut işlemin bitmesini bekleyin.');
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      addLog(`🎯 Manuel komut testi: ${commandType}`, 'info');
+      
+      // Get command by type and execute
+      const command = { type: commandType };
+      const result = await livenessDetector.giveInstruction(command);
+      const validation = await livenessDetector.validateResponse(result.result, command);
+      
+      if (validation.isValid) {
+        addLog(`✅ Manuel test başarılı: ${commandType} (Güven: ${validation.confidence})`, 'success');
+      } else {
+        addLog(`❌ Manuel test başarısız: ${commandType} - ${validation.error}`, 'error');
+      }
+      
+    } catch (error) {
+      addLog(`❌ Manuel test hatası: ${error.message}`, 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Clear logs
+  const clearLogs = () => {
+    setLogs([]);
+    addLog('📝 Loglar temizlendi', 'info');
+  };
+  
+  // Clear validation result
+  const clearValidation = () => {
+    setValidationResult(null);
+    setCurrentCommand(null);
+    addLog('🧹 Doğrulama sonuçları temizlendi', 'info');
+  };
+
+  // Day 9: Camera frame processing
+  const onCameraFrame = async (frame) => {
+    if (!realTimeMode || !livenessDetector) return;
+    
+    try {
+      const result = await livenessDetector.processCameraFrame(frame);
+      if (result) {
+        setFaceDetectionState(livenessDetector.getFaceDetectionState());
+      }
+    } catch (error) {
+      // Silent error handling for frame processing
+    }
+  };
+
+  // Render Liveness Result
+  const renderLivenessResult = () => {
+    if (!livenessData && !testResults) return null;
+
+    const data = livenessData || testResults;
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView style={styles.scrollView}>
+        <Text style={styles.title}>Canlılık Testi Demo - Day 9</Text>
+        
+        {/* Real-time Mode Toggle */}
+        <View style={styles.modeContainer}>
+          <Text style={styles.modeLabel}>Mod:</Text>
+          <TouchableOpacity
+            style={[styles.modeButton, realTimeMode ? styles.realTimeModeActive : styles.mockModeActive]}
+            onPress={() => setRealTimeMode(!realTimeMode)}
+            disabled={isProcessing}
+          >
+            <Text style={styles.modeButtonText}>
+              {realTimeMode ? '📹 Gerçek Zamanlı' : '🎭 Mock'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Camera Permission Status */}
+        {realTimeMode && (
+          <View style={styles.permissionContainer}>
+            <Text style={styles.permissionLabel}>Kamera İzni:</Text>
+            <Text style={[styles.permissionStatus, { 
+              color: cameraPermission === 'authorized' ? '#4CAF50' : '#F44336' 
+            }]}>
+              {cameraPermission === 'authorized' ? '✅ Verildi' : '❌ Gerekli'}
+            </Text>
+          </View>
+        )}
+        
+        {/* Status Display */}
+        <View style={styles.statusContainer}>
+          <Text style={styles.statusLabel}>Durum:</Text>
+          <Text style={[styles.statusValue, { color: getStatusColor(livenessStatus) }]}>
+            {livenessStatus.toUpperCase()}
+          </Text>
+        </View>
+        
+        {progress ? (
+          <View style={styles.progressContainer}>
+            <Text style={styles.progressText}>{progress}</Text>
+          </View>
+        ) : null}
+
+        {/* Camera Feed for Real-time Mode */}
+        {showCamera && realTimeMode && cameraPermission === 'authorized' && devices.front && (
+          <View style={styles.cameraContainer}>
+            <Text style={styles.cameraTitle}>📹 Canlı Kamera Feed</Text>
+            <Camera
+              ref={cameraRef}
+              style={styles.camera}
+              device={devices.front}
+              isActive={showCamera}
+              onFrame={onCameraFrame}
+              frameProcessor={onCameraFrame}
+            />
+            {faceDetectionState && (
+              <View style={styles.detectionOverlay}>
+                <Text style={styles.detectionText}>
+                  {faceDetectionState.isReady ? '✅ Yüz Algılama Hazır' : '⏳ Hazırlanıyor...'}
+                </Text>
+                {motionDetected && (
+                  <Text style={styles.motionText}>
+                    🎯 {motionDetected.motionType}: {motionDetected.confidence.overall.toFixed(2)}
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Current Status Display - Enhanced for Day 8 */}
+        <View style={styles.statusContainer}>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>Durum:</Text>
+            <Text style={[styles.statusValue, getStatusColor(livenessStatus)]}>
+              {livenessStatus.toUpperCase()}
+            </Text>
+          </View>
+          
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>İlerleme:</Text>
+            <Text style={styles.statusValue}>{progress || 'Bekleniyor...'}</Text>
+          </View>
+          
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>Yakalanan Görüntü:</Text>
+            <Text style={styles.statusValue}>{capturedImages}</Text>
+          </View>
+          
+          {currentCommand && (
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Mevcut Komut:</Text>
+              <Text style={styles.statusValue}>
+                {currentCommand.icon} {currentCommand.message}
+              </Text>
+            </View>
+          )}
+          
+          {validationResult && (
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Son Doğrulama:</Text>
+              <Text style={[styles.statusValue, validationResult.isValid ? styles.successText : styles.errorText]}>
+                {validationResult.isValid ? '✅ Başarılı' : '❌ Başarısız'} ({validationResult.confidence})
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Test Results */}
+        {data && (
+          <View style={styles.dataContainer}>
+            <Text style={styles.dataTitle}>🎯 Test Sonuçları</Text>
+            <Text style={styles.dataText}>Durum: {data.status || 'completed'}</Text>
+            <Text style={styles.dataText}>Süre: {data.duration ? `${data.duration}ms` : 'N/A'}</Text>
+            <Text style={styles.dataText}>Tamamlanan Talimatlar: {data.instructions || capturedImages}</Text>
+            <Text style={styles.dataText}>Yakalanan Görüntüler: {data.capturedImages || capturedImages}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  // Render Manual Instruction Buttons
+  const renderManualInstructions = () => {
+    const instructions = [
+      { key: LIVENESS_INSTRUCTIONS.LOOK_STRAIGHT, label: 'Düz Bak' },
+      { key: LIVENESS_INSTRUCTIONS.BLINK, label: 'Göz Kırp' },
+      { key: LIVENESS_INSTRUCTIONS.TURN_LEFT, label: 'Sola Dön' },
+      { key: LIVENESS_INSTRUCTIONS.TURN_RIGHT, label: 'Sağa Dön' },
+      { key: LIVENESS_INSTRUCTIONS.SMILE, label: 'Gülümse' },
+      { key: LIVENESS_INSTRUCTIONS.NOD, label: 'Başını Salla' }
+    ];
+
+    return (
+      <View style={styles.instructionsContainer}>
+        <Text style={styles.instructionsTitle}>📋 Manuel Talimat Testleri</Text>
+        <View style={styles.instructionGrid}>
+          {instructions.map((instruction) => (
+            <TouchableOpacity
+              key={instruction.key}
+              style={[styles.instructionButton]}
+              onPress={() => handleManualInstruction(instruction.key)}
+              disabled={isProcessing}
+            >
+              <Text style={styles.instructionButtonText}>{instruction.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  // Render Logs
+  const renderLogs = () => {
+    if (logs.length === 0) return null;
+
+    return (
+      <View style={styles.logsContainer}>
+        <Text style={styles.logsTitle}>📋 İşlem Logları</Text>
+        <ScrollView style={styles.logsScrollView} nestedScrollEnabled>
+          {logs.map((log) => (
+            <View key={log.id} style={styles.logEntry}>
+              <Text style={[styles.logText, styles[`log_${log.type}`]]}>
+                [{log.timestamp}] {log.message}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>🤖 Canlılık Testi Demo</Text>
+          <Text style={styles.subtitle}>Biyometrik canlılık doğrulama testi</Text>
+        </View>
+
+        {/* Control Buttons */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.button, styles.primaryButton, isProcessing && styles.disabledButton]}
+            onPress={handleLivenessTest}
+            disabled={isProcessing}
+          >
+            {isProcessing ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text style={styles.buttonText}>🔴 Canlılık Testi Başlat</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.secondaryButton]}
+            onPress={handleStopLivenessTest}
+          >
+            <Text style={styles.buttonText}>⏹️ Testi Durdur</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.warningButton]}
+            onPress={handleReset}
+          >
+            <Text style={styles.buttonText}>🔄 Sıfırla</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Day 8: New Command Testing Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>🎲 Komut Testi (Day 8)</Text>
+          
+          <View style={styles.commandContainer}>
+            <TouchableOpacity
+              style={[styles.button, styles.infoButton]}
+              onPress={handleRandomCommand}
+            >
+              <Text style={styles.buttonText}>🎲 Rastgele Komut Seç</Text>
+            </TouchableOpacity>
+            
+            {currentCommand && (
+              <View style={styles.currentCommandContainer}>
+                <Text style={styles.currentCommandText}>
+                  {currentCommand.icon} {currentCommand.message}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.button, styles.successButton, isProcessing && styles.disabledButton]}
+                  onPress={handleManualValidation}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <ActivityIndicator color="white" size="small" />
+                  ) : (
+                    <Text style={styles.buttonText}>✅ Onayla</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.difficultyContainer}>
+            <Text style={styles.difficultyLabel}>Zorluk Seviyesi:</Text>
+            {['easy', 'medium', 'hard'].map((level) => (
+              <TouchableOpacity
+                key={level}
+                style={[
+                  styles.difficultyButton,
+                  difficulty === level && styles.selectedDifficulty
+                ]}
+                onPress={() => setDifficulty(level)}
+              >
+                <Text style={[
+                  styles.difficultyText,
+                  difficulty === level && styles.selectedDifficultyText
+                ]}>
+                  {level === 'easy' ? 'Kolay' : level === 'medium' ? 'Orta' : 'Zor'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          
+          <TouchableOpacity
+            style={[styles.button, styles.infoButton]}
+            onPress={handleGenerateSequence}
+          >
+            <Text style={styles.buttonText}>📋 Komut Sırası Oluştur</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Manual Instructions */}
+        {renderManualInstructions()}
+
+        {/* Results */}
+        {renderLivenessResult()}
+
+        {/* Manual Instruction Testing - Enhanced for Day 8 */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>🎯 Manuel Komut Testi</Text>
+          <View style={styles.instructionGrid}>
+            {getAvailableCommandTypes().map((commandType) => (
+              <TouchableOpacity
+                key={commandType}
+                style={[styles.instructionButton, isProcessing && styles.disabledButton]}
+                onPress={() => handleManualInstruction(commandType)}
+                disabled={isProcessing}
+              >
+                <Text style={styles.instructionButtonText}>
+                  {commandType.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        
+        {/* Command Sequence Display */}
+        {commandSequence.length > 0 && (
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>📋 Oluşturulan Komut Sırası</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.sequenceContainer}>
+                {commandSequence.map((cmd, index) => (
+                  <View key={cmd.id} style={styles.sequenceItem}>
+                    <Text style={styles.sequenceNumber}>{index + 1}</Text>
+                    <Text style={styles.sequenceIcon}>{cmd.icon}</Text>
+                    <Text style={styles.sequenceText}>{cmd.type}</Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  buttonContainer: {
+    marginBottom: 24,
+  },
+  button: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  primaryButton: {
+    backgroundColor: '#007AFF',
+  },
+  secondaryButton: {
+    backgroundColor: '#2196F3',
+  },
+  successButton: {
+    backgroundColor: '#4CAF50'
+  },
+  infoButton: {
+    backgroundColor: '#2196F3'
+  },
+  warningButton: {
+    backgroundColor: '#ff9800',
+  },
+  resetButton: {
+    backgroundColor: '#9e9e9e',
+  },
+  disabledButton: {
+    opacity: 0.6
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  instructionsContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  instructionsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  instructionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between'
+  },
+  instructionButton: {
+    backgroundColor: '#e3f2fd',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    marginBottom: 8,
+    width: '48%',
+    alignItems: 'center',
+  },
+  instructionButtonText: {
+    color: '#1976d2',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  resultContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  resultTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
+  },
+  statusContainer: {
+    marginBottom: 16,
+  },
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  progressText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
+  instructionText: {
+    fontSize: 14,
+    color: '#ff9800',
+    fontWeight: '500',
+    marginTop: 8,
+  },
+  dataContainer: {
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 16,
+  },
+  dataTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  dataText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  logsContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  logsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  logsScrollView: {
+    maxHeight: 200,
+  },
+  logEntry: {
+    marginBottom: 4,
+  },
+  logText: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+  log_info: {
+    color: '#666',
+  },
+  log_success: {
+    color: '#4caf50',
+  },
+  log_error: {
+    color: '#f44336',
+  },
+  log_warning: {
+    color: '#ff9800',
+  },
+});
+
+export default LivenessDemoScreen;
