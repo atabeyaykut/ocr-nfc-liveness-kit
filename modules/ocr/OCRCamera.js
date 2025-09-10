@@ -66,33 +66,32 @@ const OCRCamera = ({ onImageCaptured, onError, onCropAreaSelected, style, guidan
   const capturePhoto = async () => {
     try {
       if (!cameraRef.current) {
-        throw new Error('Camera not available');
+        throw new Error('Kamera hazır değil');
       }
 
-      setCameraStatus(OCR_STATUS.CAPTURING);
-      Logger.info('Capturing photo for OCR...');
+      setCameraStatus(OCR_STATUS.PROCESSING);
+      Logger.info('Taking photo...');
 
       const photo = await cameraRef.current.takePhoto({
         quality: 0.8,
         skipMetadata: true,
       });
 
-      const capturedPhotoData = {
-        uri: `file://${photo.path}`,
-        width: photo.width,
-        height: photo.height,
-        timestamp: Date.now()
-      };
+      const photoUri = `file://${photo.path}`;
+      Logger.info('Photo captured successfully', { uri: photoUri });
 
-      setCapturedImage(capturedPhotoData);
+      // Show crop selection UI
+      setCapturedImage(photoUri);
       setShowCropOverlay(true);
-      setCameraStatus(OCR_STATUS.SUCCESS);
-      Logger.info('Photo captured successfully, showing crop overlay');
+      setCameraStatus(OCR_STATUS.READY);
 
     } catch (error) {
-      setCameraStatus(OCR_STATUS.ERROR);
       Logger.error('Photo capture failed:', error.message);
-      if (onError) onError(error);
+      setCameraStatus(OCR_STATUS.ERROR);
+      
+      if (onError) {
+        onError(new Error(`Fotoğraf çekme hatası: ${error.message}`));
+      }
     }
   };
 
