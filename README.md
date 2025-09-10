@@ -475,6 +475,10 @@ The demo screen provides:
 <!-- Microphone (required by react-native-vision-camera) -->
 <key>NSMicrophoneUsageDescription</key>
 <string>Kamera işlevselliği için mikrofon erişimi gereklidir.</string>
+
+<!-- NFC access for card reading -->
+<key>NFCReaderUsageDescription</key>
+<string>Bu uygulama kimlik kartlarını okumak için NFC erişimi gerektirir.</string>
 ```
 
 2. **Required Device Capabilities**:
@@ -500,9 +504,15 @@ The demo screen provides:
 <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
+<!-- NFC permissions -->
+<uses-permission android:name="android.permission.NFC" />
+
 <!-- Required camera features -->
 <uses-feature android:name="android.hardware.camera" android:required="true" />
 <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+<!-- Required NFC features -->
+<uses-feature android:name="android.hardware.nfc" android:required="false" />
 ```
 
 2. **File Provider Setup** (configured in `android/app/src/main/res/xml/file_paths.xml`):
@@ -535,13 +545,176 @@ npx react-native run-ios
 npx react-native run-android
 ```
 
-3. **Test OCR Functionality**:
+3. **Test SDK Functionality**:
 ```javascript
 import { OCRTestScreen } from './examples/OCRTestScreen';
+import { NFCDemoScreen } from './examples/NFCDemoScreen';
 
 // Add to your app navigation
-<OCRTestScreen />
+<OCRTestScreen />  // Test OCR functionality
+<NFCDemoScreen />  // Test NFC functionality
 ```
+
+## NFC Module Usage
+
+### Basic NFC Reader Usage
+
+```javascript
+import { NFCReader } from './modules/nfc/NFCReader';
+
+// Initialize NFC Reader with callbacks
+const nfcReader = new NFCReader({
+  onSuccess: (data) => {
+    console.log('NFC Data:', data);
+    console.log('Name:', data.name, data.surname);
+    console.log('ID Number:', data.idNumber);
+  },
+  onError: (error) => {
+    console.error('NFC Error:', error.message);
+  },
+  onStatusChange: (newStatus, oldStatus) => {
+    console.log('Status changed:', oldStatus, '->', newStatus);
+  },
+  onProgress: (message) => {
+    console.log('Progress:', message);
+  }
+});
+
+// Start NFC operations
+const startNFC = async () => {
+  try {
+    const isReady = await nfcReader.startNFC();
+    if (isReady) {
+      const data = await nfcReader.readNFCData();
+      console.log('Read data:', data);
+    }
+  } catch (error) {
+    console.error('NFC operation failed:', error);
+  }
+};
+
+// Stop NFC operations
+await nfcReader.stopNFC();
+```
+
+### NFC Reader Methods
+
+#### `startNFC()`
+Initializes NFC system and checks device support:
+- Verifies NFC hardware support
+- Checks if NFC is enabled
+- Requests necessary permissions
+- Returns `Promise<boolean>` indicating success
+
+#### `readNFCData(options)`
+Starts NFC data reading process:
+- `options.timeout`: Reading timeout in milliseconds (default: 30000)
+- `options.alertMessage`: Custom user guidance message
+- Returns `Promise<object>` with card data
+
+#### `stopNFC()`
+Stops NFC operations and cleanup:
+- Cancels ongoing NFC operations
+- Releases NFC resources
+- Resets reader state
+
+#### `getStatus()`
+Returns current NFC status:
+- `idle`: Not initialized
+- `initializing`: Starting up
+- `ready`: Ready to read
+- `scanning`: Looking for NFC card
+- `reading`: Reading card data
+- `processing`: Processing read data
+- `success`: Operation completed
+- `error`: Error occurred
+
+#### `getLastReadData()`
+Returns the last successfully read NFC data.
+
+#### `reset()`
+Resets NFC reader to initial state.
+
+### NFC Data Structure
+
+The NFC reader returns mock Turkish ID card data with the following structure:
+
+```javascript
+{
+  // Personal Information
+  cardType: "Turkish ID Card",
+  name: "MEHMET",
+  surname: "YILMAZ", 
+  idNumber: "12345678901",
+  birthDate: "15.06.1985",
+  birthPlace: "İSTANBUL",
+  nationality: "T.C.",
+  gender: "E",
+  motherName: "AYŞE",
+  fatherName: "ALİ",
+  
+  // Document Information
+  serialNumber: "A01B02345",
+  documentNumber: "ABC123456",
+  issueDate: "01.01.2020",
+  expiryDate: "01.01.2030",
+  issuingAuthority: "ANKARA NÜFUS MÜDÜRLÜĞÜ",
+  
+  // NFC Technical Data
+  nfcData: {
+    uid: "04:A1:B2:C3:D4:E5:F6",
+    technology: "IsoDep",
+    readTime: "2025-09-10T09:05:30.123Z",
+    signalStrength: 85
+  },
+  
+  // Verification Status
+  verification: {
+    isValid: true,
+    checksum: "VALID",
+    digitalSignature: "VERIFIED"
+  }
+}
+```
+
+### Error Handling
+
+Common NFC errors and their handling:
+
+```javascript
+const nfcReader = new NFCReader({
+  onError: (error) => {
+    switch (error.message) {
+      case 'NFC not supported on this device':
+        // Show user that device doesn't support NFC
+        break;
+      case 'NFC is disabled. Please enable NFC in device settings.':
+        // Guide user to enable NFC in settings
+        break;
+      case 'NFC permissions denied':
+        // Request permissions again
+        break;
+      default:
+        // Handle other errors
+        console.error('NFC Error:', error.message);
+    }
+  }
+});
+```
+
+### Platform Requirements
+
+#### iOS NFC Requirements
+- iOS 11.0 or later for Core NFC
+- Physical device (NFC not available in simulator)
+- NFC-enabled iPhone (iPhone 7 and later)
+- Info.plist permission: `NFCReaderUsageDescription`
+
+#### Android NFC Requirements  
+- Android 4.0 (API level 14) or later
+- NFC hardware support
+- AndroidManifest.xml permissions: `android.permission.NFC`
+- Feature declaration: `android.hardware.nfc`
 
 ## Day 3 Completion Summary
 
@@ -583,4 +756,43 @@ import { OCRTestScreen } from './examples/OCRTestScreen';
 
 ---
 
-**Day 3 Status**: OCR Reader module fully completed with end-to-end workflow, comprehensive testing, platform integration, and production-ready demo applications. System is test-ready for iOS TestFlight and Android Internal Testing. Ready for Day 4 NFC module development and cross-module integration.
+## Day 4 Completion Summary
+
+### ✅ NFC Module Development
+- **NFC Reader Module**: Complete skeleton with startNFC(), readNFCData(), stopNFC() methods
+- **Device Support Detection**: Automatic NFC hardware and enablement checking
+- **Mock Data Implementation**: Turkish ID card data simulation for testing
+- **User Guidance System**: Turkish language prompts and status updates
+- **Comprehensive Error Handling**: Device compatibility, permission, and operation errors
+- **Callback Architecture**: onSuccess, onError, onStatusChange, onProgress callbacks
+
+### 🧪 NFC Testing Suite
+- **Unit Tests**: 25+ comprehensive tests covering all NFC functionality
+- **Mock Integration**: Proper react-native-nfc-manager mocking
+- **Error Scenarios**: Device support, permissions, initialization failures
+- **Data Validation**: Turkish ID card structure and field verification
+- **Status Management**: State transitions and callback testing
+
+### 📱 NFC Demo Application
+- **NFCDemoScreen**: Complete demo with "NFC Oku" button and JSON display
+- **Support Detection**: Real-time NFC capability checking
+- **Mock Data Display**: Formatted Turkish ID card information
+- **Technical Details**: NFC UID, technology, signal strength display
+- **Real-time Logging**: Live operation tracking with timestamps
+
+### 📚 Documentation Updates
+- **NFC Usage Guide**: Complete API documentation with examples
+- **Platform Requirements**: iOS and Android NFC setup instructions
+- **Error Handling Guide**: Common scenarios and solutions
+- **Data Structure Documentation**: Detailed NFC data format specification
+
+### 🎯 Day 4 Achievements
+- **NFC Module**: Production-ready skeleton with mock data support
+- **Testing Coverage**: Comprehensive unit test suite (25+ tests)
+- **Demo Application**: Interactive NFC testing interface
+- **Platform Integration**: iOS Core NFC and Android NFC support
+- **Documentation**: Complete usage guide and API reference
+
+---
+
+**Day 4 Status**: NFC Reader module skeleton completed with mock data functionality, comprehensive testing, and demo application. Ready for Day 5 real NFC implementation and OCR+NFC integration workflows.
