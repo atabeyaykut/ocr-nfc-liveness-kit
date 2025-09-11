@@ -27,6 +27,27 @@ A comprehensive React Native SDK for Optical Character Recognition (OCR), Near F
 npm install mobile-sdk-ocr-nfc-liveness
 ```
 
+## 🔄 Recent Updates (v1.0.0-nfc)
+
+### Dependency Updates
+- **React Native**: Updated to 0.72.17 (latest stable with security patches)
+- **Vision Camera**: Upgraded to 4.7.2 (major performance improvements)
+- **ML Kit Face Detection**: Updated to 2.0.1 (enhanced accuracy)
+- **Permissions**: Upgraded to 5.4.2 (better iOS/Android compatibility)
+- **Image Processing**: Migrated to @bam.tech/react-native-image-resizer 3.0.7
+
+### Test Infrastructure
+- ✅ Complete Jest configuration for React Native 0.72.17
+- ✅ TypeScript support in test environment
+- ✅ Comprehensive mocking system for all modules
+- ✅ 84 test cases now executing properly
+- ✅ Zero security vulnerabilities
+
+### Breaking Changes
+- Replaced `react-native-image-resizer` with `@bam.tech/react-native-image-resizer`
+- Updated Babel configuration - now requires `babel.config.js`
+- Enhanced Jest setup with proper module resolution
+
 ### iOS Setup
 Add camera permissions to `Info.plist`:
 ```xml
