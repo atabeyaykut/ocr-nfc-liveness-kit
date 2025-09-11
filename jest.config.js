@@ -16,11 +16,20 @@ module.exports = {
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
-  moduleFileExtensions: ['js', 'jsx', 'json'],
+  moduleFileExtensions: ['js', 'jsx', 'json', 'ts', 'tsx'],
   transform: {
-    '^.+\\.(js|jsx)$': 'babel-jest'
+    '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { configFile: './babel.config.js' }]
   },
-  moduleNameMapping: {
-    '^@/(.*)$': '<rootDir>/$1'
-  }
+  transformIgnorePatterns: [
+    'node_modules/(?!(react-native|@react-native|react-native-.*|@react-native-.*))'
+  ],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/$1',
+    '^../../utils/logger$': '<rootDir>/__tests__/__mocks__/logger.js',
+    '^../../utils/permissions$': '<rootDir>/__tests__/__mocks__/permissions.js',
+    '^../../utils/imageProcessor$': '<rootDir>/__tests__/__mocks__/imageProcessor.js'
+  },
+  clearMocks: true,
+  resetMocks: true,
+  restoreMocks: true
 };
