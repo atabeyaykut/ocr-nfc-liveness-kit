@@ -1,8 +1,12 @@
 module.exports = {
-  presets: ['@react-native/babel-preset'],
-  env: {
-    test: {
-      presets: ['@react-native/babel-preset']
-    }
-  }
+  presets: [
+    ['@babel/preset-env', {
+      targets: {
+        node: 'current',
+      },
+    }],
+  ],
+  plugins: [
+    '@babel/plugin-proposal-class-properties',
+  ],
 };

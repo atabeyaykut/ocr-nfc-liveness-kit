@@ -4,55 +4,55 @@
  */
 
 // Command definitions for liveness testing
-export const commands = [
-  { 
-    id: 1, 
-    type: "lookRight", 
+const commands = [
+  {
+    id: 1,
+    type: "lookRight",
     message: "Lütfen sağa bakın",
     instruction: "TURN_RIGHT",
     duration: 3000,
-    icon: "👉"
+    icon: "👉",
   },
-  { 
-    id: 2, 
-    type: "lookLeft", 
+  {
+    id: 2,
+    type: "lookLeft",
     message: "Lütfen sola bakın",
-    instruction: "TURN_LEFT", 
+    instruction: "TURN_LEFT",
     duration: 3000,
-    icon: "👈"
+    icon: "👈",
   },
-  { 
-    id: 3, 
-    type: "blink", 
+  {
+    id: 3,
+    type: "blink",
     message: "Lütfen gözlerinizi kırpın",
     instruction: "BLINK",
     duration: 2000,
-    icon: "👁️"
+    icon: "👁️",
   },
-  { 
-    id: 4, 
-    type: "lookStraight", 
+  {
+    id: 4,
+    type: "lookStraight",
     message: "Lütfen kameraya doğru bakın",
     instruction: "LOOK_STRAIGHT",
     duration: 2000,
-    icon: "👀"
+    icon: "👀",
   },
-  { 
-    id: 5, 
-    type: "smile", 
+  {
+    id: 5,
+    type: "smile",
     message: "Lütfen gülümseyin",
     instruction: "SMILE",
     duration: 3000,
-    icon: "😊"
+    icon: "😊",
   },
-  { 
-    id: 6, 
-    type: "nod", 
+  {
+    id: 6,
+    type: "nod",
     message: "Lütfen başınızı sallayın",
     instruction: "NOD",
     duration: 3000,
-    icon: "👆"
-  }
+    icon: "👆",
+  },
 ];
 
 /**
@@ -70,7 +70,7 @@ export const getRandomCommand = () => {
  * @returns {object|null} Command object or null if not found
  */
 export const getCommandByType = (type) => {
-  return commands.find(command => command.type === type) || null;
+  return commands.find((command) => command.type === type) || null;
 };
 
 /**
@@ -79,7 +79,9 @@ export const getCommandByType = (type) => {
  * @returns {object|null} Command object or null if not found
  */
 export const getCommandByInstruction = (instruction) => {
-  return commands.find(command => command.instruction === instruction) || null;
+  return (
+    commands.find((command) => command.instruction === instruction) || null
+  );
 };
 
 /**
@@ -87,7 +89,7 @@ export const getCommandByInstruction = (instruction) => {
  * @returns {string[]} Array of command types
  */
 export const getAvailableCommandTypes = () => {
-  return commands.map(command => command.type);
+  return commands.map((command) => command.type);
 };
 
 /**
@@ -99,11 +101,11 @@ export const getCommandsByDifficulty = (difficulty = 'easy') => {
   const difficultyMap = {
     easy: ['lookStraight', 'blink'],
     medium: ['lookRight', 'lookLeft', 'smile'],
-    hard: ['nod', 'lookRight', 'lookLeft', 'blink']
+    hard: ['nod', 'lookRight', 'lookLeft', 'blink'],
   };
-  
+
   const allowedTypes = difficultyMap[difficulty] || difficultyMap.easy;
-  return commands.filter(command => allowedTypes.includes(command.type));
+  return commands.filter((command) => allowedTypes.includes(command.type));
 };
 
 /**
@@ -115,19 +117,31 @@ export const getCommandsByDifficulty = (difficulty = 'easy') => {
 export const generateCommandSequence = (count = 3, difficulty = 'easy') => {
   const availableCommands = getCommandsByDifficulty(difficulty);
   const sequence = [];
-  
+
   for (let i = 0; i < count; i++) {
     const randomIndex = Math.floor(Math.random() * availableCommands.length);
-    const command = { 
+    const command = {
       ...availableCommands[randomIndex],
       sequenceId: i + 1,
-      timestamp: Date.now() + (i * 1000) // Stagger timing
+      timestamp: Date.now() + i * 1000, // Stagger timing
     };
     sequence.push(command);
   }
-  
+
   return sequence;
 };
 
-// Export default commands array
-export default commands;
+// Export functions and commands array
+const getCommandByType = (type) => {
+  return commands.find(cmd => cmd.type === type);
+};
+
+const getCommandByInstruction = (instruction) => {
+  return commands.find(cmd => cmd.instruction === instruction);
+};
+
+module.exports = {
+  commands,
+  getCommandByType,
+  getCommandByInstruction,
+};

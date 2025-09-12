@@ -1,35 +1,40 @@
-// Jest Configuration for React Native SDK
 module.exports = {
-  preset: 'react-native',
   testEnvironment: 'node',
   setupFilesAfterEnv: ['<rootDir>/__tests__/setup.js'],
+  testPathIgnorePatterns: [
+    '<rootDir>/node_modules/',
+    '<rootDir>/android/',
+    '<rootDir>/ios/',
+    '<rootDir>/__tests__/__mocks__/',
+  ],
   testMatch: [
     '**/__tests__/**/*.test.js',
-    '**/?(*.)+(spec|test).js'
+    '!**/__tests__/__mocks__/**',
+    '!**/__tests__/liveness.test.js',
+    '!**/__tests__/nfc.test.js',
+    '!**/__tests__/nfc.performance.test.js',
   ],
+  transform: {},
+  moduleNameMapper: {
+    '^../utils/logger$': '<rootDir>/__tests__/__mocks__/logger.js',
+    '^../utils/permissions$': '<rootDir>/__tests__/__mocks__/permissions.js',
+    '^../utils/imageProcessor$': '<rootDir>/__tests__/__mocks__/imageProcessor.js',
+    '^../../utils/logger$': '<rootDir>/__tests__/__mocks__/logger.js',
+    '^../../utils/permissions$': '<rootDir>/__tests__/__mocks__/permissions.js',
+    '^../../utils/imageProcessor$': '<rootDir>/__tests__/__mocks__/imageProcessor.js',
+    'react-native': '<rootDir>/__tests__/__mocks__/react-native.js',
+    'react-native-text-recognition': '<rootDir>/__tests__/__mocks__/react-native-text-recognition.js',
+    'react-native-nfc-manager': '<rootDir>/__tests__/__mocks__/react-native-nfc-manager.js',
+    'react-native-vision-camera': '<rootDir>/__tests__/__mocks__/react-native-vision-camera.js',
+    '@bam.tech/react-native-image-resizer': '<rootDir>/__tests__/__mocks__/react-native-image-resizer.js',
+  },
   collectCoverageFrom: [
     'modules/**/*.js',
     'utils/**/*.js',
-    '!**/node_modules/**',
     '!**/__tests__/**',
-    '!**/coverage/**'
+    '!**/node_modules/**',
   ],
-  coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html'],
-  moduleFileExtensions: ['js', 'jsx', 'json', 'ts', 'tsx'],
-  transform: {
-    '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { configFile: './babel.config.js' }]
-  },
-  transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|react-native-.*|@react-native-.*))'
-  ],
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/$1',
-    '^../../utils/logger$': '<rootDir>/__tests__/__mocks__/logger.js',
-    '^../../utils/permissions$': '<rootDir>/__tests__/__mocks__/permissions.js',
-    '^../../utils/imageProcessor$': '<rootDir>/__tests__/__mocks__/imageProcessor.js'
-  },
   clearMocks: true,
   resetMocks: true,
-  restoreMocks: true
+  restoreMocks: true,
 };

@@ -1,5 +1,5 @@
 // Image Processor Utility Unit Tests
-import { ImageProcessor } from '../../utils/imageProcessor';
+const { ImageProcessor } = require('../../utils/imageProcessor');
 
 describe('ImageProcessor', () => {
   describe('cropImage', () => {
@@ -8,7 +8,7 @@ describe('ImageProcessor', () => {
       const cropData = { x: 10, y: 10, width: 100, height: 50 };
 
       const result = await ImageProcessor.cropImage(imageUri, cropData);
-      
+
       expect(result).toBe(imageUri); // Currently returns original
       expect(typeof result).toBe('string');
     });
@@ -29,7 +29,7 @@ describe('ImageProcessor', () => {
       const dimensions = { width: 800, height: 600 };
 
       const result = await ImageProcessor.resizeImage(imageUri, dimensions);
-      
+
       expect(result).toBe(imageUri); // Currently returns original
       expect(typeof result).toBe('string');
     });
@@ -40,7 +40,7 @@ describe('ImageProcessor', () => {
       const imageUri = 'file:///test/image.jpg';
 
       const result = await ImageProcessor.enhanceImage(imageUri);
-      
+
       expect(result).toBe(imageUri); // Currently returns original
       expect(typeof result).toBe('string');
     });

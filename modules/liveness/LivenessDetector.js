@@ -3,43 +3,50 @@
  * Biometric liveness detection with real-time face tracking
  */
 
-import { Platform } from 'react-native';
-import Logger from '../../utils/logger';
-import { getRandomCommand, getCommandByType, generateCommandSequence } from './commands';
-import { validateResponse as mockValidateResponse, validateCommandSequence } from './validator';
-import FaceDetector from './detector';
+const { Platform } = require("react-native");
+const Logger = require("../../utils/logger");
+const {
+  getRandomCommand,
+  getCommandByType,
+  generateCommandSequence,
+} = require("./commands");
+const {
+  validateResponse: mockValidateResponse,
+  validateCommandSequence,
+} = require("./validator");
+const FaceDetector = require("./detector");
 
 // Liveness Test Status Constants
-export const LIVENESS_STATUS = {
-  IDLE: 'idle',
-  INITIALIZING: 'initializing',
-  CAMERA_READY: 'camera_ready',
-  INSTRUCTION_GIVEN: 'instruction_given',
-  CAPTURING: 'capturing',
-  PROCESSING: 'processing',
-  SUCCESS: 'success',
-  ERROR: 'error'
+const LIVENESS_STATUS = {
+  IDLE: "idle",
+  INITIALIZING: "initializing",
+  CAMERA_READY: "camera_ready",
+  INSTRUCTION_GIVEN: "instruction_given",
+  CAPTURING: "capturing",
+  PROCESSING: "processing",
+  SUCCESS: "success",
+  ERROR: "error",
 };
 
 // Liveness Instructions
-export const LIVENESS_INSTRUCTIONS = {
-  LOOK_STRAIGHT: 'look_straight',
-  BLINK: 'blink',
-  TURN_LEFT: 'turn_left',
-  TURN_RIGHT: 'turn_right',
-  SMILE: 'smile',
-  NOD: 'nod'
+const LIVENESS_INSTRUCTIONS = {
+  LOOK_STRAIGHT: "look_straight",
+  BLINK: "blink",
+  TURN_LEFT: "turn_left",
+  TURN_RIGHT: "turn_right",
+  SMILE: "smile",
+  NOD: "nod",
 };
 
 // Default Configuration
-export const LIVENESS_CONFIG = {
-  cameraType: 'front', // front or back
+const LIVENESS_CONFIG = {
+  cameraType: "front", // front or back
   captureQuality: 0.8,
   timeoutDuration: 30000, // 30 seconds
   instructionDelay: 2000, // 2 seconds between instructions
   maxRetries: 3,
   enableFaceDetection: true,
-  enableMotionDetection: true
+  enableMotionDetection: true,
 };
 
 /**
@@ -54,14 +61,14 @@ class LivenessDetector {
     this.capturedImages = [];
     this.isProcessing = false;
     this.retryCount = 0;
-    
+
     // Day 9: Real-time face detection
     this.faceDetector = new FaceDetector();
     this.currentCommand = null;
     this.commandStartTime = null;
     this.detectionTimeout = null;
     this.realTimeMode = config.realTimeMode !== false; // Default to true
-    
+
     // Callback functions
     this.onStatusChange = null;
     this.onInstructionGiven = null;
@@ -70,11 +77,14 @@ class LivenessDetector {
     this.onError = null;
     this.onProgress = null;
     this.onMotionDetected = null; // Day 9: New callback
-    
-    Logger.info('LivenessDetector initialized with real-time detection', { 
+
+    Logger.info("LivenessDetector initialized with real-time detection", {
       config: this.config,
-      realTimeMode: this.realTimeMode
+      realTimeMode: this.realTimeMode,
     });
+
+    this.realTimeMode = true;
+    Logger.info(`Face detection initialized for real-time mode`);
   }
 
   /**
@@ -85,58 +95,62 @@ class LivenessDetector {
   async startLivenessTest(options = {}) {
     try {
       if (this.isProcessing) {
-        throw new Error('Canlılık testi zaten devam ediyor. Lütfen mevcut testin bitmesini bekleyin.');
+        throw new Error(
+          "Canlılık testi zaten devam ediyor. Lütfen mevcut testin bitmesini bekleyin."
+        );
       }
 
-      Logger.info('Starting real-time liveness test...', options);
+      Logger.info("Starting real-time liveness test...", options);
       this.isProcessing = true;
       this.retryCount = 0;
       this.capturedImages = [];
-      
+
       const testOptions = { ...this.config, ...options };
-      
+
       this._updateStatus(LIVENESS_STATUS.INITIALIZING);
-      
+
       // Check camera permissions
       const hasPermission = await this._checkCameraPermissions();
       if (!hasPermission) {
-        throw new Error('Kamera izni gerekli. Lütfen ayarlardan kamera erişimini etkinleştirin.');
+        throw new Error(
+          "Kamera izni gerekli. Lütfen ayarlardan kamera erişimini etkinleştirin."
+        );
       }
-      
+
       // Initialize face detector
       if (this.realTimeMode) {
         await this.faceDetector.initialize();
         this._setupFaceDetectionCallbacks();
       }
-      
+
       // Initialize front camera
       await this.captureFrontCamera(testOptions);
-      
+
       // Start real-time instruction sequence
       await this._startRealTimeInstructionSequence(testOptions);
-      
+
       this._updateStatus(LIVENESS_STATUS.SUCCESS);
-      
+
       if (this.onSuccess) {
         this.onSuccess({
-          status: 'completed',
+          status: "completed",
           capturedImages: this.capturedImages.length,
           duration: Date.now() - this.startTime,
           instructions: this.completedInstructions,
-          realTimeMode: this.realTimeMode
+          realTimeMode: this.realTimeMode,
         });
       }
-      
+
       return true;
-      
+
     } catch (error) {
-      Logger.error('Liveness test failed:', error.message);
+      Logger.error("Liveness test failed:", error.message);
       this._updateStatus(LIVENESS_STATUS.ERROR);
-      
+
       if (this.onError) {
         this.onError(error);
       }
-      
+
       throw error;
     } finally {
       this.isProcessing = false;
@@ -153,35 +167,35 @@ class LivenessDetector {
    */
   async captureFrontCamera(options = {}) {
     try {
-      Logger.info('Initializing front camera for liveness detection...');
-      
+      Logger.info("Initializing front camera for liveness detection...");
+
       this._updateStatus(LIVENESS_STATUS.CAMERA_READY);
-      
+
       if (this.onProgress) {
-        this.onProgress('Ön kamera başlatılıyor...');
+        this.onProgress("Ön kamera başlatılıyor...");
       }
-      
+
       // Simulate camera initialization (skeleton implementation)
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       const cameraResult = {
-        cameraType: 'front',
-        resolution: '1280x720',
+        cameraType: "front",
+        resolution: "1280x720",
         fps: 30,
         ready: true,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
-      
-      Logger.info('Front camera initialized successfully', cameraResult);
-      
+
+      Logger.info("Front camera initialized successfully", cameraResult);
+
       if (this.onProgress) {
-        this.onProgress('Kamera hazır. Lütfen kameraya bakın.');
+        this.onProgress("Kamera hazır. Lütfen kameraya bakın.");
       }
-      
+
       return cameraResult;
-      
+
     } catch (error) {
-      Logger.error('Front camera initialization failed:', error.message);
+      Logger.error("Front camera initialization failed:", error.message);
       throw new Error(`Ön kamera başlatılamadı: ${error.message}`);
     }
   }
@@ -195,28 +209,30 @@ class LivenessDetector {
   async giveInstruction(instruction, options = {}) {
     try {
       let command;
-      
+
       // Handle both string instruction and command object
-      if (typeof instruction === 'string') {
+      if (typeof instruction === "string") {
         // Legacy support - convert instruction to command
-        command = getCommandByType(this._mapInstructionToCommandType(instruction));
+        command = getCommandByType(
+          this._mapInstructionToCommandType(instruction)
+        );
         if (!command) {
           throw new Error(`Geçersiz talimat: ${instruction}`);
         }
-      } else if (typeof instruction === 'object' && instruction.type) {
+      } else if (typeof instruction === "object" && instruction.type) {
         // New command object format
         command = instruction;
       } else {
         // Get random command if no specific instruction provided
         command = getRandomCommand();
       }
-      
-      Logger.info('Giving liveness instruction:', command);
-      
+
+      Logger.info("Giving liveness instruction:", command);
+
       this.currentInstruction = command.instruction || command.type;
       this.currentCommand = command;
       this._updateStatus(LIVENESS_STATUS.INSTRUCTION_GIVEN);
-      
+
       if (this.onInstructionGiven) {
         this.onInstructionGiven({
           command,
@@ -224,32 +240,35 @@ class LivenessDetector {
           message: command.message,
           icon: command.icon,
           duration: command.duration,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       }
-      
+
       if (this.onProgress) {
         this.onProgress(`${command.icon} ${command.message}`);
       }
-      
+
       // Wait for instruction delay (use command duration or default)
       const delay = command.duration || this.config.instructionDelay;
-      await new Promise(resolve => setTimeout(resolve, delay));
-      
+      await new Promise((resolve) => setTimeout(resolve, delay));
+
       // Simulate instruction capture
-      const captureResult = await this._captureInstructionResponse(command, options);
-      
+      const captureResult = await this._captureInstructionResponse(
+        command,
+        options
+      );
+
       return {
         command,
         instruction: command.instruction,
         message: command.message,
         captured: true,
         result: captureResult,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
-      
+
     } catch (error) {
-      Logger.error('Instruction failed:', error.message);
+      Logger.error("Instruction failed:", error.message);
       throw error;
     }
   }
@@ -262,52 +281,65 @@ class LivenessDetector {
    */
   async validateResponse(captureData, expectedInstruction) {
     try {
-      const commandType = typeof expectedInstruction === 'object' 
-        ? expectedInstruction.type 
-        : this._mapInstructionToCommandType(expectedInstruction);
-        
-      Logger.info('Validating liveness response...', { 
+      const commandType =
+        typeof expectedInstruction === "object"
+          ? expectedInstruction.type
+          : this._mapInstructionToCommandType(expectedInstruction);
+
+      Logger.info("Validating liveness response...", {
         commandType,
         expectedInstruction,
         realTimeMode: this.realTimeMode,
-        dataSize: captureData ? Object.keys(captureData).length : 0
+        dataSize: captureData ? Object.keys(captureData).length : 0,
       });
-      
+
       this._updateStatus(LIVENESS_STATUS.PROCESSING);
-      
+
       if (this.onProgress) {
-        this.onProgress('Yanıt doğrulanıyor...');
+        this.onProgress("Yanıt doğrulanıyor...");
       }
-      
+
       let validationResult;
-      
+
       if (this.realTimeMode && captureData.realTimeDetection) {
         // Use real-time face detection data
-        validationResult = await this._validateRealTimeResponse(captureData, commandType);
+        validationResult = await this._validateRealTimeResponse(
+          captureData,
+          commandType
+        );
       } else {
         // Fallback to mock validator
         validationResult = await mockValidateResponse(commandType, {
           captureData,
           retryCount: this.retryCount,
-          maxRetries: this.config.maxRetries
+          maxRetries: this.config.maxRetries,
         });
       }
-      
-      Logger.info('Response validation completed', validationResult);
-      
-      if (!validationResult.isValid && this.retryCount < this.config.maxRetries) {
+
+      Logger.info("Response validation completed", validationResult);
+
+      if (
+        !validationResult.isValid &&
+        this.retryCount < this.config.maxRetries
+      ) {
         this.retryCount++;
-        Logger.warn(`Validation failed, retry ${this.retryCount}/${this.config.maxRetries}`);
-        
+        Logger.warn(
+          `Validation failed, retry ${this.retryCount}/${this.config.maxRetries}`
+        );
+
         if (this.onProgress) {
-          this.onProgress(`Tekrar deneyin (${this.retryCount}/${this.config.maxRetries}): ${validationResult.error || 'Hareket algılanamadı'}`);
+          this.onProgress(
+            `Tekrar deneyin (${this.retryCount}/${this.config.maxRetries}): ${
+              validationResult.error || "Hareket algılanamadı"
+            }`
+          );
         }
       }
-      
+
       return validationResult;
-      
+
     } catch (error) {
-      Logger.error('Response validation failed:', error.message);
+      Logger.error("Response validation failed:", error.message);
       throw new Error(`Yanıt doğrulama hatası: ${error.message}`);
     }
   }
@@ -318,34 +350,34 @@ class LivenessDetector {
    */
   async stopLivenessTest() {
     try {
-      Logger.info('Stopping real-time liveness test...');
-      
+      Logger.info("Stopping real-time liveness test...");
+
       this.isProcessing = false;
       this.currentInstruction = null;
       this.currentCommand = null;
-      
+
       // Stop face detection
       if (this.realTimeMode) {
         this.faceDetector.stopDetection();
       }
-      
+
       // Clear detection timeout
       if (this.detectionTimeout) {
         clearTimeout(this.detectionTimeout);
         this.detectionTimeout = null;
       }
-      
+
       // Cleanup camera resources
       await this._cleanupCamera();
-      
+
       this._updateStatus(LIVENESS_STATUS.IDLE);
-      
+
       if (this.onProgress) {
-        this.onProgress('Canlılık testi durduruldu');
+        this.onProgress("Canlılık testi durduruldu");
       }
-      
+
     } catch (error) {
-      Logger.error('Error stopping liveness test:', error.message);
+      Logger.error("Error stopping liveness test:", error.message);
       throw error;
     }
   }
@@ -362,19 +394,19 @@ class LivenessDetector {
     this.retryCount = 0;
     this.completedInstructions = [];
     this.commandStartTime = null;
-    
+
     // Reset face detector
     if (this.realTimeMode) {
       this.faceDetector.reset();
     }
-    
+
     // Clear timeout
     if (this.detectionTimeout) {
       clearTimeout(this.detectionTimeout);
       this.detectionTimeout = null;
     }
-    
-    Logger.info('LivenessDetector reset to initial state');
+
+    Logger.info("LivenessDetector reset to initial state");
   }
 
   /**
@@ -403,9 +435,9 @@ class LivenessDetector {
   _updateStatus(newStatus) {
     const oldStatus = this.status;
     this.status = newStatus;
-    
-    Logger.info('Liveness status changed:', { from: oldStatus, to: newStatus });
-    
+
+    Logger.info("Liveness status changed:", { from: oldStatus, to: newStatus });
+
     if (this.onStatusChange) {
       this.onStatusChange(newStatus, oldStatus);
     }
@@ -419,19 +451,19 @@ class LivenessDetector {
   async _checkCameraPermissions() {
     try {
       // Skeleton implementation - assume permissions are granted
-      Logger.info('Checking camera permissions...');
-      
-      if (Platform.OS === 'ios') {
+      Logger.info("Checking camera permissions...");
+
+      if (Platform.OS === "ios") {
         // iOS camera permission check (skeleton)
         return true;
-      } else if (Platform.OS === 'android') {
+      } else if (Platform.OS === "android") {
         // Android camera permission check (skeleton)
         return true;
       }
-      
+
       return true;
     } catch (error) {
-      Logger.error('Camera permission check failed:', error.message);
+      Logger.error("Camera permission check failed:", error.message);
       return false;
     }
   }
@@ -443,56 +475,65 @@ class LivenessDetector {
    */
   async _startRealTimeInstructionSequence(options) {
     // Generate random command sequence based on difficulty
-    const difficulty = options.difficulty || 'easy';
+    const difficulty = options.difficulty || "easy";
     const commandCount = options.commandCount || 3;
     const commandSequence = generateCommandSequence(commandCount, difficulty);
-    
-    Logger.info(`Starting real-time command sequence with ${commandCount} commands (${difficulty} difficulty)`);
-    
+
+    Logger.info(
+      `Starting real-time command sequence with ${commandCount} commands (${difficulty} difficulty)`
+    );
+
     this.completedInstructions = [];
     this.startTime = Date.now();
-    
+
     // Start face detection
     if (this.realTimeMode) {
       this.faceDetector.startDetection();
     }
-    
+
     for (const command of commandSequence) {
-      if (!this.isProcessing) break; // Stop if test was cancelled
-      
-      Logger.info(`Executing real-time command ${command.sequenceId}/${commandCount}:`, command.type);
-      
+      if (!this.isProcessing) {break;} // Stop if test was cancelled
+
+      Logger.info(
+        `Executing real-time command ${command.sequenceId}/${commandCount}:`,
+        command.type
+
       const result = await this._executeRealTimeCommand(command, options);
-      
+
       if (result.isValid) {
         this.completedInstructions.push({
           command,
           instruction: command.instruction,
-          result: result,
+          result,
           sequenceId: command.sequenceId,
           timestamp: new Date().toISOString(),
-          realTimeDetection: true
+          realTimeDetection: true,
         });
-        
+
         if (this.onProgress) {
-          this.onProgress(`✅ ${command.message} - Başarılı! (Güven: ${result.confidence})`);
+          this.onProgress(
+            `✅ ${command.message} - Başarılı! (Güven: ${result.confidence})`
+          );
         }
       } else if (this.retryCount >= this.config.maxRetries) {
-        throw new Error(`Talimat başarısız: ${command.message}. Maksimum deneme sayısına ulaşıldı.`);
-      }
-      
+        throw new Error(
+          `Talimat başarısız: ${command.message}. Maksimum deneme sayısına ulaşıldı.`
+        );
+
       // Small delay between commands
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    
+
     // Stop face detection
     if (this.realTimeMode) {
       this.faceDetector.stopDetection();
     }
-    
+
     // Validate entire sequence
     if (this.completedInstructions.length > 0) {
-      Logger.info('Real-time command sequence completed successfully');
+      Logger.info(
+        `Mock liveness detection completed with ${this.completedInstructions.length} instructions`
+      );
     }
   }
 
@@ -504,15 +545,17 @@ class LivenessDetector {
    */
   async _captureInstructionResponse(command, options) {
     this._updateStatus(LIVENESS_STATUS.CAPTURING);
-    
+
     if (this.onProgress) {
       this.onProgress(`📸 ${command.message} - Yakalanıyor...`);
     }
-    
+
     // Simulate image capture with command-specific timing
-    const captureDelay = command.duration ? Math.min(command.duration / 2, 1000) : 500;
-    await new Promise(resolve => setTimeout(resolve, captureDelay));
-    
+    const captureDelay = command.duration
+      ? Math.min(command.duration / 2, 1000)
+      : 500;
+    await new Promise((resolve) => setTimeout(resolve, captureDelay));
+
     const captureData = {
       command,
       instruction: command.instruction,
@@ -521,15 +564,15 @@ class LivenessDetector {
       timestamp: new Date().toISOString(),
       quality: this.config.captureQuality,
       sequenceId: command.sequenceId || 1,
-      mockCapture: true
+      mockCapture: true,
     };
-    
+
     this.capturedImages.push(captureData);
-    
+
     if (this.onCaptureComplete) {
       this.onCaptureComplete(captureData);
     }
-    
+
     return captureData;
   }
 
@@ -540,18 +583,18 @@ class LivenessDetector {
    */
   _simulateMotionDetection(instruction) {
     const motionTypes = {
-      [LIVENESS_INSTRUCTIONS.LOOK_STRAIGHT]: 'face_forward',
-      [LIVENESS_INSTRUCTIONS.BLINK]: 'eye_blink',
-      [LIVENESS_INSTRUCTIONS.TURN_LEFT]: 'head_left',
-      [LIVENESS_INSTRUCTIONS.TURN_RIGHT]: 'head_right',
-      [LIVENESS_INSTRUCTIONS.SMILE]: 'smile_detected',
-      [LIVENESS_INSTRUCTIONS.NOD]: 'head_nod'
+      [LIVENESS_INSTRUCTIONS.LOOK_STRAIGHT]: "face_forward",
+      [LIVENESS_INSTRUCTIONS.BLINK]: "eye_blink",
+      [LIVENESS_INSTRUCTIONS.TURN_LEFT]: "head_left",
+      [LIVENESS_INSTRUCTIONS.TURN_RIGHT]: "head_right",
+      [LIVENESS_INSTRUCTIONS.SMILE]: "smile_detected",
+      [LIVENESS_INSTRUCTIONS.NOD]: "head_nod",
     };
-    
+
     return {
-      type: motionTypes[instruction] || 'unknown',
+      type: motionTypes[instruction] || "unknown",
       detected: true,
-      confidence: 0.8 + Math.random() * 0.2
+      confidence: 0.8 + Math.random() * 0.2,
     };
   }
 
@@ -563,14 +606,14 @@ class LivenessDetector {
    */
   _mapInstructionToCommandType(instruction) {
     const instructionMap = {
-      [LIVENESS_INSTRUCTIONS.LOOK_STRAIGHT]: 'lookStraight',
-      [LIVENESS_INSTRUCTIONS.BLINK]: 'blink',
-      [LIVENESS_INSTRUCTIONS.TURN_LEFT]: 'lookLeft',
-      [LIVENESS_INSTRUCTIONS.TURN_RIGHT]: 'lookRight',
-      [LIVENESS_INSTRUCTIONS.SMILE]: 'smile',
-      [LIVENESS_INSTRUCTIONS.NOD]: 'nod'
+      [LIVENESS_INSTRUCTIONS.LOOK_STRAIGHT]: "lookStraight",
+      [LIVENESS_INSTRUCTIONS.BLINK]: "blink",
+      [LIVENESS_INSTRUCTIONS.TURN_LEFT]: "lookLeft",
+      [LIVENESS_INSTRUCTIONS.TURN_RIGHT]: "lookRight",
+      [LIVENESS_INSTRUCTIONS.SMILE]: "smile",
+      [LIVENESS_INSTRUCTIONS.NOD]: "nod",
     };
-    
+
     return instructionMap[instruction] || instruction;
   }
 
@@ -588,7 +631,7 @@ class LivenessDetector {
    * @param {string} difficulty - Difficulty level
    * @returns {object[]} - Command sequence
    */
-  generateTestSequence(count = 3, difficulty = 'easy') {
+  generateTestSequence(count = 3, difficulty = "easy") {
     return generateCommandSequence(count, difficulty);
   }
 
@@ -598,26 +641,26 @@ class LivenessDetector {
    */
   _setupFaceDetectionCallbacks() {
     // Register motion detection callbacks
-    this.faceDetector.onMotionDetected('blink', (motionData) => {
-      this._handleMotionDetected('blink', motionData);
+    this.faceDetector.onMotionDetected("blink", (motionData) => {
+      this._handleMotionDetected("blink", motionData);
     });
-    
-    this.faceDetector.onMotionDetected('lookLeft', (motionData) => {
-      this._handleMotionDetected('lookLeft', motionData);
+
+    this.faceDetector.onMotionDetected("lookLeft", (motionData) => {
+      this._handleMotionDetected("lookLeft", motionData);
     });
-    
-    this.faceDetector.onMotionDetected('lookRight', (motionData) => {
-      this._handleMotionDetected('lookRight', motionData);
+
+    this.faceDetector.onMotionDetected("lookRight", (motionData) => {
+      this._handleMotionDetected("lookRight", motionData);
     });
-    
-    this.faceDetector.onMotionDetected('smile', (motionData) => {
-      this._handleMotionDetected('smile', motionData);
+
+    this.faceDetector.onMotionDetected("smile", (motionData) => {
+      this._handleMotionDetected("smile", motionData);
     });
-    
-    this.faceDetector.onMotionDetected('nod', (motionData) => {
-      this._handleMotionDetected('nod', motionData);
+
+    this.faceDetector.onMotionDetected("nod", (motionData) => {
+      this._handleMotionDetected("nod", motionData);
     });
-    
+
     // General motion callback
     this.faceDetector.onAnyMotionDetected((motionData) => {
       if (this.onMotionDetected) {
@@ -625,7 +668,7 @@ class LivenessDetector {
       }
     });
   }
-  
+
   /**
    * Handle detected motion (Day 9)
    * @private
@@ -633,25 +676,27 @@ class LivenessDetector {
    * @param {object} motionData - Motion detection data
    */
   _handleMotionDetected(motionType, motionData) {
-    if (!this.currentCommand || !this.isProcessing) return;
-    
+    if (!this.currentCommand || !this.isProcessing) {return;}
+
     // Check if detected motion matches current command
     const commandType = this._mapCommandToMotionType(this.currentCommand.type);
-    
+
     if (motionType === commandType) {
-      Logger.info(`Motion detected for command: ${this.currentCommand.type}`, motionData);
-      
+      Logger.info(
+        `Motion detected for command: ${this.currentCommand.type}`,
+        motionData
+
       // Clear timeout
       if (this.detectionTimeout) {
         clearTimeout(this.detectionTimeout);
         this.detectionTimeout = null;
       }
-      
+
       // Trigger success callback
       if (this.onProgress) {
         this.onProgress(`✅ ${this.currentCommand.message} algılandı!`);
       }
-      
+
       // Store detection result
       this.currentDetectionResult = {
         isValid: true,
@@ -659,11 +704,11 @@ class LivenessDetector {
         motionType,
         detectionData: motionData,
         timestamp: Date.now(),
-        realTimeDetection: true
+        realTimeDetection: true,
       };
     }
   }
-  
+
   /**
    * Execute real-time command with face detection (Day 9)
    * @private
@@ -676,10 +721,10 @@ class LivenessDetector {
       this.currentCommand = command;
       this.commandStartTime = Date.now();
       this.currentDetectionResult = null;
-      
+
       // Give instruction to user
       this._updateStatus(LIVENESS_STATUS.INSTRUCTION_GIVEN);
-      
+
       if (this.onInstructionGiven) {
         this.onInstructionGiven({
           command,
@@ -688,14 +733,15 @@ class LivenessDetector {
           icon: command.icon,
           duration: command.duration,
           timestamp: new Date().toISOString(),
-          realTimeMode: true
+          realTimeMode: true,
         });
       }
-      
+
       if (this.onProgress) {
-        this.onProgress(`${command.icon} ${command.message} - Hareket bekleniyor...`);
-      }
-      
+        this.onProgress(
+          `${command.icon} ${command.message} - Hareket bekleniyor...`
+        );
+
       // Set timeout for command completion
       const timeout = command.duration || 5000; // 5 seconds default
       this.detectionTimeout = setTimeout(() => {
@@ -706,12 +752,12 @@ class LivenessDetector {
             confidence: 0,
             error: `${command.message} - Zaman aşımı`,
             timeout: true,
-            realTimeDetection: true
+            realTimeDetection: true,
           };
           resolve(timeoutResult);
         }
       }, timeout);
-      
+
       // Check for detection result periodically
       const checkResult = () => {
         if (this.currentDetectionResult) {
@@ -720,11 +766,11 @@ class LivenessDetector {
           setTimeout(checkResult, 100);
         }
       };
-      
+
       setTimeout(checkResult, 100);
     });
   }
-  
+
   /**
    * Validate real-time response (Day 9)
    * @private
@@ -734,28 +780,28 @@ class LivenessDetector {
    */
   async _validateRealTimeResponse(captureData, commandType) {
     const detectionData = captureData.detectionData;
-    
+
     if (!detectionData) {
       return {
         isValid: false,
         confidence: 0,
-        error: 'Yüz algılama verisi bulunamadı',
+        error: "Yüz algılama verisi bulunamadı",
         commandType,
-        realTimeValidation: true
+        realTimeValidation: true,
       };
     }
-    
+
     // Validate based on command type
     const motionType = this._mapCommandToMotionType(commandType);
     const motionDetected = detectionData.motions[motionType];
     const confidence = detectionData.confidence.overall;
-    
+
     return {
       isValid: motionDetected && confidence > 0.6,
       confidence: parseFloat(confidence.toFixed(2)),
       commandType,
       motionType,
-      detectionType: 'real_time_face_detection',
+      detectionType: "real_time_face_detection",
       requiredMotion: motionType,
       timestamp: new Date().toISOString(),
       realTimeValidation: true,
@@ -763,12 +809,12 @@ class LivenessDetector {
         faceDetected: detectionData.faceDetected,
         motionDetected,
         confidenceBreakdown: detectionData.confidence,
-        detectionData: detectionData
+        detectionData
       },
-      error: !motionDetected ? `${commandType} hareketi algılanamadı` : null
+      error: !motionDetected ? `${commandType} hareketi algılanamadı` : null,
     };
   }
-  
+
   /**
    * Map command type to motion type (Day 9)
    * @private
@@ -777,17 +823,17 @@ class LivenessDetector {
    */
   _mapCommandToMotionType(commandType) {
     const mapping = {
-      'blink': 'blink',
-      'lookLeft': 'lookLeft', 
-      'lookRight': 'lookRight',
-      'lookStraight': 'lookStraight',
-      'smile': 'smile',
-      'nod': 'nod'
+      blink: "blink",
+      lookLeft: "lookLeft",
+      lookRight: "lookRight",
+      lookStraight: "lookStraight",
+      smile: "smile",
+      nod: "nod",
     };
-    
+
     return mapping[commandType] || commandType;
   }
-  
+
   /**
    * Process camera frame for face detection (Day 9)
    * @param {object} frame - Camera frame
@@ -797,10 +843,10 @@ class LivenessDetector {
     if (!this.realTimeMode || !this.faceDetector.isReady()) {
       return null;
     }
-    
+
     return await this.faceDetector.processFrame(frame);
   }
-  
+
   /**
    * Get face detection state (Day 9)
    * @returns {object} - Face detection state
@@ -809,13 +855,13 @@ class LivenessDetector {
     if (!this.realTimeMode) {
       return { realTimeMode: false };
     }
-    
+
     return {
       realTimeMode: true,
       isReady: this.faceDetector.isReady(),
       isDetecting: this.faceDetector.isDetecting,
       motionState: this.faceDetector.getMotionState(),
-      currentCommand: this.currentCommand
+      currentCommand: this.currentCommand,
     };
   }
 
@@ -824,16 +870,19 @@ class LivenessDetector {
    * @private
    */
   async _cleanupCamera() {
-    Logger.info('Cleaning up camera and face detection resources...');
-    
+    Logger.info("Cleaning up camera and face detection resources...");
+
     // Stop face detection
     if (this.realTimeMode) {
       this.faceDetector.stopDetection();
     }
-    
-    await new Promise(resolve => setTimeout(resolve, 500));
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 }
 
-export default LivenessDetector;
-export { FaceDetector };
+module.exports = LivenessDetector;
+module.exports.LIVENESS_STATUS = LIVENESS_STATUS;
+module.exports.LIVENESS_INSTRUCTIONS = LIVENESS_INSTRUCTIONS;
+module.exports.LIVENESS_CONFIG = LIVENESS_CONFIG;
+module.exports.FaceDetector = FaceDetector;

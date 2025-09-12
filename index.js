@@ -4,7 +4,7 @@
 // OCR Module
 export * from './modules/ocr';
 
-// NFC Module  
+// NFC Module
 export * from './modules/nfc';
 
 // Liveness Detection Module

@@ -9,7 +9,7 @@ import {
   Alert,
   SafeAreaView,
   Modal,
-  ActivityIndicator
+  ActivityIndicator,
 } from 'react-native';
 import OCRReader from '../modules/ocr/OCRReader';
 import OCRCamera from '../modules/ocr/OCRCamera';
@@ -17,12 +17,15 @@ import Logger from '../utils/logger';
 import { OCR_STATUS } from '../modules/ocr/types';
 
 const OCRDemoScreen = () => {
-  const [ocrReader] = useState(() => new OCRReader({
-    onSuccess: handleOCRSuccess,
-    onError: handleOCRError,
-    onStatusChange: handleStatusChange
-  }));
-  
+  const [ocrReader] = useState(
+    () =>
+      new OCRReader({
+        onSuccess: handleOCRSuccess,
+        onError: handleOCRError,
+        onStatusChange: handleStatusChange,
+      })
+  );
+
   const [isOCRActive, setIsOCRActive] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [extractedText, setExtractedText] = useState(null);
@@ -34,14 +37,14 @@ const OCRDemoScreen = () => {
   function handleOCRSuccess(result) {
     Logger.info('OCR Success callback triggered', result);
     setExtractedText(result);
-    
+
     // Extract specific fields from the text
     const fields = {
       tcNo: ocrReader.extractField(result.text, 'tc_no'),
       name: ocrReader.extractField(result.text, 'name'),
-      surname: ocrReader.extractField(result.text, 'surname')
+      surname: ocrReader.extractField(result.text, 'surname'),
     };
-    
+
     setExtractedFields(fields);
     addLog(`✅ OCR Başarılı: ${result.text.substring(0, 50)}...`);
     setShowCamera(false);
@@ -63,19 +66,22 @@ const OCRDemoScreen = () => {
 
   const addLog = useCallback((message) => {
     const timestamp = new Date().toLocaleTimeString('tr-TR');
-    setLogs(prev => [...prev.slice(-9), `[${timestamp}] ${message}`]);
+    setLogs((prev) => [...prev.slice(-9), `[${timestamp}] ${message}`]);
   }, []);
 
   const startOCRSession = async () => {
     try {
       setIsProcessing(true);
       addLog('🚀 OCR sistemi başlatılıyor...');
-      
+
       await ocrReader.startOCR();
       setIsOCRActive(true);
       addLog('✅ OCR sistemi hazır');
-      
-      Alert.alert('Başarılı', 'OCR sistemi başlatıldı. Şimdi kamera ile fotoğraf çekebilirsiniz.');
+
+      Alert.alert(
+        'Başarılı',
+        'OCR sistemi başlatıldı. Şimdi kamera ile fotoğraf çekebilirsiniz.'
+      );
     } catch (error) {
       addLog(`❌ OCR başlatma hatası: ${error.message}`);
       Alert.alert('Hata', `OCR başlatılamadı: ${error.message}`);
@@ -97,14 +103,13 @@ const OCRDemoScreen = () => {
     try {
       setIsProcessing(true);
       addLog('📸 Fotoğraf çekildi, OCR işlemi başlıyor...');
-      
+
       // OCR processing will be handled by the success callback
       await ocrReader.extractText(photo.uri, {
         language: 'tr',
         confidence: 0.7,
-        enhanceImage: true
+        enhanceImage: true,
       });
-      
     } catch (error) {
       addLog(`❌ OCR işlem hatası: ${error.message}`);
       Alert.alert('OCR Hatası', error.message);
@@ -131,24 +136,23 @@ const OCRDemoScreen = () => {
       // Simulate capturing and processing
       const mockImageUri = await ocrReader.captureImage();
       addLog('📸 Mock fotoğraf çekildi');
-      
+
       // Mock OCR result for demo
       const mockResult = {
         text: 'TÜRKİYE CUMHURİYETİ KİMLİK KARTI AD: MEHMET SOYAD: YILMAZ T.C. KİMLİK NO: 12345678901',
         confidence: 0.92,
         blocks: [
           { text: 'TÜRKİYE CUMHURİYETİ KİMLİK KARTI', confidence: 0.95 },
-          { text: 'AD: MEHMET', confidence: 0.90 },
+          { text: 'AD: MEHMET', confidence: 0.9 },
           { text: 'SOYAD: YILMAZ', confidence: 0.88 },
-          { text: 'T.C. KİMLİK NO: 12345678901', confidence: 0.92 }
+          { text: 'T.C. KİMLİK NO: 12345678901', confidence: 0.92 },
         ],
         language: 'tr',
         processingTime: 1500,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
 
       handleOCRSuccess(mockResult);
-      
     } catch (error) {
       addLog(`❌ Mock test hatası: ${error.message}`);
       Alert.alert('Test Hatası', error.message);
@@ -177,7 +181,8 @@ const OCRDemoScreen = () => {
         <View style={styles.header}>
           <Text style={styles.title}>OCR Demo Uygulaması</Text>
           <Text style={styles.subtitle}>
-            Durum: <Text style={[styles.status, { color: getStatusColor(status) }]}>
+            Durum:{' '}
+            <Text style={[styles.status, { color: getStatusColor(status) }]}>
               {getStatusText(status)}
             </Text>
           </Text>
@@ -185,8 +190,12 @@ const OCRDemoScreen = () => {
 
         {/* Control Buttons */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={[styles.button, styles.primaryButton, isProcessing && styles.buttonDisabled]} 
+          <TouchableOpacity
+            style={[
+              styles.button,
+              styles.primaryButton,
+              isProcessing && styles.buttonDisabled,
+            ]}
             onPress={startOCRSession}
             disabled={isProcessing || isOCRActive}
           >
@@ -195,24 +204,32 @@ const OCRDemoScreen = () => {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.button, styles.cameraButton, (!isOCRActive || isProcessing) && styles.buttonDisabled]} 
+          <TouchableOpacity
+            style={[
+              styles.button,
+              styles.cameraButton,
+              (!isOCRActive || isProcessing) && styles.buttonDisabled,
+            ]}
             onPress={openCamera}
             disabled={!isOCRActive || isProcessing}
           >
             <Text style={styles.buttonText}>📷 Kamera Aç</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.button, styles.testButton, isProcessing && styles.buttonDisabled]} 
+          <TouchableOpacity
+            style={[
+              styles.button,
+              styles.testButton,
+              isProcessing && styles.buttonDisabled,
+            ]}
             onPress={testWithMockData}
             disabled={isProcessing}
           >
             <Text style={styles.buttonText}>🧪 Mock Test</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.button, styles.resetButton]} 
+          <TouchableOpacity
+            style={[styles.button, styles.resetButton]}
             onPress={resetOCR}
           >
             <Text style={styles.buttonText}>🔄 Sıfırla</Text>
@@ -234,12 +251,12 @@ const OCRDemoScreen = () => {
             <ScrollView style={styles.textContainer} nestedScrollEnabled>
               <Text style={styles.extractedText}>{extractedText.text}</Text>
             </ScrollView>
-            
+
             <View style={styles.metaInfo}>
               <Text style={styles.metaText}>
-                Güven: {(extractedText.confidence * 100).toFixed(1)}% | 
-                Blok: {extractedText.blocks?.length || 0} | 
-                Süre: {extractedText.processingTime}ms
+                Güven: {(extractedText.confidence * 100).toFixed(1)}% |
+                {extractedText.blocks?.length || 0} | Süre:{' '}
+                {extractedText.processingTime}ms
               </Text>
             </View>
           </View>
@@ -280,7 +297,9 @@ const OCRDemoScreen = () => {
           </View>
           <ScrollView style={styles.logsScrollView} nestedScrollEnabled>
             {logs.map((log, index) => (
-              <Text key={index} style={styles.logText}>{log}</Text>
+              <Text key={index} style={styles.logText}>
+                {log}
+              </Text>
             ))}
             {logs.length === 0 && (
               <Text style={styles.emptyLogsText}>Henüz log kaydı yok</Text>
@@ -300,7 +319,7 @@ const OCRDemoScreen = () => {
           onError={handleCameraError}
           guidanceText="Kimlik kartınızı çerçeve içine yerleştirin"
         />
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.closeCameraButton}
           onPress={() => setShowCamera(false)}
         >
@@ -314,27 +333,43 @@ const OCRDemoScreen = () => {
 // Helper functions
 const getStatusColor = (status) => {
   switch (status) {
-    case OCR_STATUS.IDLE: return '#666';
-    case OCR_STATUS.INITIALIZING: return '#FF9500';
-    case OCR_STATUS.READY: return '#34C759';
-    case OCR_STATUS.CAPTURING: return '#007AFF';
-    case OCR_STATUS.PROCESSING: return '#FF9500';
-    case OCR_STATUS.SUCCESS: return '#34C759';
-    case OCR_STATUS.ERROR: return '#FF3B30';
-    default: return '#666';
+    case OCR_STATUS.IDLE:
+      return '#666';
+    case OCR_STATUS.INITIALIZING:
+      return '#FF9500';
+    case OCR_STATUS.READY:
+      return '#34C759';
+    case OCR_STATUS.CAPTURING:
+      return '#007AFF';
+    case OCR_STATUS.PROCESSING:
+      return '#FF9500';
+    case OCR_STATUS.SUCCESS:
+      return '#34C759';
+    case OCR_STATUS.ERROR:
+      return '#FF3B30';
+    default:
+      return '#666';
   }
 };
 
 const getStatusText = (status) => {
   switch (status) {
-    case OCR_STATUS.IDLE: return 'Beklemede';
-    case OCR_STATUS.INITIALIZING: return 'Başlatılıyor';
-    case OCR_STATUS.READY: return 'Hazır';
-    case OCR_STATUS.CAPTURING: return 'Fotoğraf Çekiliyor';
-    case OCR_STATUS.PROCESSING: return 'İşleniyor';
-    case OCR_STATUS.SUCCESS: return 'Başarılı';
-    case OCR_STATUS.ERROR: return 'Hata';
-    default: return 'Bilinmiyor';
+    case OCR_STATUS.IDLE:
+      return 'Beklemede';
+    case OCR_STATUS.INITIALIZING:
+      return 'Başlatılıyor';
+    case OCR_STATUS.READY:
+      return 'Hazır';
+    case OCR_STATUS.CAPTURING:
+      return 'Fotoğraf Çekiliyor';
+    case OCR_STATUS.PROCESSING:
+      return 'İşleniyor';
+    case OCR_STATUS.SUCCESS:
+      return 'Başarılı';
+    case OCR_STATUS.ERROR:
+      return 'Hata';
+    default:
+      return 'Bilinmiyor';
   }
 };
 

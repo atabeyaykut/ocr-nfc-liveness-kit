@@ -15,10 +15,10 @@ const OCRExample = () => {
     try {
       setIsProcessing(true);
       Logger.info('Starting OCR session...');
-      
+
       await ocrReader.startOCR();
       setIsOCRActive(true);
-      
+
       Alert.alert('Success', 'OCR system initialized successfully');
     } catch (error) {
       Logger.error('Failed to start OCR:', error.message);
@@ -36,7 +36,7 @@ const OCRExample = () => {
       // Extract text from captured image
       const result = await ocrReader.extractText(photo.uri);
       setExtractedText(result);
-      
+
       Alert.alert('Text Extracted', result.text);
     } catch (error) {
       Logger.error('Text extraction failed:', error.message);
@@ -64,7 +64,7 @@ const OCRExample = () => {
       // Simulate image capture and text extraction
       const mockImageUri = await ocrReader.captureImage();
       const result = await ocrReader.extractText(mockImageUri);
-      
+
       setExtractedText(result);
       Alert.alert('Mock Test Success', `Extracted: ${result.text}`);
     } catch (error) {
@@ -85,10 +85,10 @@ const OCRExample = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>OCR SDK Example</Text>
-      
+
       <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          style={[styles.button, isProcessing && styles.buttonDisabled]} 
+        <TouchableOpacity
+          style={[styles.button, isProcessing && styles.buttonDisabled]}
           onPress={startOCRSession}
           disabled={isProcessing || isOCRActive}
         >
@@ -97,16 +97,20 @@ const OCRExample = () => {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.button, styles.testButton, isProcessing && styles.buttonDisabled]} 
+        <TouchableOpacity
+          style={[
+            styles.button,
+            styles.testButton,
+            isProcessing && styles.buttonDisabled,
+          ]}
           onPress={testWithMockData}
           disabled={isProcessing}
         >
           <Text style={styles.buttonText}>Test with Mock Data</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.button, styles.resetButton]} 
+        <TouchableOpacity
+          style={[styles.button, styles.resetButton]}
           onPress={resetOCR}
         >
           <Text style={styles.buttonText}>Reset</Text>

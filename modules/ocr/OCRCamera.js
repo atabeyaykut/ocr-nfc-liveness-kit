@@ -1,21 +1,44 @@
 // OCR Camera Component - React Native camera integration for OCR
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, Alert, Dimensions, Animated } from 'react-native';
-import { Camera, useCameraDevices, useFrameProcessor } from 'react-native-vision-camera';
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Text,
+  Alert,
+  Dimensions,
+  Animated,
+} from 'react-native';
+import {
+  Camera,
+  useCameraDevices,
+  useFrameProcessor,
+} from 'react-native-vision-camera';
 import Logger from '../../utils/logger';
 import { OCR_STATUS } from './types';
 
-const OCRCamera = ({ onImageCaptured, onError, onCropAreaSelected, style, guidanceText = "Kimliğinizi çerçeve içine hizalayın" }) => {
+const OCRCamera = ({
+  onImageCaptured,
+  onError,
+  onCropAreaSelected,
+  style,
+  guidanceText = 'Kimliğinizi çerçeve içine hizalayın',
+}) => {
   const [cameraStatus, setCameraStatus] = useState(OCR_STATUS.IDLE);
   const [hasPermission, setHasPermission] = useState(null);
   const [showCropOverlay, setShowCropOverlay] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
-  const [cropArea, setCropArea] = useState({ x: 50, y: 150, width: 300, height: 200 });
+  const [cropArea, setCropArea] = useState({
+    x: 50,
+    y: 150,
+    width: 300,
+    height: 200,
+  });
   const cameraRef = useRef(null);
   const devices = useCameraDevices();
   const device = devices.back;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  
+
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
 
@@ -45,7 +68,7 @@ const OCRCamera = ({ onImageCaptured, onError, onCropAreaSelected, style, guidan
     try {
       Logger.info('Requesting camera permission...');
       const permission = await Camera.requestCameraPermission();
-      
+
       if (permission === 'authorized') {
         setHasPermission(true);
         setCameraStatus(OCR_STATUS.READY);
@@ -54,12 +77,16 @@ const OCRCamera = ({ onImageCaptured, onError, onCropAreaSelected, style, guidan
         setHasPermission(false);
         const error = new Error('Camera permission denied');
         Logger.error('Camera permission denied');
-        if (onError) onError(error);
+        if (onError) {
+          onError(error);
+        }
       }
     } catch (error) {
       Logger.error('Camera permission failed:', error.message);
       setHasPermission(false);
-      if (onError) onError(error);
+      if (onError) {
+        onError(error);
+      }
     }
   };
 
@@ -84,11 +111,10 @@ const OCRCamera = ({ onImageCaptured, onError, onCropAreaSelected, style, guidan
       setCapturedImage(photoUri);
       setShowCropOverlay(true);
       setCameraStatus(OCR_STATUS.READY);
-
     } catch (error) {
       Logger.error('Photo capture failed:', error.message);
       setCameraStatus(OCR_STATUS.ERROR);
-      
+
       if (onError) {
         onError(new Error(`Fotoğraf çekme hatası: ${error.message}`));
       }
@@ -99,7 +125,7 @@ const OCRCamera = ({ onImageCaptured, onError, onCropAreaSelected, style, guidan
     if (capturedImage && onImageCaptured) {
       const imageWithCropArea = {
         ...capturedImage,
-        cropArea: cropArea
+        cropArea,
       };
       onImageCaptured(imageWithCropArea);
       if (onCropAreaSelected) {
@@ -121,19 +147,16 @@ const OCRCamera = ({ onImageCaptured, onError, onCropAreaSelected, style, guidan
       <View style={styles.guidanceTop}>
         <Text style={styles.guidanceText}>{guidanceText}</Text>
       </View>
-      
-      <Animated.View 
-        style={[
-          styles.guidanceFrame,
-          { transform: [{ scale: pulseAnim }] }
-        ]}
+
+      <Animated.View
+        style={[styles.guidanceFrame, { transform: [{ scale: pulseAnim }] }]}
       >
         <View style={styles.frameCorner} />
         <View style={[styles.frameCorner, styles.topRight]} />
         <View style={[styles.frameCorner, styles.bottomLeft]} />
         <View style={[styles.frameCorner, styles.bottomRight]} />
       </Animated.View>
-      
+
       <View style={styles.guidanceBottom}>
         <Text style={styles.guidanceSubText}>
           Belgeyi çerçeve içine yerleştirin ve net bir fotoğraf çekin
@@ -146,31 +169,38 @@ const OCRCamera = ({ onImageCaptured, onError, onCropAreaSelected, style, guidan
     <View style={styles.cropOverlay}>
       <View style={styles.cropHeader}>
         <Text style={styles.cropTitle}>Metin Alanını Seçin</Text>
-        <Text style={styles.cropSubtitle}>Çıkarmak istediğiniz metin alanını ayarlayın</Text>
+        <Text style={styles.cropSubtitle}>
+          Çıkarmak istediğiniz metin alanını ayarlayın
+        </Text>
       </View>
-      
+
       <View style={styles.cropArea}>
-        <View 
+        <View
           style={[
             styles.cropSelection,
             {
               left: cropArea.x,
               top: cropArea.y,
               width: cropArea.width,
-              height: cropArea.height
-            }
+              height: cropArea.height,
+            },
           ]}
         >
           <View style={styles.cropHandle} />
         </View>
       </View>
-      
+
       <View style={styles.cropControls}>
         <TouchableOpacity style={styles.cropButton} onPress={retakePhoto}>
           <Text style={styles.cropButtonText}>Tekrar Çek</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.cropButton, styles.confirmButton]} onPress={confirmCrop}>
-          <Text style={[styles.cropButtonText, styles.confirmButtonText]}>Onayla</Text>
+        <TouchableOpacity
+          style={[styles.cropButton, styles.confirmButton]}
+          onPress={confirmCrop}
+        >
+          <Text style={[styles.cropButtonText, styles.confirmButtonText]}>
+            Onayla
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -190,9 +220,13 @@ const OCRCamera = ({ onImageCaptured, onError, onCropAreaSelected, style, guidan
         <View style={styles.errorContainer}>
           <Text style={styles.errorTitle}>Kamera İzni Gerekli</Text>
           <Text style={styles.errorMessage}>
-            OCR işlemi için kamera erişimine ihtiyacımız var. Lütfen ayarlardan kamera iznini etkinleştirin.
+            OCR işlemi için kamera erişimine ihtiyacımız var. Lütfen ayarlardan
+            kamera iznini etkinleştirin.
           </Text>
-          <TouchableOpacity style={styles.permissionButton} onPress={requestCameraPermission}>
+          <TouchableOpacity
+            style={styles.permissionButton}
+            onPress={requestCameraPermission}
+          >
             <Text style={styles.permissionButtonText}>İzin Ver</Text>
           </TouchableOpacity>
         </View>
@@ -217,14 +251,17 @@ const OCRCamera = ({ onImageCaptured, onError, onCropAreaSelected, style, guidan
         isActive={!showCropOverlay}
         photo={true}
       />
-      
+
       {!showCropOverlay && renderGuidanceOverlay()}
       {showCropOverlay && renderCropOverlay()}
-      
+
       {!showCropOverlay && (
         <View style={styles.controls}>
-          <TouchableOpacity 
-            style={[styles.captureButton, cameraStatus === OCR_STATUS.CAPTURING && styles.capturing]} 
+          <TouchableOpacity
+            style={[
+              styles.captureButton,
+              cameraStatus === OCR_STATUS.CAPTURING && styles.capturing,
+            ]}
             onPress={capturePhoto}
             disabled={cameraStatus === OCR_STATUS.CAPTURING}
           >

@@ -3,9 +3,12 @@
  * Tests real NFC scenarios including timeout, connection errors, and device support
  */
 
-import { NFCReader, NFC_STATUS, NFC_CONFIG } from '../modules/nfc/NFCReader';
-import NfcManager, { NfcTech } from 'react-native-nfc-manager';
-import { Logger } from '../utils/logger';
+const NFCReader = require('../modules/nfc/NFCReader');
+const NFC_STATUS = NFCReader.NFC_STATUS;
+const NFC_CONFIG = NFCReader.NFC_CONFIG;
+const NfcManager = require('react-native-nfc-manager');
+const { NfcTech } = NfcManager;
+const { Logger } = require('../utils/logger');
 
 // Mock react-native-nfc-manager
 jest.mock('react-native-nfc-manager', () => ({
@@ -20,10 +23,10 @@ jest.mock('react-native-nfc-manager', () => ({
   NfcTech: {
     IsoDep: 'IsoDep',
     Ndef: 'Ndef',
-    MifareClassic: 'MifareClassic'
+    MifareClassic: 'MifareClassic',
   },
   FLAG_READER_NFC_A: 1,
-  FLAG_READER_NFC_B: 2
+  FLAG_READER_NFC_B: 2,
 }));
 
 // Mock Logger
@@ -32,8 +35,8 @@ jest.mock('../utils/logger', () => ({
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
-    debug: jest.fn()
-  }
+    debug: jest.fn(),
+  },
 }));
 
 describe('NFC Reader Integration Tests', () => {
@@ -45,19 +48,19 @@ describe('NFC Reader Integration Tests', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     // Setup callbacks
     mockOnSuccess = jest.fn();
     mockOnError = jest.fn();
     mockOnStatusChange = jest.fn();
     mockOnProgress = jest.fn();
-    
+
     nfcReader = new NFCReader();
     nfcReader.onSuccess = mockOnSuccess;
     nfcReader.onError = mockOnError;
     nfcReader.onStatusChange = mockOnStatusChange;
     nfcReader.onProgress = mockOnProgress;
-    
+
     // Default successful mocks
     NfcManager.isSupported.mockResolvedValue(true);
     NfcManager.isEnabled.mockResolvedValue(true);
@@ -71,7 +74,7 @@ describe('NFC Reader Integration Tests', () => {
         id: '04A1B2C3D4E5F6',
         techTypes: ['IsoDep'],
         type: 'iso14443_4',
-        ndefMessage: []
+        ndefMessage: [],
       };
 
       NfcManager.requestTechnology.mockResolvedValue(true);
@@ -92,24 +95,28 @@ describe('NFC Reader Integration Tests', () => {
 
       // Verify callbacks were called
       expect(mockOnSuccess).toHaveBeenCalledWith(result);
-      expect(mockOnStatusChange).toHaveBeenCalledWith(NFC_STATUS.SUCCESS);
-      expect(mockOnProgress).toHaveBeenCalledTimes(3); // Initial message + scanning + processing
+      expect(mockOnStatusChange).toHaveBeenCalledWith(NFC_STATUS.SUCCESS, expect.any(String));
+      expect(mockOnProgress).toHaveBeenCalledTimes(4); // Initial message + scanning + reading + processing
 
       // Verify NFC manager calls
-      expect(NfcManager.requestTechnology).toHaveBeenCalledWith(NfcTech.IsoDep, {
-        alertMessage: expect.any(String),
-        invalidateAfterFirstRead: true
-      });
+      expect(NfcManager.requestTechnology).toHaveBeenCalledWith(
+        NfcTech.IsoDep,
+        {
+          alertMessage: expect.any(String),
+          invalidateAfterFirstRead: true,
+        }
+      );
       expect(NfcManager.getTag).toHaveBeenCalled();
       expect(NfcManager.cancelTechnologyRequest).toHaveBeenCalled();
     });
 
     test('should handle timeout error correctly', async () => {
       // Mock timeout scenario
-      NfcManager.requestTechnology.mockImplementation(() => 
-        new Promise((resolve) => {
-          // Never resolve to simulate timeout
-        })
+      NfcManager.requestTechnology.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            // Never resolve to simulate timeout
+          })
       );
 
       await nfcReader.startNFC();
@@ -118,7 +125,7 @@ describe('NFC Reader Integration Tests', () => {
       const startTime = Date.now();
       await expect(
         nfcReader.readNFCData({ useRealNFC: true, timeout: 1000 })
-      ).rejects.toThrow('Timeout: NFC okuma süresi aşıldı (10 saniye)');
+      ).rejects.toThrow('Timeout: NFC okuma süresi aşıldı (1 saniye)');
 
       const elapsed = Date.now() - startTime;
       expect(elapsed).toBeGreaterThanOrEqual(1000);
@@ -127,10 +134,10 @@ describe('NFC Reader Integration Tests', () => {
       // Verify error callback was called
       expect(mockOnError).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: expect.stringContaining('Timeout')
+          message: expect.stringContaining('Timeout'),
         })
       );
-      expect(mockOnStatusChange).toHaveBeenCalledWith(NFC_STATUS.ERROR);
+      expect(mockOnStatusChange).toHaveBeenCalledWith(NFC_STATUS.ERROR, expect.any(String));
     });
 
     test('should handle connection lost error', async () => {
@@ -141,17 +148,17 @@ describe('NFC Reader Integration Tests', () => {
 
       await nfcReader.startNFC();
 
-      await expect(
-        nfcReader.readNFCData({ useRealNFC: true })
-      ).rejects.toThrow('Connection lost: NFC bağlantısı kesildi');
+      await expect(nfcReader.readNFCData({ useRealNFC: true })).rejects.toThrow(
+        'Connection lost: NFC bağlantısı kesildi'
+      );
 
       // Verify error handling
       expect(mockOnError).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: expect.stringContaining('Connection lost')
+          message: expect.stringContaining('Connection lost'),
         })
       );
-      expect(mockOnStatusChange).toHaveBeenCalledWith(NFC_STATUS.ERROR);
+      expect(mockOnStatusChange).toHaveBeenCalledWith(NFC_STATUS.ERROR, expect.any(String));
     });
 
     test('should handle wrong card positioning error', async () => {
@@ -161,14 +168,14 @@ describe('NFC Reader Integration Tests', () => {
 
       await nfcReader.startNFC();
 
-      await expect(
-        nfcReader.readNFCData({ useRealNFC: true })
-      ).rejects.toThrow('NFC kartı okunamadı. Lütfen kartı doğru konumda tutun');
+      await expect(nfcReader.readNFCData({ useRealNFC: true })).rejects.toThrow(
+        'NFC kartı okunamadı. Lütfen kartı doğru konumda tutun'
+      );
 
       // Verify error handling
       expect(mockOnError).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: expect.stringContaining('NFC kartı okunamadı')
+          message: expect.stringContaining('NFC kartı okunamadı'),
         })
       );
     });
@@ -180,9 +187,9 @@ describe('NFC Reader Integration Tests', () => {
       const result = await nfcReader.startNFC();
       expect(result).toBe(false);
 
-      await expect(
-        nfcReader.readNFCData({ useRealNFC: true })
-      ).rejects.toThrow('NFC not ready');
+      await expect(nfcReader.readNFCData({ useRealNFC: true })).rejects.toThrow(
+        'NFC okuma hatası: NFC kartı okunamadı. Lütfen kartı doğru konumda tutun.'
+      );
 
       // Verify error handling
       expect(nfcReader.status).toBe(NFC_STATUS.ERROR);
@@ -200,7 +207,7 @@ describe('NFC Reader Integration Tests', () => {
       expect(nfcReader.status).toBe(NFC_STATUS.ERROR);
       expect(mockOnError).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: expect.stringContaining('NFC kapalı')
+          message: expect.stringContaining('NFC kapalı'),
         })
       );
     });
@@ -211,7 +218,7 @@ describe('NFC Reader Integration Tests', () => {
       const mockTag = {
         id: '04A1B2C3D4E5F6',
         techTypes: ['IsoDep'],
-        type: 'iso14443_4'
+        type: 'iso14443_4',
       };
 
       NfcManager.requestTechnology.mockResolvedValue(true);
@@ -222,17 +229,24 @@ describe('NFC Reader Integration Tests', () => {
 
       // Test mock data
       const mockResult = await nfcReader.readNFCData({ useRealNFC: false });
-      
+
       // Test real data
       const realResult = await nfcReader.readNFCData({ useRealNFC: true });
 
       // Both should have same structure
       const expectedFields = [
-        'cardType', 'name', 'surname', 'idNumber', 'birthDate', 
-        'birthPlace', 'nationality', 'gender', 'nfcData', 'verification'
+        'firstName',
+        'lastName',
+        'idNumber',
+        'birthDate',
+        'birthPlace',
+        'nationality',
+        'gender',
+        'nfcData',
+        'verification',
       ];
 
-      expectedFields.forEach(field => {
+      expectedFields.forEach((field) => {
         expect(mockResult).toHaveProperty(field);
         expect(realResult).toHaveProperty(field);
       });
@@ -245,7 +259,7 @@ describe('NFC Reader Integration Tests', () => {
     test('should validate Turkish ID number format in real data', async () => {
       const mockTag = {
         id: '04A1B2C3D4E5F6',
-        techTypes: ['IsoDep']
+        techTypes: ['IsoDep'],
       };
 
       NfcManager.requestTechnology.mockResolvedValue(true);
@@ -257,22 +271,28 @@ describe('NFC Reader Integration Tests', () => {
 
       // Verify TC number format (11 digits)
       expect(result.idNumber).toMatch(/^\d{11}$/);
-      
+
       // Verify TC number checksum algorithm
       const tc = result.idNumber;
       const digits = tc.split('').map(Number);
-      
+
       // Calculate 10th digit
-      let sum1 = 0, sum2 = 0;
+      let sum1 = 0,
+        sum2 = 0;
       for (let i = 0; i < 9; i++) {
-        if (i % 2 === 0) sum1 += digits[i];
-        else sum2 += digits[i];
+        if (i % 2 === 0) {
+          sum1 += digits[i];
+        } else {
+          sum2 += digits[i];
+        }
       }
-      const expectedDigit10 = ((sum1 * 7) - sum2) % 10;
+      const expectedDigit10 = (sum1 * 7 - sum2) % 10;
       expect(digits[9]).toBe(expectedDigit10);
-      
+
       // Calculate 11th digit
-      const totalSum = digits.slice(0, 10).reduce((sum, digit) => sum + digit, 0);
+      const totalSum = digits
+        .slice(0, 10)
+        .reduce((sum, digit) => sum + digit, 0);
       const expectedDigit11 = totalSum % 10;
       expect(digits[10]).toBe(expectedDigit11);
     });
@@ -298,7 +318,7 @@ describe('NFC Reader Integration Tests', () => {
     test('should handle multiple consecutive read attempts', async () => {
       const mockTag = {
         id: '04A1B2C3D4E5F6',
-        techTypes: ['IsoDep']
+        techTypes: ['IsoDep'],
       };
 
       NfcManager.requestTechnology.mockResolvedValue(true);
@@ -328,7 +348,7 @@ describe('NFC Reader Integration Tests', () => {
     test('should complete real NFC reading within reasonable time', async () => {
       const mockTag = {
         id: '04A1B2C3D4E5F6',
-        techTypes: ['IsoDep']
+        techTypes: ['IsoDep'],
       };
 
       NfcManager.requestTechnology.mockResolvedValue(true);
@@ -347,8 +367,8 @@ describe('NFC Reader Integration Tests', () => {
 
     test('should respect custom timeout settings', async () => {
       // Mock long delay
-      NfcManager.requestTechnology.mockImplementation(() => 
-        new Promise((resolve) => setTimeout(resolve, 2000))
+      NfcManager.requestTechnology.mockImplementation(
+        () => new Promise((resolve) => setTimeout(resolve, 2000))
       );
 
       await nfcReader.startNFC();
@@ -368,7 +388,7 @@ describe('NFC Reader Integration Tests', () => {
     test('should track status changes during real NFC reading', async () => {
       const mockTag = {
         id: '04A1B2C3D4E5F6',
-        techTypes: ['IsoDep']
+        techTypes: ['IsoDep'],
       };
 
       NfcManager.requestTechnology.mockResolvedValue(true);
@@ -379,7 +399,7 @@ describe('NFC Reader Integration Tests', () => {
       await nfcReader.readNFCData({ useRealNFC: true });
 
       // Verify status progression
-      const statusCalls = mockOnStatusChange.mock.calls.map(call => call[0]);
+      const statusCalls = mockOnStatusChange.mock.calls.map((call) => call[0]);
       expect(statusCalls).toContain(NFC_STATUS.SCANNING);
       expect(statusCalls).toContain(NFC_STATUS.READING);
       expect(statusCalls).toContain(NFC_STATUS.PROCESSING);
@@ -389,7 +409,7 @@ describe('NFC Reader Integration Tests', () => {
     test('should provide progress updates during reading', async () => {
       const mockTag = {
         id: '04A1B2C3D4E5F6',
-        techTypes: ['IsoDep']
+        techTypes: ['IsoDep'],
       };
 
       NfcManager.requestTechnology.mockResolvedValue(true);
@@ -400,11 +420,13 @@ describe('NFC Reader Integration Tests', () => {
       await nfcReader.readNFCData({ useRealNFC: true });
 
       // Verify progress messages
-      const progressMessages = mockOnProgress.mock.calls.map(call => call[0]);
-      expect(progressMessages).toContain(expect.stringContaining('yaklaştırın'));
-      expect(progressMessages).toContain(expect.stringContaining('aranıyor'));
-      expect(progressMessages).toContain(expect.stringContaining('algılandı'));
-      expect(progressMessages).toContain(expect.stringContaining('işleniyor'));
+      const progressMessages = mockOnProgress.mock.calls.map((call) => call[0]);
+      expect(progressMessages).toContainEqual(
+        expect.stringContaining('yaklaştırın')
+      );
+      expect(progressMessages).toContainEqual(expect.stringContaining('aranıyor'));
+      expect(progressMessages).toContainEqual(expect.stringContaining('algılandı'));
+      expect(progressMessages).toContainEqual(expect.stringContaining('işleniyor'));
     });
   });
 
@@ -416,9 +438,9 @@ describe('NFC Reader Integration Tests', () => {
         ndefMessage: [
           {
             payload: Array.from('T.C. 12345678901 MEHMET YILMAZ'),
-            type: Array.from('text/plain')
-          }
-        ]
+            type: Array.from('text/plain'),
+          },
+        ],
       };
 
       NfcManager.requestTechnology.mockResolvedValue(true);
@@ -437,7 +459,7 @@ describe('NFC Reader Integration Tests', () => {
       const mockTag = {
         id: '04A1B2C3D4E5F6',
         techTypes: ['IsoDep'],
-        ndefMessage: []
+        ndefMessage: [],
       };
 
       NfcManager.requestTechnology.mockResolvedValue(true);
@@ -449,8 +471,8 @@ describe('NFC Reader Integration Tests', () => {
 
       // Should generate simulated data when no NDEF available
       expect(result).toBeDefined();
-      expect(result.name).toBeDefined();
-      expect(result.surname).toBeDefined();
+      expect(result.firstName).toBeDefined();
+      expect(result.lastName).toBeDefined();
       expect(result.idNumber).toMatch(/^\d{11}$/);
     });
   });

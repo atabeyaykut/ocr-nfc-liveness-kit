@@ -1,9 +1,9 @@
 // OCR Reader - Core OCR functionality
-import { OCR_STATUS, OCR_ERROR_CODES, OCR_CONFIG } from './types';
-import Logger from '../../utils/logger';
-import PermissionManager from '../../utils/permissions';
-import { ImageProcessor } from '../../utils/imageProcessor';
-import TextRecognition from 'react-native-text-recognition';
+const { OCR_STATUS, OCR_ERROR_CODES, OCR_CONFIG } = require("./types");
+const Logger = require("../../utils/logger");
+const PermissionManager = require("../../utils/permissions");
+const { ImageProcessor } = require("../../utils/imageProcessor");
+const TextRecognition = require("react-native-text-recognition");
 
 class OCRReader {
   constructor(options = {}) {
@@ -18,7 +18,7 @@ class OCRReader {
       totalProcessingTime: 0,
       imageProcessingTime: 0,
       ocrProcessingTime: 0,
-      lastProcessedImageSize: null
+      lastProcessedImageSize: null,
     };
   }
 
@@ -28,28 +28,29 @@ class OCRReader {
    */
   async startOCR() {
     try {
-      Logger.info('Starting OCR initialization...');
+      Logger.info("Starting OCR initialization...");
       this.status = OCR_STATUS.INITIALIZING;
 
       // Request camera permission
-      const cameraPermission = await PermissionManager.requestCameraPermission();
+      const cameraPermission =
+        await PermissionManager.requestCameraPermission();
       if (!cameraPermission) {
         throw new Error(OCR_ERROR_CODES.CAMERA_PERMISSION_DENIED);
       }
 
       // Request storage permission
-      const storagePermission = await PermissionManager.requestStoragePermission();
+      const storagePermission =
+        await PermissionManager.requestStoragePermission();
       if (!storagePermission) {
-        Logger.warn('Storage permission denied, some features may be limited');
+        Logger.warn("Storage permission denied, some features may be limited");
       }
 
       this.status = OCR_STATUS.READY;
-      Logger.info('OCR system initialized successfully');
+      Logger.info("OCR system initialized successfully");
       return true;
-
     } catch (error) {
       this.status = OCR_STATUS.ERROR;
-      Logger.error('OCR initialization failed:', error.message);
+      Logger.error("OCR initialization failed:", error.message);
       throw error;
     }
   }
@@ -62,10 +63,10 @@ class OCRReader {
   async captureImage(options = {}) {
     try {
       if (this.status !== OCR_STATUS.READY) {
-        throw new Error('OCR system not ready. Call startOCR() first.');
+        throw new Error("OCR system not ready. Call startOCR() first.");
       }
 
-      Logger.info('Capturing image for OCR...');
+      Logger.info("Capturing image for OCR...");
       this.status = OCR_STATUS.CAPTURING;
 
       const captureOptions = {
@@ -73,22 +74,23 @@ class OCRReader {
         maxWidth: options.maxWidth || this.config.MAX_IMAGE_SIZE,
         maxHeight: options.maxHeight || this.config.MAX_IMAGE_SIZE,
         includeBase64: false,
-        mediaType: 'photo'
+        mediaType: "photo",
       };
 
       // Placeholder implementation - will be replaced with actual camera integration
-      const mockImageUri = 'file:///mock/path/captured_image.jpg';
-      
+      const mockImageUri = "file:///mock/path/captured_image.jpg";
+
       this.currentImage = mockImageUri;
       this.status = OCR_STATUS.READY;
-      
-      Logger.info('Image captured successfully:', mockImageUri);
-      return mockImageUri;
 
+      Logger.info("Image captured successfully:", mockImageUri);
+      return mockImageUri;
     } catch (error) {
       this.status = OCR_STATUS.ERROR;
-      Logger.error('Image capture failed:', error.message);
-      throw new Error(`${OCR_ERROR_CODES.IMAGE_CAPTURE_FAILED}: ${error.message}`);
+      Logger.error("Image capture failed:", error.message);
+      throw new Error(
+        `${OCR_ERROR_CODES.IMAGE_CAPTURE_FAILED}: ${error.message}`
+      );
     }
   }
 
@@ -101,19 +103,21 @@ class OCRReader {
   async cropImage(imageUri, cropData) {
     try {
       if (!imageUri) {
-        throw new Error('Image URI is required');
+        throw new Error("Image URI is required");
       }
 
-      Logger.info('Cropping image for OCR processing...');
-      
-      const croppedImageUri = await ImageProcessor.cropImage(imageUri, cropData);
-      this.currentImage = croppedImageUri;
-      
-      Logger.info('Image cropped successfully:', croppedImageUri);
-      return croppedImageUri;
+      Logger.info("Cropping image for OCR processing...");
 
+      const croppedImageUri = await ImageProcessor.cropImage(
+        imageUri,
+        cropData
+      );
+      this.currentImage = croppedImageUri;
+
+      Logger.info("Image cropped successfully:", croppedImageUri);
+      return croppedImageUri;
     } catch (error) {
-      Logger.error('Image cropping failed:', error.message);
+      Logger.error("Image cropping failed:", error.message);
       throw error;
     }
   }
@@ -131,76 +135,87 @@ class OCRReader {
       }
 
       if (!imageUri) {
-        const error = new Error('No image available for text extraction');
+        const error = new Error("No image available for text extraction");
         this._handleError(error);
         throw error;
       }
 
-      Logger.info('Starting OCR text extraction process...');
+      Logger.info("Starting OCR text extraction process...");
       this._updateStatus(OCR_STATUS.PROCESSING);
 
       const ocrOptions = {
         language: options.language || this.config.DEFAULT_LANGUAGE,
         confidence: options.confidence || 0.7,
-        enhanceImage: options.enhanceImage !== false // Default to true
+        enhanceImage: options.enhanceImage !== false, // Default to true
       };
 
       let processedImageUri = imageUri;
-      
+
       // Enhance image quality if requested
       if (ocrOptions.enhanceImage) {
-        Logger.info('Enhancing image for better OCR results...');
+        Logger.info("Enhancing image for better OCR results...");
         processedImageUri = await ImageProcessor.enhanceImage(imageUri);
       }
 
       // Perform OCR using react-native-text-recognition
-      Logger.info('Performing text recognition...');
+      Logger.info("Performing text recognition...");
       const startTime = Date.now();
-      
+
       const ocrResult = await TextRecognition.recognize(processedImageUri, {
         language: ocrOptions.language,
       });
 
       const processingTime = Date.now() - startTime;
-      
+
       // Process and format OCR results
-      const extractedTextData = this._formatOCRResult(ocrResult, ocrOptions, processingTime);
-      
+      const extractedTextData = this._formatOCRResult(
+        ocrResult,
+        ocrOptions,
+        processingTime
+      );
+
       // Filter results by confidence if specified
       if (ocrOptions.confidence > 0) {
         extractedTextData.blocks = extractedTextData.blocks.filter(
-          block => block.confidence >= ocrOptions.confidence
+          (block) => block.confidence >= ocrOptions.confidence
         );
-        
+
         // Recalculate overall text and confidence
-        extractedTextData.text = extractedTextData.blocks.map(block => block.text).join(' ');
-        extractedTextData.confidence = extractedTextData.blocks.length > 0 
-          ? extractedTextData.blocks.reduce((sum, block) => sum + block.confidence, 0) / extractedTextData.blocks.length
-          : 0;
+        extractedTextData.text = extractedTextData.blocks
+          .map((block) => block.text)
+          .join(" ");
+        extractedTextData.confidence =
+          extractedTextData.blocks.length > 0
+            ? extractedTextData.blocks.reduce(
+                (sum, block) => sum + block.confidence,
+                0
+              ) / extractedTextData.blocks.length
+            : 0;
       }
 
       this.extractedText = extractedTextData;
       this._updateStatus(OCR_STATUS.SUCCESS);
-      
-      Logger.info('OCR text extraction completed successfully', {
+
+      Logger.info("OCR text extraction completed successfully", {
         textLength: extractedTextData.text.length,
         blocksCount: extractedTextData.blocks.length,
         confidence: extractedTextData.confidence,
-        processingTime
+        processingTime,
       });
-      
+
       // Call success callback if provided
       if (this.onSuccess) {
         this.onSuccess(extractedTextData);
       }
-      
-      return extractedTextData;
 
+      return extractedTextData;
     } catch (error) {
       this._updateStatus(OCR_STATUS.ERROR);
-      Logger.error('OCR text extraction failed:', error.message);
-      
-      const ocrError = new Error(`${OCR_ERROR_CODES.TEXT_EXTRACTION_FAILED}: ${error.message}`);
+      Logger.error("OCR text extraction failed:", error.message);
+
+      const ocrError = new Error(
+        `${OCR_ERROR_CODES.TEXT_EXTRACTION_FAILED}: ${error.message}`
+      );
       this._handleError(ocrError);
       throw ocrError;
     }
@@ -230,14 +245,14 @@ class OCRReader {
   async startCompleteOCRWorkflow(options = {}) {
     try {
       const workflowStartTime = Date.now();
-      Logger.info('Starting complete OCR workflow...');
-      
+      Logger.info("Starting complete OCR workflow...");
+
       const workflowOptions = {
         showCamera: options.showCamera !== false,
         autoEnhance: options.autoEnhance !== false,
-        language: options.language || 'tr',
+        language: options.language || "tr",
         confidence: options.confidence || 0.7,
-        ...options
+        ...options,
       };
 
       // Step 1: Initialize OCR system
@@ -247,20 +262,19 @@ class OCRReader {
 
       // Step 2: Capture image (this will be handled by camera component)
       // The camera component will call this.processImageFromWorkflow()
-      
+
       return new Promise((resolve, reject) => {
         this._workflowResolve = resolve;
         this._workflowReject = reject;
         this._workflowOptions = workflowOptions;
         this._workflowStartTime = workflowStartTime;
-        
+
         // Notify that workflow is ready for camera
         this._updateStatus(OCR_STATUS.READY);
-        Logger.info('OCR workflow ready for image capture');
+        Logger.info("OCR workflow ready for image capture");
       });
-
     } catch (error) {
-      Logger.error('OCR workflow initialization failed:', error.message);
+      Logger.error("OCR workflow initialization failed:", error.message);
       const workflowError = new Error(`OCR workflow failed: ${error.message}`);
       this._handleError(workflowError);
       throw workflowError;
@@ -275,14 +289,16 @@ class OCRReader {
   async processImageFromWorkflow(imageData) {
     try {
       if (!this._workflowOptions) {
-        throw new Error('No active workflow found');
+        throw new Error("No active workflow found");
       }
 
-      Logger.info('Processing image from workflow', { imageUri: imageData.uri });
+      Logger.info("Processing image from workflow", {
+        imageUri: imageData.uri,
+      });
       const imageProcessingStartTime = Date.now();
 
       let processedImageUri = imageData.uri;
-      
+
       // Step 3: Optimize image for OCR
       if (this._workflowOptions.autoEnhance) {
         processedImageUri = await this._optimizeImageForOCR(imageData.uri);
@@ -290,7 +306,10 @@ class OCRReader {
 
       // Step 4: Crop image if crop area is provided
       if (imageData.cropArea) {
-        processedImageUri = await this.cropImage(processedImageUri, imageData.cropArea);
+        processedImageUri = await this.cropImage(
+          processedImageUri,
+          imageData.cropArea
+        );
       }
 
       const imageProcessingTime = Date.now() - imageProcessingStartTime;
@@ -301,16 +320,17 @@ class OCRReader {
       const ocrResult = await this.extractText(processedImageUri, {
         language: this._workflowOptions.language,
         confidence: this._workflowOptions.confidence,
-        enhanceImage: false // Already enhanced
+        enhanceImage: false, // Already enhanced
       });
 
       const ocrProcessingTime = Date.now() - ocrStartTime;
       this.performanceMetrics.ocrProcessingTime = ocrProcessingTime;
-      this.performanceMetrics.totalProcessingTime = Date.now() - this._workflowStartTime;
+      this.performanceMetrics.totalProcessingTime =
+        Date.now() - this._workflowStartTime;
 
       // Step 6: Extract specific fields
       const extractedFields = this._extractAllFields(ocrResult.text);
-      
+
       // Step 7: Prepare final result
       const finalResult = {
         ...ocrResult,
@@ -319,14 +339,21 @@ class OCRReader {
         workflow: {
           completed: true,
           totalTime: this.performanceMetrics.totalProcessingTime,
-          steps: ['initialize', 'capture', 'optimize', 'crop', 'ocr', 'extract_fields']
-        }
+          steps: [
+            "initialize",
+            "capture",
+            "optimize",
+            "crop",
+            "ocr",
+            "extract_fields",
+          ],
+        },
       };
 
-      Logger.info('OCR workflow completed successfully', {
+      Logger.info("OCR workflow completed successfully", {
         totalTime: this.performanceMetrics.totalProcessingTime,
         textLength: ocrResult.text.length,
-        fieldsExtracted: Object.keys(extractedFields).length
+        fieldsExtracted: Object.keys(extractedFields).length,
       });
 
       // Step 8: Call success callback and resolve workflow
@@ -340,15 +367,14 @@ class OCRReader {
       }
 
       return finalResult;
-
     } catch (error) {
-      Logger.error('Workflow image processing failed:', error.message);
-      
+      Logger.error("Workflow image processing failed:", error.message);
+
       if (this._workflowReject) {
         this._workflowReject(error);
         this._cleanupWorkflow();
       }
-      
+
       this._handleError(error);
       throw error;
     }
@@ -360,31 +386,31 @@ class OCRReader {
    */
   async _optimizeImageForOCR(imageUri) {
     try {
-      Logger.info('Optimizing image for OCR processing');
-      
+      Logger.info("Optimizing image for OCR processing");
+
       // Get original image dimensions
       const dimensions = await ImageProcessor.getImageDimensions(imageUri);
       this.performanceMetrics.lastProcessedImageSize = dimensions;
-      
+
       // Resize if image is too large (optimal OCR width: 1200-1600px)
       let optimizedUri = imageUri;
       if (dimensions.width > 1600) {
         const aspectRatio = dimensions.height / dimensions.width;
         optimizedUri = await ImageProcessor.resizeImage(imageUri, {
           width: 1600,
-          height: Math.round(1600 * aspectRatio)
+          height: Math.round(1600 * aspectRatio),
         });
-        Logger.info('Image resized for optimal OCR performance');
+        Logger.info("Image resized for optimal OCR performance");
       }
-      
+
       // Enhance image quality
       const enhancedUri = await ImageProcessor.enhanceImage(optimizedUri);
-      
-      Logger.info('Image optimization completed');
+
+      Logger.info("Image optimization completed");
       return enhancedUri;
-      
+
     } catch (error) {
-      Logger.warn('Image optimization failed, using original:', error.message);
+      Logger.warn("Image optimization failed, using original:", error.message);
       return imageUri;
     }
   }
@@ -395,9 +421,9 @@ class OCRReader {
    */
   _extractAllFields(text) {
     return {
-      tcNo: this.extractField(text, 'tc_no'),
-      name: this.extractField(text, 'name'),
-      surname: this.extractField(text, 'surname')
+      tcNo: this.extractField(text, "tc_no"),
+      name: this.extractField(text, "name"),
+      surname: this.extractField(text, "surname"),
     };
   }
 
@@ -432,11 +458,11 @@ class OCRReader {
       totalProcessingTime: 0,
       imageProcessingTime: 0,
       ocrProcessingTime: 0,
-      lastProcessedImageSize: null
+      lastProcessedImageSize: null,
     };
-    Logger.info('OCR reader reset');
+    Logger.info("OCR reader reset");
   }
-  
+
   /**
    * Extract specific fields from OCR text (e.g., ID number, name)
    * @param {string} text - Extracted text
@@ -446,23 +472,27 @@ class OCRReader {
   extractField(text, fieldType) {
     try {
       Logger.info(`Extracting field: ${fieldType} from text`);
-      
+
       switch (fieldType) {
-        case 'tc_no':
+        case "tc_no":
           // Turkish ID number pattern (11 digits)
           const tcMatch = text.match(/\b\d{11}\b/);
           return tcMatch ? tcMatch[0] : null;
-          
-        case 'name':
+
+        case "name":
           // Extract name patterns (Turkish names)
-          const nameMatch = text.match(/(?:AD[I\s]*|NAME[\s]*:?[\s]*)([A-ZÇĞıÖŞÜ][a-zçğıöşü]+(?:[\s][A-ZÇĞıÖŞÜ][a-zçğıöşü]+)*)/i);
+          const nameMatch = text.match(
+            /(?:AD[I\s]*:?\s*)([A-Z]+)/i
+          );
           return nameMatch ? nameMatch[1].trim() : null;
-          
-        case 'surname':
+
+        case "surname":
           // Extract surname patterns
-          const surnameMatch = text.match(/(?:SOYAD[I\s]*|SURNAME[\s]*:?[\s]*)([A-ZÇĞıÖŞÜ][a-zçğıöşü]+(?:[\s][A-ZÇĞıÖŞÜ][a-zçğıöşü]+)*)/i);
+          const surnameMatch = text.match(
+            /(?:SOYAD[I\s]*:?\s*)([A-Z]+)/i
+          );
           return surnameMatch ? surnameMatch[1].trim() : null;
-          
+
         default:
           Logger.warn(`Unknown field type: ${fieldType}`);
           return null;
@@ -472,7 +502,7 @@ class OCRReader {
       return null;
     }
   }
-  
+
   /**
    * Update status and notify listeners
    * @private
@@ -480,12 +510,12 @@ class OCRReader {
   _updateStatus(newStatus) {
     const oldStatus = this.status;
     this.status = newStatus;
-    
+
     if (this.onStatusChange && oldStatus !== newStatus) {
       this.onStatusChange(newStatus, oldStatus);
     }
   }
-  
+
   /**
    * Handle errors and notify listeners
    * @private
@@ -495,28 +525,33 @@ class OCRReader {
       this.onError(error);
     }
   }
-  
+
   /**
    * Format OCR result into standardized structure
    * @private
    */
   _formatOCRResult(ocrResult, options, processingTime) {
     const blocks = [];
-    let fullText = '';
+    let fullText = "";
     let totalConfidence = 0;
-    
+
     // Process OCR blocks
     if (ocrResult.blocks && ocrResult.blocks.length > 0) {
-      ocrResult.blocks.forEach(block => {
+      ocrResult.blocks.forEach((block) => {
         if (block.text && block.text.trim()) {
           const blockData = {
             text: block.text.trim(),
             confidence: block.confidence || 0.8,
-            boundingBox: block.boundingBox || { x: 0, y: 0, width: 0, height: 0 }
+            boundingBox: block.boundingBox || {
+              x: 0,
+              y: 0,
+              width: 0,
+              height: 0,
+            },
           };
-          
+
           blocks.push(blockData);
-          fullText += (fullText ? ' ' : '') + blockData.text;
+          fullText += (fullText ? " " : "") + blockData.text;
           totalConfidence += blockData.confidence;
         }
       });
@@ -525,23 +560,23 @@ class OCRReader {
       const blockData = {
         text: ocrResult.text.trim(),
         confidence: ocrResult.confidence || 0.8,
-        boundingBox: { x: 0, y: 0, width: 0, height: 0 }
+        boundingBox: { x: 0, y: 0, width: 0, height: 0 },
       };
-      
+
       blocks.push(blockData);
       fullText = blockData.text;
       totalConfidence = blockData.confidence;
     }
-    
+
     return {
       text: fullText,
       confidence: blocks.length > 0 ? totalConfidence / blocks.length : 0,
-      blocks: blocks,
+      blocks,
       language: options.language,
-      processingTime: processingTime,
-      timestamp: Date.now()
+      processingTime,
+      timestamp: Date.now(),
     };
   }
 }
 
-export default OCRReader;
+module.exports = OCRReader;

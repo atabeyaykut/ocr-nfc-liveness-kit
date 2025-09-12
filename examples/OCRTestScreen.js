@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
   Modal,
   SafeAreaView,
-  Dimensions
+  Dimensions,
 } from 'react-native';
 
 import { OCRReader } from '../modules/ocr/OCRReader';
@@ -30,7 +30,7 @@ const OCRTestScreen = () => {
   const [processingStatus, setProcessingStatus] = useState('');
   const [performanceMetrics, setPerformanceMetrics] = useState(null);
   const [logs, setLogs] = useState([]);
-  
+
   const ocrReaderRef = useRef(null);
 
   // Initialize OCR Reader with callbacks
@@ -39,7 +39,7 @@ const OCRTestScreen = () => {
       ocrReaderRef.current = new OCRReader({
         onSuccess: handleOCRSuccess,
         onError: handleOCRError,
-        onStatusChange: handleStatusChange
+        onStatusChange: handleStatusChange,
       });
     }
     return ocrReaderRef.current;
@@ -51,9 +51,9 @@ const OCRTestScreen = () => {
       id: Date.now(),
       timestamp,
       message,
-      type
+      type,
     };
-    setLogs(prev => [newLog, ...prev].slice(0, 50)); // Keep last 50 logs
+    setLogs((prev) => [newLog, ...prev].slice(0, 50)); // Keep last 50 logs
   };
 
   const handleOCRSuccess = (result) => {
@@ -62,10 +62,12 @@ const OCRTestScreen = () => {
     setPerformanceMetrics(result.performanceMetrics);
     setIsProcessing(false);
     setShowCamera(false);
-    
+
     Alert.alert(
       'OCR Başarılı! 🎉',
-      `Metin çıkarıldı: ${result.text.length} karakter\nAlanlar: ${Object.keys(result.extractedFields).length} adet`,
+      `Metin çıkarıldı: ${result.text.length} karakter\nAlanlar: ${
+        Object.keys(result.extractedFields).length
+      } adet`,
       [{ text: 'Tamam', style: 'default' }]
     );
   };
@@ -74,15 +76,11 @@ const OCRTestScreen = () => {
     addLog(`OCR hatası: ${error.message}`, 'error');
     setIsProcessing(false);
     setShowCamera(false);
-    
-    Alert.alert(
-      'OCR Hatası ❌',
-      error.message,
-      [
-        { text: 'Tekrar Dene', onPress: startOCRWorkflow },
-        { text: 'İptal', style: 'cancel' }
-      ]
-    );
+
+    Alert.alert('OCR Hatası ❌', error.message, [
+      { text: 'Tekrar Dene', onPress: startOCRWorkflow },
+      { text: 'İptal', style: 'cancel' },
+    ]);
   };
 
   const handleStatusChange = (status) => {
@@ -98,19 +96,18 @@ const OCRTestScreen = () => {
       addLog('OCR iş akışı başlatılıyor...', 'info');
 
       const ocrReader = initializeOCR();
-      
+
       // Start complete OCR workflow
       const workflowPromise = ocrReader.startCompleteOCRWorkflow({
         language: 'tr',
         confidence: 0.7,
         autoEnhance: true,
-        showCamera: true
+        showCamera: true,
       });
 
       // Show camera for image capture
       setShowCamera(true);
       addLog('Kamera açılıyor...', 'info');
-
     } catch (error) {
       handleOCRError(error);
     }
@@ -119,7 +116,7 @@ const OCRTestScreen = () => {
   const handleImageCaptured = async (imageData) => {
     try {
       addLog('Görüntü yakalandı, işleniyor...', 'info');
-      
+
       const ocrReader = ocrReaderRef.current;
       if (!ocrReader) {
         throw new Error('OCR Reader başlatılmamış');
@@ -127,7 +124,6 @@ const OCRTestScreen = () => {
 
       // Process the captured image through the workflow
       await ocrReader.processImageFromWorkflow(imageData);
-      
     } catch (error) {
       handleOCRError(error);
     }
@@ -157,26 +153,32 @@ DOĞUM TARİHİ
         extractedFields: {
           tcNo: '12345678901',
           name: 'MEHMET',
-          surname: 'YILMAZ'
+          surname: 'YILMAZ',
         },
         performanceMetrics: {
           totalProcessingTime: 1250,
           imageProcessingTime: 450,
           ocrProcessingTime: 800,
-          lastProcessedImageSize: { width: 1200, height: 800 }
+          lastProcessedImageSize: { width: 1200, height: 800 },
         },
         workflow: {
           completed: true,
           totalTime: 1250,
-          steps: ['initialize', 'capture', 'optimize', 'crop', 'ocr', 'extract_fields']
-        }
+          steps: [
+            'initialize',
+            'capture',
+            'optimize',
+            'crop',
+            'ocr',
+            'extract_fields',
+          ],
+        },
       };
 
       // Simulate processing delay
       setTimeout(() => {
         handleOCRSuccess(mockResult);
       }, 2000);
-
     } catch (error) {
       handleOCRError(error);
     }
@@ -196,12 +198,14 @@ DOĞUM TARİHİ
   };
 
   const renderOCRResult = () => {
-    if (!ocrResult) return null;
+    if (!ocrResult) {
+      return null;
+    }
 
     return (
       <View style={styles.resultContainer}>
         <Text style={styles.resultTitle}>📄 OCR Sonucu</Text>
-        
+
         {/* Extracted Fields */}
         <View style={styles.fieldsContainer}>
           <Text style={styles.fieldsTitle}>Çıkarılan Alanlar:</Text>
@@ -228,7 +232,9 @@ DOĞUM TARİHİ
             </Text>
             {performanceMetrics.lastProcessedImageSize && (
               <Text style={styles.metricText}>
-                Görüntü Boyutu: {performanceMetrics.lastProcessedImageSize.width}x{performanceMetrics.lastProcessedImageSize.height}
+                Görüntü Boyutu:{' '}
+                {performanceMetrics.lastProcessedImageSize.width}x
+                {performanceMetrics.lastProcessedImageSize.height}
               </Text>
             )}
           </View>
@@ -251,7 +257,7 @@ DOĞUM TARİHİ
     <View style={styles.logsContainer}>
       <Text style={styles.logsTitle}>📋 İşlem Logları</Text>
       <ScrollView style={styles.logsScroll} nestedScrollEnabled>
-        {logs.map(log => (
+        {logs.map((log) => (
           <View key={log.id} style={[styles.logRow, styles[`log_${log.type}`]]}>
             <Text style={styles.logTimestamp}>{log.timestamp}</Text>
             <Text style={styles.logMessage}>{log.message}</Text>
@@ -266,7 +272,10 @@ DOĞUM TARİHİ
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>🔍 OCR Test Ekranı</Text>
@@ -283,7 +292,11 @@ DOĞUM TARİHİ
         {/* Action Buttons */}
         <View style={styles.buttonsContainer}>
           <TouchableOpacity
-            style={[styles.button, styles.primaryButton, isProcessing && styles.disabledButton]}
+            style={[
+              styles.button,
+              styles.primaryButton,
+              isProcessing && styles.disabledButton,
+            ]}
             onPress={startOCRWorkflow}
             disabled={isProcessing}
           >
@@ -295,7 +308,11 @@ DOĞUM TARİHİ
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, styles.secondaryButton, isProcessing && styles.disabledButton]}
+            style={[
+              styles.button,
+              styles.secondaryButton,
+              isProcessing && styles.disabledButton,
+            ]}
             onPress={testWithMockData}
             disabled={isProcessing}
           >
@@ -333,7 +350,7 @@ DOĞUM TARİHİ
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
           </View>
-          
+
           <OCRCamera
             onImageCaptured={handleImageCaptured}
             onError={handleOCRError}
