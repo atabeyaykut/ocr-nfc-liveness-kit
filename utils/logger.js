@@ -5,7 +5,7 @@ const LOG_LEVELS = {
   ERROR: 0,
   WARN: 1,
   INFO: 2,
-  DEBUG: 3
+  DEBUG: 3,
 };
 
 class Logger {
@@ -38,5 +38,5 @@ class Logger {
   }
 }
 
-export default new Logger();
-export { LOG_LEVELS };
+module.exports = new Logger();
+module.exports.LOG_LEVELS = LOG_LEVELS;

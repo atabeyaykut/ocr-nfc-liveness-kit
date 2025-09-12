@@ -20,5 +20,5 @@ export const NFCModule = {
   createReader: (options) => new NFCReader(options),
   // Status constants for external use
   STATUS: NFC_STATUS,
-  CONFIG: NFC_CONFIG
+  CONFIG: NFC_CONFIG,
 };

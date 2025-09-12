@@ -1,12 +1,12 @@
 // Permissions Utility
 // Handles camera, storage and other permissions for React Native
 
-import { PermissionsAndroid, Platform } from 'react-native';
+const { PermissionsAndroid, Platform } = require('react-native');
 
-export const PERMISSIONS = {
+const PERMISSIONS = {
   CAMERA: 'camera',
   STORAGE: 'storage',
-  NFC: 'nfc'
+  NFC: 'nfc',
 };
 
 class PermissionManager {
@@ -39,7 +39,8 @@ class PermissionManager {
           PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
           {
             title: 'Storage Permission',
-            message: 'This app needs access to storage to save processed images',
+            message:
+              'This app needs access to storage to save processed images',
             buttonNeutral: 'Ask Me Later',
             buttonNegative: 'Cancel',
             buttonPositive: 'OK',
@@ -55,4 +56,4 @@ class PermissionManager {
   }
 }
 
-export default new PermissionManager();
+module.exports = new PermissionManager();

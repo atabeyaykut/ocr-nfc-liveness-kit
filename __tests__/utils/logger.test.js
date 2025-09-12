@@ -1,5 +1,6 @@
 // Logger Utility Unit Tests
-import Logger, { LOG_LEVELS } from '../../utils/logger';
+const Logger = require('../../utils/logger');
+const { LOG_LEVELS } = require('../../utils/logger');
 
 describe('Logger', () => {
   let consoleSpy;
@@ -9,12 +10,12 @@ describe('Logger', () => {
       error: jest.spyOn(console, 'error').mockImplementation(),
       warn: jest.spyOn(console, 'warn').mockImplementation(),
       info: jest.spyOn(console, 'info').mockImplementation(),
-      log: jest.spyOn(console, 'log').mockImplementation()
+      log: jest.spyOn(console, 'log').mockImplementation(),
     };
   });
 
   afterEach(() => {
-    Object.values(consoleSpy).forEach(spy => spy.mockRestore());
+    Object.values(consoleSpy).forEach((spy) => spy.mockRestore());
   });
 
   describe('LOG_LEVELS', () => {
