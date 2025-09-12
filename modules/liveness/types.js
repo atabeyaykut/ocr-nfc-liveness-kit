@@ -12,7 +12,7 @@ export const LIVENESS_STATUS = {
   CAPTURING: 'capturing',
   PROCESSING: 'processing',
   SUCCESS: 'success',
-  ERROR: 'error'
+  ERROR: 'error',
 };
 
 // Export instruction types
@@ -22,7 +22,7 @@ export const LIVENESS_INSTRUCTIONS = {
   TURN_LEFT: 'turn_left',
   TURN_RIGHT: 'turn_right',
   SMILE: 'smile',
-  NOD: 'nod'
+  NOD: 'nod',
 };
 
 // Export configuration defaults
@@ -33,5 +33,5 @@ export const LIVENESS_CONFIG = {
   instructionDelay: 2000,
   maxRetries: 3,
   enableFaceDetection: true,
-  enableMotionDetection: true
+  enableMotionDetection: true,
 };

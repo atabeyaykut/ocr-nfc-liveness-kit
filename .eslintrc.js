@@ -5,8 +5,8 @@ module.exports = {
   parserOptions: {
     requireConfigFile: false,
     babelOptions: {
-      presets: ['@babel/preset-react']
-    }
+      presets: ['@babel/preset-react'],
+    },
   },
   rules: {
     'no-console': 'warn',
@@ -14,6 +14,6 @@ module.exports = {
     'prefer-const': 'error',
     'no-var': 'error',
     'object-shorthand': 'error',
-    'prefer-template': 'error'
-  }
+    'prefer-template': 'error',
+  },
 };

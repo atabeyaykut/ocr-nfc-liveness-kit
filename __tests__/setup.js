@@ -1,24 +1,22 @@
-// Jest Setup - Test environment configuration
-import 'react-native-gesture-handler/jestSetup';
+// Jest setup file for React Native SDK tests
+
+// Set up global test timeout
+jest.setTimeout(10000);
 
 // Mock Logger utility
 jest.mock('../utils/logger', () => ({
-  Logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  },
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
 }));
 
 // Mock PermissionManager utility
 jest.mock('../utils/permissions', () => ({
-  PermissionManager: {
-    requestCameraPermission: jest.fn(() => Promise.resolve(true)),
-    requestStoragePermission: jest.fn(() => Promise.resolve(true)),
-    checkCameraPermission: jest.fn(() => Promise.resolve(true)),
-    checkStoragePermission: jest.fn(() => Promise.resolve(true)),
-  },
+  requestCameraPermission: jest.fn(() => Promise.resolve(true)),
+  requestStoragePermission: jest.fn(() => Promise.resolve(true)),
+  checkCameraPermission: jest.fn(() => Promise.resolve(true)),
+  checkStoragePermission: jest.fn(() => Promise.resolve(true)),
 }));
 
 // Mock ImageProcessor utility
@@ -63,10 +61,12 @@ jest.mock('react-native-vision-camera', () => ({
 // Mock react-native-text-recognition
 jest.mock('react-native-text-recognition', () => ({
   TextRecognition: {
-    recognize: jest.fn(() => Promise.resolve({
-      text: 'Mock extracted text',
-      blocks: [],
-    })),
+    recognize: jest.fn(() =>
+      Promise.resolve({
+        text: 'Mock extracted text',
+        blocks: [],
+      })
+    ),
   },
 }));
 
@@ -110,27 +110,35 @@ jest.mock('react-native-nfc-manager', () => ({
   isEnabled: jest.fn(() => Promise.resolve(true)),
   isSupported: jest.fn(() => Promise.resolve(true)),
   requestTechnology: jest.fn(() => Promise.resolve()),
-  getTag: jest.fn(() => Promise.resolve({
-    id: 'mock-tag-id',
-    techTypes: ['IsoDep'],
-    ndefMessage: [{
-      tnf: 1,
-      type: [84, 101, 120, 116], // "Text"
-      payload: [2, 101, 110, 77, 111, 99, 107, 32, 78, 70, 67, 32, 68, 97, 116, 97], // Mock NFC Data
-    }],
-  })),
+  getTag: jest.fn(() =>
+    Promise.resolve({
+      id: 'mock-tag-id',
+      techTypes: ['IsoDep'],
+      ndefMessage: [
+        {
+          tnf: 1,
+          type: [84, 101, 120, 116], // "Text"
+          payload: [
+            2, 101, 110, 77, 111, 99, 107, 32, 78, 70, 67, 32, 68, 97, 116, 97,
+          ], // Mock NFC Data
+        },
+      ],
+    })
+  ),
   closeTechnology: jest.fn(() => Promise.resolve()),
   cancelTechnologyRequest: jest.fn(() => Promise.resolve()),
 }));
 
 // Mock @bam.tech/react-native-image-resizer
 jest.mock('@bam.tech/react-native-image-resizer', () => ({
-  createResizedImage: jest.fn(() => Promise.resolve({
-    uri: 'mock-resized-image-uri',
-    width: 800,
-    height: 600,
-    size: 50000,
-  })),
+  createResizedImage: jest.fn(() =>
+    Promise.resolve({
+      uri: 'mock-resized-image-uri',
+      width: 800,
+      height: 600,
+      size: 50000,
+    })
+  ),
 }));
 
 // Global test utilities

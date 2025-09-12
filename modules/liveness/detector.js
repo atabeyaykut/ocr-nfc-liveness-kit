@@ -3,9 +3,9 @@
  * Real-time face tracking and motion detection using ML Kit
  */
 
-import { runOnJS } from 'react-native-reanimated';
-import FaceDetection from '@react-native-ml-kit/face-detection';
-import Logger from '../../utils/logger';
+const { runOnJS } = require('react-native-reanimated');
+const FaceDetection = require('@react-native-ml-kit/face-detection');
+const Logger = require('../../utils/logger');
 
 // Face detection configuration
 const FACE_DETECTION_CONFIG = {
@@ -13,7 +13,7 @@ const FACE_DETECTION_CONFIG = {
   landmarkMode: 'all',
   classificationMode: 'all',
   minFaceSize: 0.1,
-  enableTracking: true
+  enableTracking: true,
 };
 
 // Face landmarks for motion detection
@@ -27,7 +27,7 @@ export const FACE_LANDMARKS = {
   RIGHT_EAR: 'rightEar',
   MOUTH_LEFT: 'mouthLeft',
   MOUTH_RIGHT: 'mouthRight',
-  MOUTH_BOTTOM: 'mouthBottom'
+  MOUTH_BOTTOM: 'mouthBottom',
 };
 
 // Motion detection thresholds
@@ -37,7 +37,7 @@ const MOTION_THRESHOLDS = {
   EYE_CLOSED_PROBABILITY: 0.3,
   SMILE_PROBABILITY: 0.7,
   FACE_CONFIDENCE: 0.7,
-  MOVEMENT_SENSITIVITY: 10 // pixels
+  MOVEMENT_SENSITIVITY: 10, // pixels
 };
 
 /**
@@ -52,7 +52,7 @@ class FaceDetector {
     this.detectionCallbacks = {};
     this.isDetecting = false;
     this.frameCount = 0;
-    
+
     // Motion state tracking
     this.motionState = {
       isBlinking: false,
@@ -60,9 +60,9 @@ class FaceDetector {
       isSmiling: false,
       eyesOpen: true,
       faceDetected: false,
-      faceConfidence: 0
+      faceConfidence: 0,
     };
-    
+
     Logger.info('FaceDetector initialized');
   }
 
@@ -73,14 +73,13 @@ class FaceDetector {
   async initialize() {
     try {
       Logger.info('Initializing face detection...');
-      
+
       // Configure ML Kit Face Detection
       await FaceDetection.configure(FACE_DETECTION_CONFIG);
-      
+
       this.isInitialized = true;
       Logger.info('Face detection initialized successfully');
       return true;
-      
     } catch (error) {
       Logger.error('Face detection initialization failed:', error.message);
       throw new Error(`Yüz algılama başlatılamadı: ${error.message}`);
@@ -99,30 +98,29 @@ class FaceDetector {
 
     try {
       this.frameCount++;
-      
+
       // Detect faces in frame
       const faces = await FaceDetection.detect(frame);
-      
+
       // Update face tracking
       this.previousFaces = [...this.currentFaces];
       this.currentFaces = faces;
-      
+
       // Analyze motion and update state
       const motionData = this.analyzeMotion(faces);
-      
+
       // Update motion history
       this.updateMotionHistory(motionData);
-      
+
       // Trigger callbacks
       this.triggerCallbacks(motionData);
-      
+
       return {
         faces,
         motionData,
         frameCount: this.frameCount,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
-      
     } catch (error) {
       Logger.error('Frame processing failed:', error.message);
       return null;
@@ -145,15 +143,15 @@ class FaceDetector {
         lookRight: false,
         lookStraight: false,
         smile: false,
-        nod: false
+        nod: false,
       },
       confidence: {
         overall: 0,
         eyeOpen: 0,
         smile: 0,
-        headPose: 0
+        headPose: 0,
       },
-      details: {}
+      details: {},
     };
 
     if (faces.length === 0) {
@@ -163,7 +161,9 @@ class FaceDetector {
 
     // Analyze primary face (largest face)
     const primaryFace = this.getPrimaryFace(faces);
-    if (!primaryFace) return motionData;
+    if (!primaryFace) {
+      return motionData;
+    }
 
     // Update motion state
     this.motionState.faceDetected = true;
@@ -191,7 +191,9 @@ class FaceDetector {
     motionData.motions.nod = nodAnalysis.nod;
 
     // Calculate overall confidence
-    motionData.confidence.overall = this.calculateOverallConfidence(motionData.confidence);
+    motionData.confidence.overall = this.calculateOverallConfidence(
+      motionData.confidence
+    );
 
     // Store detailed analysis
     motionData.details = {
@@ -199,7 +201,7 @@ class FaceDetector {
       eyeState: eyeAnalysis,
       headPose: headAnalysis,
       smile: smileAnalysis,
-      nod: nodAnalysis
+      nod: nodAnalysis,
     };
 
     return motionData;
@@ -238,7 +240,7 @@ class FaceDetector {
       leftEyeOpen,
       rightEyeOpen,
       avgEyeOpen,
-      confidence: Math.max(leftEyeOpen, rightEyeOpen)
+      confidence: Math.max(leftEyeOpen, rightEyeOpen),
     };
   }
 
@@ -254,7 +256,8 @@ class FaceDetector {
     // Determine look direction based on head rotation
     const lookLeft = headEulerAngleY > MOTION_THRESHOLDS.HEAD_TURN_ANGLE;
     const lookRight = headEulerAngleY < -MOTION_THRESHOLDS.HEAD_TURN_ANGLE;
-    const lookStraight = Math.abs(headEulerAngleY) <= MOTION_THRESHOLDS.HEAD_TURN_ANGLE;
+    const lookStraight =
+      Math.abs(headEulerAngleY) <= MOTION_THRESHOLDS.HEAD_TURN_ANGLE;
 
     // Update motion state
     if (lookLeft) {
@@ -272,7 +275,7 @@ class FaceDetector {
       headEulerAngleY,
       headEulerAngleZ,
       direction: this.motionState.headDirection,
-      confidence: Math.min(1.0, Math.abs(headEulerAngleY) / 45) // Normalize to 0-1
+      confidence: Math.min(1.0, Math.abs(headEulerAngleY) / 45), // Normalize to 0-1
     };
   }
 
@@ -291,7 +294,7 @@ class FaceDetector {
     return {
       smile,
       smileProbability,
-      confidence: smileProbability
+      confidence: smileProbability,
     };
   }
 
@@ -302,14 +305,14 @@ class FaceDetector {
    */
   analyzeNod(face) {
     const headEulerAngleX = face.headEulerAngleX || 0;
-    
+
     // Simple nod detection based on X-axis rotation
     const nod = Math.abs(headEulerAngleX) > 10; // Basic threshold
 
     return {
       nod,
       headEulerAngleX,
-      confidence: Math.min(1.0, Math.abs(headEulerAngleX) / 30)
+      confidence: Math.min(1.0, Math.abs(headEulerAngleX) / 30),
     };
   }
 
@@ -319,15 +322,17 @@ class FaceDetector {
    * @returns {object|null} Primary face
    */
   getPrimaryFace(faces) {
-    if (faces.length === 0) return null;
-    
+    if (faces.length === 0) {
+      return null;
+    }
+
     // Return face with highest confidence or largest bounds
     return faces.reduce((primary, face) => {
-      const primarySize = primary.bounds ? 
-        (primary.bounds.width * primary.bounds.height) : 0;
-      const faceSize = face.bounds ? 
-        (face.bounds.width * face.bounds.height) : 0;
-      
+      const primarySize = primary.bounds
+        ? primary.bounds.width * primary.bounds.height
+        : 0;
+      const faceSize = face.bounds ? face.bounds.width * face.bounds.height : 0;
+
       return faceSize > primarySize ? face : primary;
     });
   }
@@ -338,12 +343,14 @@ class FaceDetector {
    * @returns {number} Overall confidence (0-1)
    */
   calculateOverallConfidence(confidences) {
-    const scores = Object.values(confidences).filter(score => 
-      typeof score === 'number' && score > 0
+    const scores = Object.values(confidences).filter(
+      (score) => typeof score === 'number' && score > 0
     );
-    
-    if (scores.length === 0) return 0;
-    
+
+    if (scores.length === 0) {
+      return 0;
+    }
+
     return scores.reduce((sum, score) => sum + score, 0) / scores.length;
   }
 
@@ -354,7 +361,7 @@ class FaceDetector {
   updateMotionHistory(motionData) {
     this.motionHistory.push({
       ...motionData,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
 
     // Keep only last 30 frames (1 second at 30fps)
@@ -368,8 +375,11 @@ class FaceDetector {
    * @param {object} motionData - Motion analysis results
    */
   triggerCallbacks(motionData) {
-    Object.keys(motionData.motions).forEach(motionType => {
-      if (motionData.motions[motionType] && this.detectionCallbacks[motionType]) {
+    Object.keys(motionData.motions).forEach((motionType) => {
+      if (
+        motionData.motions[motionType] &&
+        this.detectionCallbacks[motionType]
+      ) {
         runOnJS(this.detectionCallbacks[motionType])(motionData);
       }
     });
@@ -428,7 +438,7 @@ class FaceDetector {
       isSmiling: false,
       eyesOpen: true,
       faceDetected: false,
-      faceConfidence: 0
+      faceConfidence: 0,
     };
     Logger.info('Face detector reset');
   }
@@ -458,4 +468,4 @@ class FaceDetector {
   }
 }
 
-export default FaceDetector;
+module.exports = FaceDetector;
