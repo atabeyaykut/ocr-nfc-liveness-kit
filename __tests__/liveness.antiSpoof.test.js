@@ -1,6 +1,6 @@
 /**
- * Anti-Spoofing Tests for Liveness Detection - Day 10
- * Tests for fake photo, screen, and spoofing detection
+ * Anti-Spoofing Tests for Liveness Detection - Day 11 Enhanced
+ * Tests for fake photo, screen, and spoofing detection with sequential command integration
  */
 
 const {
@@ -8,7 +8,8 @@ const {
   AntiSpoofingDetector,
   ANTI_SPOOFING_CONFIG,
 } = require("../modules/liveness/antiSpoofing");
-// const { validateRealTimeResponse } = require("../modules/liveness/validator");
+const { ValidationUtils } = require("../modules/liveness/utils");
+const { generateCommandSequence } = require("../modules/liveness/commands");
 
 // Mock Logger
 jest.mock("../utils/logger", () => ({
@@ -18,7 +19,7 @@ jest.mock("../utils/logger", () => ({
   debug: jest.fn(),
 }));
 
-describe("Anti-Spoofing Detection - Day 10", () => {
+describe("Anti-Spoofing Detection - Day 11 Enhanced", () => {
   let detector;
 
   beforeEach(() => {
@@ -598,6 +599,322 @@ describe("Anti-Spoofing Detection - Day 10", () => {
       expect(stats.frameHistoryLength).toBe(3); // Should be limited to window size
     });
   });
+
+  // Day 11: Sequential Command Integration Tests
+  describe("Sequential Command Integration", () => {
+    test("should handle anti-spoofing during command sequence", async () => {
+      const commandSequence = generateCommandSequence(3, "easy");
+      let spoofingResults = [];
+
+      for (const command of commandSequence) {
+        const mockFrameData = {
+          faces: [{
+            bounds: { x: 100, y: 100, width: 200, height: 200 },
+            landmarks: {
+              leftEye: { x: 150, y: 150 },
+              rightEye: { x: 250, y: 150 },
+              nose: { x: 200, y: 180 },
+              mouth: { x: 200, y: 220 }
+            },
+            contours: generateMockContours(),
+            trackingId: 1
+          }],
+          imageData: generateMockImageData(400, 400),
+          timestamp: Date.now()
+        };
+
+        const result = await checkSpoof(mockFrameData);
+        spoofingResults.push({ command: command.type, result });
+      }
+
+      expect(spoofingResults).toHaveLength(3);
+      spoofingResults.forEach(({ result }) => {
+        expect(result).toHaveProperty('isReal');
+        expect(result).toHaveProperty('confidence');
+        expect(result).toHaveProperty('reason');
+      });
+    });
+
+    test("should maintain consistency across command sequence", async () => {
+      const commandSequence = generateCommandSequence(5, "medium");
+      const consistentFrameData = {
+        faces: [{
+          bounds: { x: 100, y: 100, width: 200, height: 200 },
+          landmarks: {
+            leftEye: { x: 150, y: 150 },
+            rightEye: { x: 250, y: 150 },
+            nose: { x: 200, y: 180 },
+            mouth: { x: 200, y: 220 }
+          },
+          contours: generateMockContours(),
+          trackingId: 1
+        }],
+        imageData: generateMockImageData(400, 400),
+        timestamp: Date.now()
+      };
+
+      let confidenceValues = [];
+      for (let i = 0; i < commandSequence.length; i++) {
+        const result = await checkSpoof(consistentFrameData);
+        confidenceValues.push(result.confidence);
+      }
+
+      // Confidence should remain relatively stable for consistent input
+      const avgConfidence = confidenceValues.reduce((a, b) => a + b) / confidenceValues.length;
+      confidenceValues.forEach(confidence => {
+        expect(Math.abs(confidence - avgConfidence)).toBeLessThan(0.2);
+      });
+    });
+
+    test("should detect spoofing attempts during command transitions", async () => {
+      const realFrameData = {
+        faces: [{
+          bounds: { x: 100, y: 100, width: 200, height: 200 },
+          landmarks: {
+            leftEye: { x: 150, y: 150 },
+            rightEye: { x: 250, y: 150 },
+            nose: { x: 200, y: 180 },
+            mouth: { x: 200, y: 220 }
+          },
+          contours: generateMockContours(),
+          trackingId: 1
+        }],
+        imageData: generateMockImageData(400, 400),
+        timestamp: Date.now()
+      };
+
+      const spoofFrameData = {
+        faces: [{
+          bounds: { x: 100, y: 100, width: 200, height: 200 },
+          landmarks: {
+            leftEye: { x: 150, y: 150 },
+            rightEye: { x: 250, y: 150 },
+            nose: { x: 200, y: 180 },
+            mouth: { x: 200, y: 220 }
+          },
+          contours: generateFlatContours(), // Flat surface simulation
+          trackingId: 1
+        }],
+        imageData: generateMockImageData(400, 400, true), // High pixelation
+        timestamp: Date.now()
+      };
+
+      const realResult = await checkSpoof(realFrameData);
+      const spoofResult = await checkSpoof(spoofFrameData);
+
+      expect(realResult.isReal).toBe(true);
+      expect(spoofResult.isReal).toBe(false);
+      expect(spoofResult.reason).toContain('texture');
+    });
+  });
+
+  // Day 11: Progress Tracking Tests
+  describe("Progress Tracking Integration", () => {
+    test("should provide progress feedback during anti-spoofing analysis", async () => {
+      const progressCallbacks = [];
+      const mockProgressCallback = (progress) => {
+        progressCallbacks.push(progress);
+      };
+
+      detector.setProgressCallback(mockProgressCallback);
+
+      const frameData = {
+        faces: [{
+          bounds: { x: 100, y: 100, width: 200, height: 200 },
+          landmarks: {
+            leftEye: { x: 150, y: 150 },
+            rightEye: { x: 250, y: 150 },
+            nose: { x: 200, y: 180 },
+            mouth: { x: 200, y: 220 }
+          },
+          contours: generateMockContours(),
+          trackingId: 1
+        }],
+        imageData: generateMockImageData(400, 400),
+        timestamp: Date.now()
+      };
+
+      await detector.checkSpoof(frameData);
+
+      expect(progressCallbacks.length).toBeGreaterThan(0);
+      progressCallbacks.forEach(progress => {
+        expect(progress).toHaveProperty('percentage');
+        expect(progress).toHaveProperty('message');
+        expect(progress.percentage).toBeGreaterThanOrEqual(0);
+        expect(progress.percentage).toBeLessThanOrEqual(100);
+      });
+    });
+
+    test("should handle error recovery during progress tracking", async () => {
+      const progressCallbacks = [];
+      const errorCallbacks = [];
+      
+      detector.setProgressCallback((progress) => progressCallbacks.push(progress));
+      detector.setErrorCallback((error) => errorCallbacks.push(error));
+
+      const invalidFrameData = {
+        faces: [], // No faces detected
+        imageData: null,
+        timestamp: Date.now()
+      };
+
+      try {
+        await detector.checkSpoof(invalidFrameData);
+      } catch (error) {
+        // Expected to throw
+      }
+
+      expect(errorCallbacks.length).toBeGreaterThan(0);
+      expect(errorCallbacks[0]).toHaveProperty('message');
+      expect(errorCallbacks[0].message).toContain('face');
+    });
+  });
+
+  // Day 11: Performance Optimization Tests
+  describe("Performance Optimization", () => {
+    test("should complete anti-spoofing analysis within time limits", async () => {
+      const frameData = {
+        faces: [{
+          bounds: { x: 100, y: 100, width: 200, height: 200 },
+          landmarks: {
+            leftEye: { x: 150, y: 150 },
+            rightEye: { x: 250, y: 150 },
+            nose: { x: 200, y: 180 },
+            mouth: { x: 200, y: 220 }
+          },
+          contours: generateMockContours(),
+          trackingId: 1
+        }],
+        imageData: generateMockImageData(400, 400),
+        timestamp: Date.now()
+      };
+
+      const startTime = Date.now();
+      const result = await checkSpoof(frameData);
+      const endTime = Date.now();
+
+      expect(endTime - startTime).toBeLessThan(200); // Should complete within 200ms
+      expect(result).toHaveProperty('processingTime');
+      expect(result.processingTime).toBeLessThan(200);
+    });
+
+    test("should handle multiple concurrent anti-spoofing checks", async () => {
+      const frameData = {
+        faces: [{
+          bounds: { x: 100, y: 100, width: 200, height: 200 },
+          landmarks: {
+            leftEye: { x: 150, y: 150 },
+            rightEye: { x: 250, y: 150 },
+            nose: { x: 200, y: 180 },
+            mouth: { x: 200, y: 220 }
+          },
+          contours: generateMockContours(),
+          trackingId: 1
+        }],
+        imageData: generateMockImageData(400, 400),
+        timestamp: Date.now()
+      };
+
+      const promises = Array(5).fill().map(() => checkSpoof(frameData));
+      const results = await Promise.all(promises);
+
+      expect(results).toHaveLength(5);
+      results.forEach(result => {
+        expect(result).toHaveProperty('isReal');
+        expect(result).toHaveProperty('confidence');
+      });
+    });
+
+    test("should optimize memory usage during extended sessions", async () => {
+      const initialMemory = process.memoryUsage().heapUsed;
+
+      // Simulate extended session with many anti-spoofing checks
+      for (let i = 0; i < 50; i++) {
+        const frameData = {
+          faces: [{
+            bounds: { x: 100, y: 100, width: 200, height: 200 },
+            landmarks: {
+              leftEye: { x: 150, y: 150 },
+              rightEye: { x: 250, y: 150 },
+              nose: { x: 200, y: 180 },
+              mouth: { x: 200, y: 220 }
+            },
+            contours: generateMockContours(),
+            trackingId: 1
+          }],
+          imageData: generateMockImageData(400, 400),
+          timestamp: Date.now()
+        };
+
+        await checkSpoof(frameData);
+      }
+
+      const finalMemory = process.memoryUsage().heapUsed;
+      const memoryIncrease = finalMemory - initialMemory;
+
+      // Memory increase should be reasonable (less than 50MB)
+      expect(memoryIncrease).toBeLessThan(50 * 1024 * 1024);
+    });
+  });
+
+  // Helper functions for enhanced tests
+  function generateMockContours() {
+    return {
+      face: Array(20).fill().map((_, i) => ({
+        x: 100 + Math.cos(i * 0.314) * 100,
+        y: 100 + Math.sin(i * 0.314) * 100
+      })),
+      leftEye: Array(6).fill().map((_, i) => ({
+        x: 140 + Math.cos(i * 1.047) * 10,
+        y: 140 + Math.sin(i * 1.047) * 5
+      })),
+      rightEye: Array(6).fill().map((_, i) => ({
+        x: 240 + Math.cos(i * 1.047) * 10,
+        y: 140 + Math.sin(i * 1.047) * 5
+      }))
+    };
+  }
+
+  function generateFlatContours() {
+    return {
+      face: Array(20).fill().map((_, i) => ({
+        x: 100 + i * 10,
+        y: 100 // Flat line - indicates photo/screen
+      })),
+      leftEye: Array(6).fill().map((_, i) => ({
+        x: 140 + i * 3,
+        y: 140
+      })),
+      rightEye: Array(6).fill().map((_, i) => ({
+        x: 240 + i * 3,
+        y: 140
+      }))
+    };
+  }
+
+  function generateMockImageData(width, height, highPixelation = false) {
+    const data = new Uint8Array(width * height * 4);
+    for (let i = 0; i < data.length; i += 4) {
+      if (highPixelation) {
+        // Simulate screen pixelation
+        const blockSize = 8;
+        const blockX = Math.floor((i / 4) % width / blockSize);
+        const blockY = Math.floor((i / 4) / width / blockSize);
+        const color = (blockX + blockY) % 2 === 0 ? 255 : 0;
+        data[i] = color;     // R
+        data[i + 1] = color; // G
+        data[i + 2] = color; // B
+        data[i + 3] = 255;   // A
+      } else {
+        // Natural variation
+        data[i] = Math.random() * 255;     // R
+        data[i + 1] = Math.random() * 255; // G
+        data[i + 2] = Math.random() * 255; // B
+        data[i + 3] = 255;                 // A
+      }
+    }
+    return data;
+  }
 });
 
 describe("checkSpoof Function", () => {

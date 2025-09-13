@@ -7,6 +7,7 @@ const Logger = require("../../utils/logger");
 const { getCommandByType, getCommandByInstruction } = require("./commands");
 const FaceDetector = require("./detector");
 const { checkSpoof, AntiSpoofingDetector } = require("./antiSpoofing");
+const { ValidationUtils, LivenessLogger } = require("./utils");
 
 /**
  * Mock validation results for different command types

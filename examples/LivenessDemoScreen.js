@@ -1,6 +1,6 @@
 /**
- * Liveness Demo Screen - Day 10 Anti-Spoofing Enhanced Demo
- * Canlılık Testi demo ekranı - real-time face tracking with anti-spoofing
+ * Liveness Demo Screen - Day 11 Final Demo Implementation
+ * Canlılık Testi final demo - ardışık komutlar, ilerleme barı, başarı/hata mesajları
  */
 
 import React, { useState, useRef, useMemo, useEffect } from "react";
@@ -15,6 +15,8 @@ import {
   SafeAreaView,
   Dimensions,
   Switch,
+  Animated,
+  Modal,
 } from "react-native";
 import { Camera, useCameraDevices } from "react-native-vision-camera";
 
