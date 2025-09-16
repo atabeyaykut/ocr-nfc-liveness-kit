@@ -1,0 +1,25 @@
+// android/settings.gradle aligned with React Native 0.74.7
+
+pluginManagement {
+  repositories {
+    gradlePluginPortal()
+    mavenCentral()
+    google()
+  }
+  // Provides the React Native Gradle plugins: com.facebook.react and com.facebook.react.rootproject
+  includeBuild("../node_modules/react-native-gradle-plugin")
+}
+
+dependencyResolutionManagement {
+  repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+  repositories {
+    mavenCentral()
+    google()
+    // React Native and JSC artifacts
+    maven { url("$rootDir/../node_modules/react-native/android") }
+    maven { url("$rootDir/../node_modules/jsc-android/dist") }
+  }
+}
+
+rootProject.name = "OCRMobileSDK"
+include(":app")
