@@ -1,0 +1,102 @@
+// React Native Android app module build configuration (RN 0.74+ compatible)
+// This file defines debug and release buildTypes and a sample signingConfig
+
+plugins {
+  id 'com.android.application'
+  id 'com.facebook.react'
+}
+
+android {
+  namespace "com.ocrmobilesdk"
+  compileSdkVersion 34
+
+  defaultConfig {
+    applicationId "com.ocrmobilesdk"
+    minSdkVersion 24
+    targetSdkVersion 34
+    versionCode 1
+    versionName "1.0.0"
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+
+  signingConfigs {
+    debug {
+      // Debug keystore is automatically provided by the Android SDK
+    }
+    // Example release signing; will be used only if you provide keystore files/props
+    release {
+      // Either hardcode values via env or load from gradle.properties
+      // Recommended: keep secrets in ~/.gradle/gradle.properties or ENV vars
+      if (System.getenv("ANDROID_KEYSTORE") != null) {
+        storeFile file(System.getenv("ANDROID_KEYSTORE"))
+        storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+        keyAlias System.getenv("ANDROID_KEY_ALIAS")
+        keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+      } else if (project.hasProperty('RELEASE_STORE_FILE')) {
+        storeFile file(RELEASE_STORE_FILE)
+        storePassword RELEASE_STORE_PASSWORD
+        keyAlias RELEASE_KEY_ALIAS
+        keyPassword RELEASE_KEY_PASSWORD
+      }
+    }
+  }
+
+  buildTypes {
+    debug {
+      applicationIdSuffix ".debug"
+      versionNameSuffix "-debug"
+      debuggable true
+      signingConfig signingConfigs.debug
+    }
+    release {
+      // Enable shrinker/proguard for smaller APKs. Adjust as needed.
+      minifyEnabled true
+      shrinkResources true
+      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+      // If a release signing config is provided, use it; otherwise Gradle will error on assembleRelease
+      signingConfig signingConfigs.release
+    }
+  }
+
+  // Generate separate APKs per CPU architecture (optional)
+  splits {
+    abi {
+      enable true
+      reset()
+      include 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+      universalApk false
+    }
+  }
+
+  packagingOptions {
+    resources {
+      excludes += [
+        'META-INF/LICENSE*',
+        'META-INF/DEPENDENCIES',
+        'META-INF/NOTICE*'
+      ]
+    }
+  }
+}
+
+// React Native Gradle Plugin configuration (RN 0.74+)
+react {
+  // Use Hermes by default
+  hermesEnabled = true
+}
+
+dependencies {
+  implementation(platform("com.facebook.react:react-android-bom:0.74.0"))
+  implementation("com.facebook.react:react-android")
+
+  // Add AndroidX AppCompat (commonly needed by RN libs)
+  implementation "androidx.appcompat:appcompat:1.6.1"
+  implementation "com.google.android.material:material:1.10.0"
+
+  // NFC (if used natively)
+  // implementation "com.google.android.gms:play-services-nfc:18.1.0"
+}
