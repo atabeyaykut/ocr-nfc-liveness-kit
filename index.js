@@ -1,6 +1,9 @@
 // Mobile SDK - Main Entry Point
 // React Native SDK for OCR, NFC and Liveness Detection
 
+import { AppRegistry } from 'react-native';
+import App from './App';
+
 // OCR Module
 export * from './modules/ocr';
 
@@ -17,3 +20,7 @@ export { ImageProcessor } from './utils/imageProcessor';
 
 // SDK Version
 export const SDK_VERSION = '1.0.0';
+
+// Register the React Native root component for Android/iOS launcher
+// Must match MainActivity#getMainComponentName()
+AppRegistry.registerComponent('mobile-sdk-ocr-nfc-liveness', () => App);
