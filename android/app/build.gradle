@@ -68,7 +68,7 @@ android {
       enable true
       reset()
       include 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
-      universalApk false
+      universalApk true
     }
   }
 
@@ -83,15 +83,10 @@ android {
   }
 }
 
-// React Native Gradle Plugin configuration (RN 0.74+)
-react {
-  // Use Hermes by default
-  hermesEnabled = true
-}
+
 
 dependencies {
-  implementation(platform("com.facebook.react:react-android-bom:0.74.0"))
-  implementation("com.facebook.react:react-android")
+  implementation("com.facebook.react:react-android:0.74.7")
 
   // Add AndroidX AppCompat (commonly needed by RN libs)
   implementation "androidx.appcompat:appcompat:1.6.1"

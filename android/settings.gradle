@@ -7,11 +7,11 @@ pluginManagement {
     google()
   }
   // Provides the React Native Gradle plugins: com.facebook.react and com.facebook.react.rootproject
-  includeBuild("../node_modules/react-native-gradle-plugin")
+  includeBuild("../node_modules/@react-native/gradle-plugin")
 }
 
 dependencyResolutionManagement {
-  repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+  repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
   repositories {
     mavenCentral()
     google()
