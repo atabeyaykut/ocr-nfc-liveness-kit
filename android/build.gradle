@@ -2,14 +2,12 @@
 // Uses the plugins DSL with versions managed here and plugin resolution in settings.gradle
 
 plugins {
-  id("com.android.application") version "8.1.4" apply false
-  id("com.android.library") version "8.1.4" apply false
+  id("com.android.application") version "8.4.2" apply false
+  id("com.android.library") version "8.4.2" apply false
   id("org.jetbrains.kotlin.android") version "1.9.24" apply false
   // The React Native Gradle plugin is provided via includeBuild in settings.gradle
   // Do not set a version here; it is resolved from node_modules/react-native-gradle-plugin
   id("com.facebook.react") apply false
-  // Apply the root project plugin to configure repositories and Node settings for the monorepo/project
-  id("com.facebook.react.rootproject")
 }
 
 ext {
@@ -20,10 +18,13 @@ ext {
   kotlinVersion = "1.9.24"
 }
 
-// For legacy tasks that still look here, keep standard repositories.
+// Project-level repositories (repositoriesMode is PREFER_PROJECT)
 allprojects {
   repositories {
-    google()
     mavenCentral()
+    google()
+    // React Native and JSC artifacts
+    maven { url("$rootDir/../node_modules/react-native/android") }
+    maven { url("$rootDir/../node_modules/jsc-android/dist") }
   }
 }
