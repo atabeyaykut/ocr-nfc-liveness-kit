@@ -2,13 +2,14 @@ package com.ocrmobilesdk;
 
 import android.app.Application;
 
-import com.facebook.react.PackageList;
 import com.facebook.react.ReactApplication;
 import com.facebook.react.ReactNativeHost;
 import com.facebook.react.ReactPackage;
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
 import com.facebook.react.defaults.DefaultReactNativeHost;
 
+import com.ocrmobilesdk.BuildConfig;
+import java.util.Collections;
 import java.util.List;
 
 public class MainApplication extends Application implements ReactApplication {
@@ -16,12 +17,17 @@ public class MainApplication extends Application implements ReactApplication {
   private final ReactNativeHost mReactNativeHost = new DefaultReactNativeHost(this) {
     @Override
     public boolean isNewArchEnabled() {
-      return false; // Toggle if you enable the new architecture
+      return BuildConfig.IS_NEW_ARCHITECTURE_ENABLED;
     }
 
     @Override
-    public boolean isHermesEnabled() {
-      return true;
+    public Boolean isHermesEnabled() {
+      return BuildConfig.IS_HERMES_ENABLED;
+    }
+
+    @Override
+    public boolean getUseDeveloperSupport() {
+      return BuildConfig.DEBUG;
     }
 
     @Override
@@ -31,10 +37,8 @@ public class MainApplication extends Application implements ReactApplication {
 
     @Override
     protected List<ReactPackage> getPackages() {
-      @SuppressWarnings("UnnecessaryLocalVariable")
-      List<ReactPackage> packages = new PackageList(this).getPackages();
-      // Add additional packages here if needed
-      return packages;
+      // Hızlı çözüm: Autolinking RN Gradle plugin ile sağlanır; burada boş liste döndürüyoruz.
+      return Collections.emptyList();
     }
   };
 
@@ -46,13 +50,7 @@ public class MainApplication extends Application implements ReactApplication {
   @Override
   public void onCreate() {
     super.onCreate();
-    if (mReactNativeHost.getReactInstanceManager().getCurrentReactContext() == null) {
-      // Initialize any SDKs if needed
-    }
-    if (mReactNativeHost.getReactInstanceManager().getDevSupportManager() != null) {
-      // No-op
-    }
-    if (DefaultNewArchitectureEntryPoint.shouldEnableNewArchitecture()) {
+    if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       DefaultNewArchitectureEntryPoint.load();
     }
   }
