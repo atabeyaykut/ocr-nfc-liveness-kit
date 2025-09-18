@@ -744,7 +744,6 @@ class LivenessDetector {
         this.onProgress(
           `${command.icon} ${command.message} - Hareket bekleniyor...`
         );
-      }
 
       // Set timeout for command completion
       const timeout = command.duration || 5000; // 5 seconds default
