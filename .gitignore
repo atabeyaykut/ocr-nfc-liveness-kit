@@ -76,3 +76,7 @@ pids
 # Temporary folders
 tmp/
 temp/
+
+# Keystore & secrets - DO NOT COMMIT
+/android/ocr-release-key.keystore
+/android/keystore.properties
