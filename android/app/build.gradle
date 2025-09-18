@@ -23,25 +23,22 @@ android {
     targetCompatibility JavaVersion.VERSION_17
   }
 
+  def keystorePropertiesFile = rootProject.file("keystore.properties")
+  def keystoreProperties = new Properties()
+  if (keystorePropertiesFile.exists()) {
+      keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+  }
+
   signingConfigs {
     debug {
       // Debug keystore is automatically provided by the Android SDK
     }
-    // Example release signing; will be used only if you provide keystore files/props
     release {
-      // Either hardcode values via env or load from gradle.properties
-      // Recommended: keep secrets in ~/.gradle/gradle.properties or ENV vars
-      if (System.getenv("ANDROID_KEYSTORE") != null) {
-        storeFile file(System.getenv("ANDROID_KEYSTORE"))
-        storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
-        keyAlias System.getenv("ANDROID_KEY_ALIAS")
-        keyPassword System.getenv("ANDROID_KEY_PASSWORD")
-      } else if (project.hasProperty('RELEASE_STORE_FILE')) {
-        storeFile file(RELEASE_STORE_FILE)
-        storePassword RELEASE_STORE_PASSWORD
-        keyAlias RELEASE_KEY_ALIAS
-        keyPassword RELEASE_KEY_PASSWORD
-      }
+        def storeFilePath = keystoreProperties['STORE_FILE'] ?: 'ocr-release-key.keystore'
+        storeFile rootProject.file(storeFilePath)
+        storePassword keystoreProperties['STORE_PASSWORD'] ?: System.getenv("RELEASE_STORE_PASSWORD")
+        keyAlias keystoreProperties['KEY_ALIAS'] ?: 'ocr-key-alias'
+        keyPassword keystoreProperties['KEY_PASSWORD'] ?: System.getenv("RELEASE_KEY_PASSWORD")
     }
   }
 
@@ -53,12 +50,10 @@ android {
       signingConfig signingConfigs.debug
     }
     release {
-      // Enable shrinker/proguard for smaller APKs. Adjust as needed.
-      minifyEnabled true
-      shrinkResources true
-      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-      // If a release signing config is provided, use it; otherwise Gradle will error on assembleRelease
-      signingConfig signingConfigs.release
+        signingConfig signingConfigs.release
+        minifyEnabled true
+        shrinkResources true
+        proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
     }
   }
 

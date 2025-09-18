@@ -69,7 +69,7 @@ export const getRandomCommand = () => {
  * @param {string} type - Command type
  * @returns {object|null} Command object or null if not found
  */
-export const getCommandByType = (type) => {
+const getCommandByTypeExport = (type) => {
   return commands.find((command) => command.type === type) || null;
 };
 
@@ -131,17 +131,12 @@ export const generateCommandSequence = (count = 3, difficulty = 'easy') => {
   return sequence;
 };
 
-// Export functions and commands array
-const getCommandByType = (type) => {
-  return commands.find(cmd => cmd.type === type);
-};
-
-const getCommandByInstruction = (instruction) => {
-  return commands.find(cmd => cmd.instruction === instruction);
-};
+// Export functions and commands array (removed duplicate)
 
 module.exports = {
   commands,
-  getCommandByType,
-  getCommandByInstruction,
+  getCommandByType: getCommandByTypeExport,
+  getCommandByInstruction: (instruction) => {
+    return commands.find(cmd => cmd.instruction === instruction);
+  },
 };
