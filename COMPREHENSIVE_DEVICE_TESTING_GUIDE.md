@@ -1,7 +1,14 @@
 # 📱 OCR Mobile SDK - Comprehensive Device Testing Guide
 
+**APK Details:**
+- Path: `android/app/build/outputs/apk/release/app-universal-release.apk`
+- Size: 45.3MB (45,284,794 bytes)
+- SHA256: `239494d9d407978f5d7ddf20d6b869d25729a399bca8848bdfe393b6134f7fbc`
+- Package: `com.ocrmobilesdk v1.0.0`
+- Target: Android 10+ (API 23-34)
+
 ## Prerequisites
-- Android device/emulator with Android 7.0+ (API 24+)
+- Android device/emulator with Android 10+ (API 23+)
 - USB debugging enabled
 - ADB installed and accessible
 - Device connected and authorized
