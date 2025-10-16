@@ -31,6 +31,18 @@ jobs:
     - name: Install dependencies
       run: npm ci
       
+    - name: Verify React Native installation
+      run: |
+        echo "Checking React Native installation..."
+        ls -la node_modules/@react-native/ || echo "React Native not found in node_modules"
+        if [ ! -d "node_modules/@react-native/gradle-plugin" ]; then
+          echo "ERROR: React Native gradle plugin not found"
+          echo "Installing React Native explicitly..."
+          npm install react-native@^0.74.0 --save
+        fi
+        echo "React Native gradle plugin status:"
+        ls -la node_modules/@react-native/gradle-plugin || echo "Still not found"
+      
     - name: Grant execute permission for gradlew
       run: chmod +x android/gradlew
       
