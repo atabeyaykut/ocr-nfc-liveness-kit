@@ -1,6 +1,6 @@
 package com.sdk.nfc;
 
-import android.util.Log;
+import com.sdk.utils.LogSanitizer;
 
 import org.bouncycastle.asn1.*;
 import org.bouncycastle.asn1.cms.ContentInfo;
@@ -14,8 +14,8 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 /**
  * Passive Authentication (PA) - ICAO 9303 compliant
@@ -38,6 +38,10 @@ public class PassiveAuthentication {
     
     private static final String TAG = "PassiveAuth"; // SEC-LOG: shortened tag
     
+    // Thread pool for parallel hash verification
+    private static final ExecutorService hashVerificationExecutor = 
+            Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    
     // Error codes
     public static final String ERR_NFC_SOD_MISMATCH = "ERR_NFC_SOD_MISMATCH";
     public static final String ERR_NFC_CHAIN_FAILED = "ERR_NFC_CHAIN_FAILED";
@@ -59,7 +63,7 @@ public class PassiveAuthentication {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
             Security.addProvider(new BouncyCastleProvider());
             if (BuildConfig.DEBUG) {
-                Log.d(TAG, "BouncyCastle provider registered");
+                LogSanitizer.d(TAG, "BouncyCastle provider registered");
             }
         }
     }
@@ -168,7 +172,7 @@ public class PassiveAuthentication {
             try {
                 // SEC-LOG: No PII in logs
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, String.format("PA started: SOD=%d bytes, DGs=%d", 
+                    LogSanitizer.d(TAG, String.format("PA started: SOD=%d bytes, DGs=%d", 
                             sod.length, dataGroups.size()));
                 }
                 
@@ -177,11 +181,11 @@ public class PassiveAuthentication {
                 try {
                     signedData = parseSOD(sod);
                     if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "SOD parsed successfully");
+                        LogSanitizer.d(TAG, "SOD parsed successfully");
                     }
                 } catch (Exception e) {
                     // SEC-ERR: No sensitive data in error
-                    Log.e(TAG, "SOD parse failed", e);
+                    LogSanitizer.e(TAG, "SOD parse failed", e);
                     return PAResult.failure(ERR_NFC_PARSE_FAILED, 
                             "Failed to parse SOD: " + e.getMessage(),
                             PAMetadata.empty());
@@ -194,11 +198,11 @@ public class PassiveAuthentication {
                     digestAlgorithm = extractDigestAlgorithm(signedData);
                     signatureAlgorithm = extractSignatureAlgorithm(signedData);
                     if (BuildConfig.DEBUG) {
-                        Log.d(TAG, String.format("Algorithms: digest=%s, signature=%s",
+                        LogSanitizer.d(TAG, String.format("Algorithms: digest=%s, signature=%s",
                                 digestAlgorithm, signatureAlgorithm));
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "Algorithm extraction failed", e);
+                    LogSanitizer.e(TAG, "Algorithm extraction failed", e);
                     return PAResult.failure(ERR_NFC_PARSE_FAILED,
                             "Failed to extract algorithms: " + e.getMessage(),
                             new PAMetadata(true, false, false, false, null, null, 0, 
@@ -210,10 +214,10 @@ public class PassiveAuthentication {
                 try {
                     hashesValid = verifyDataGroupHashes(signedData, dataGroups, digestAlgorithm);
                     if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "Hash verification: " + (hashesValid ? "PASS" : "FAIL"));
+                        LogSanitizer.d(TAG, "Hash verification: " + (hashesValid ? "PASS" : "FAIL"));
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "Hash verification failed", e);
+                    LogSanitizer.e(TAG, "Hash verification failed", e);
                     return PAResult.failure(ERR_NFC_HASH_FAILED,
                             "Data group hash verification failed: " + e.getMessage(),
                             new PAMetadata(true, false, false, false, digestAlgorithm, 
@@ -233,10 +237,10 @@ public class PassiveAuthentication {
                 try {
                     certChain = extractCertificateChain(signedData);
                     if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "Certificate chain extracted: " + certChain.size() + " certs");
+                        LogSanitizer.d(TAG, "Certificate chain extracted: " + certChain.size() + " certs");
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "Certificate extraction failed", e);
+                    LogSanitizer.e(TAG, "Certificate extraction failed", e);
                     return PAResult.failure(ERR_NFC_CHAIN_FAILED,
                             "Failed to extract certificate chain: " + e.getMessage(),
                             new PAMetadata(true, true, false, false, digestAlgorithm,
@@ -249,15 +253,15 @@ public class PassiveAuthentication {
                     try {
                         chainValid = validateCertificateChain(certChain, cscaCertificates);
                         if (BuildConfig.DEBUG) {
-                            Log.d(TAG, "Chain validation: " + (chainValid ? "PASS" : "FAIL"));
+                            LogSanitizer.d(TAG, "Chain validation: " + (chainValid ? "PASS" : "FAIL"));
                         }
                     } catch (Exception e) {
-                        Log.e(TAG, "Chain validation failed", e);
+                        LogSanitizer.e(TAG, "Chain validation failed", e);
                         // Continue even if chain validation fails (optional step)
                     }
                 } else {
                     if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "CSCA certificates not provided, skipping chain validation");
+                        LogSanitizer.d(TAG, "CSCA certificates not provided, skipping chain validation");
                     }
                     chainValid = true; // Consider valid if CSCA not provided
                 }
@@ -268,10 +272,10 @@ public class PassiveAuthentication {
                     PublicKey publicKey = certChain.get(0).getPublicKey();
                     signatureValid = verifySODSignature(signedData, publicKey, signatureAlgorithm);
                     if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "Signature verification: " + (signatureValid ? "PASS" : "FAIL"));
+                        LogSanitizer.d(TAG, "Signature verification: " + (signatureValid ? "PASS" : "FAIL"));
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "Signature verification failed", e);
+                    LogSanitizer.e(TAG, "Signature verification failed", e);
                     return PAResult.failure(ERR_NFC_SIGNATURE_FAILED,
                             "SOD signature verification failed: " + e.getMessage(),
                             new PAMetadata(true, true, false, chainValid, digestAlgorithm,
@@ -290,7 +294,7 @@ public class PassiveAuthentication {
                 // All validations passed
                 long duration = System.currentTimeMillis() - startTime;
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, String.format("PA completed successfully in %dms", duration));
+                    LogSanitizer.d(TAG, String.format("PA completed successfully in %dms", duration));
                 }
                 
                 PAMetadata metadata = new PAMetadata(true, true, true, chainValid,
@@ -299,7 +303,7 @@ public class PassiveAuthentication {
                 
             } catch (Exception e) {
                 // SEC-ERR: Catch-all for unexpected errors
-                Log.e(TAG, "PA unexpected error", e);
+                LogSanitizer.e(TAG, "PA unexpected error", e);
                 return PAResult.failure("ERR_NFC_PA_FAILED",
                         "Passive authentication failed: " + e.getMessage(),
                         PAMetadata.empty());
@@ -404,29 +408,74 @@ public class PassiveAuthentication {
             sodHashes.put(dgNumber, dgHash);
         }
         
-        // Verify each provided data group
-        MessageDigest md = MessageDigest.getInstance(digestAlgorithm);
-        for (Map.Entry<Integer, byte[]> entry : dataGroups.entrySet()) {
-            int dgNumber = entry.getKey();
-            byte[] dgData = entry.getValue();
-            
-            byte[] sodHash = sodHashes.get(dgNumber);
-            if (sodHash == null) {
-                if (BuildConfig.DEBUG) {
-                    Log.w(TAG, "DG" + dgNumber + " not found in SOD");
+        // Parallel hash verification for better performance
+        List<CompletableFuture<DGValidationResult>> futures = dataGroups.entrySet().stream()
+                .map(entry -> CompletableFuture.supplyAsync(() -> {
+                    int dgNumber = entry.getKey();
+                    byte[] dgData = entry.getValue();
+                    long startTime = System.currentTimeMillis();
+                    
+                    try {
+                        byte[] sodHash = sodHashes.get(dgNumber);
+                        if (sodHash == null) {
+                            if (BuildConfig.DEBUG) {
+                                LogSanitizer.w(TAG, "DG" + dgNumber + " not found in SOD");
+                            }
+                            return new DGValidationResult(dgNumber, false, "Not in SOD",
+                                    System.currentTimeMillis() - startTime);
+                        }
+                        
+                        MessageDigest md = MessageDigest.getInstance(digestAlgorithm);
+                        byte[] computedHash = md.digest(dgData);
+                        
+                        boolean valid = Arrays.equals(computedHash, sodHash);
+                        if (!valid) {
+                            LogSanitizer.e(TAG, "Hash mismatch for DG" + dgNumber);
+                        }
+                        
+                        return new DGValidationResult(dgNumber, valid, 
+                                valid ? null : "Hash mismatch",
+                                System.currentTimeMillis() - startTime);
+                                
+                    } catch (Exception e) {
+                        LogSanitizer.e(TAG, "Hash verification failed for DG" + dgNumber, e);
+                        return new DGValidationResult(dgNumber, false, e.getMessage(),
+                                System.currentTimeMillis() - startTime);
+                    }
+                }, hashVerificationExecutor))
+                .collect(Collectors.toList());
+        
+        // Wait for all hash verifications to complete
+        try {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                    .get(5, TimeUnit.SECONDS); // 5 second timeout for all hashes
+        } catch (TimeoutException e) {
+            LogSanitizer.e(TAG, "Hash verification timeout", e);
+            return false;
+        } catch (Exception e) {
+            LogSanitizer.e(TAG, "Hash verification error", e);
+            return false;
+        }
+        
+        // Check if all validations passed
+        boolean allValid = true;
+        for (CompletableFuture<DGValidationResult> future : futures) {
+            try {
+                DGValidationResult result = future.get();
+                if (!result.valid) {
+                    allValid = false;
+                    if (BuildConfig.DEBUG) {
+                        LogSanitizer.d(TAG, String.format("DG%d validation failed: %s (took %dms)",
+                                result.dgNumber, result.errorReason, result.verificationTimeMs));
+                    }
                 }
-                continue; // Skip if not in SOD
-            }
-            
-            byte[] computedHash = md.digest(dgData);
-            if (!Arrays.equals(computedHash, sodHash)) {
-                // SEC-ERR: No data content in log
-                Log.e(TAG, "Hash mismatch for DG" + dgNumber);
-                return false;
+            } catch (Exception e) {
+                LogSanitizer.e(TAG, "Failed to get validation result", e);
+                allValid = false;
             }
         }
         
-        return true;
+        return allValid;
     }
     
     /**
@@ -472,7 +521,7 @@ public class PassiveAuthentication {
             try {
                 cert.verify(issuer.getPublicKey());
             } catch (Exception e) {
-                Log.e(TAG, "Certificate chain verification failed at index " + i, e);
+                LogSanitizer.e(TAG, "Certificate chain verification failed at index " + i, e);
                 return false;
             }
         }
@@ -489,7 +538,7 @@ public class PassiveAuthentication {
         }
         
         // SEC-ERR: No CSCA matched
-        Log.e(TAG, "No CSCA certificate matched");
+        LogSanitizer.e(TAG, "No CSCA certificate matched");
         return false;
     }
     
