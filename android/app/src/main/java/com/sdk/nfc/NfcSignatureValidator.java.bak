@@ -1,7 +1,5 @@
 package com.sdk.nfc;
 
-import com.ocrmobilesdk.BuildConfig;
-
 import android.nfc.tech.IsoDep;
 import com.sdk.utils.LogSanitizer;
 

@@ -1,4 +1,5 @@
 package com.sdk.nfc;
+package com.sdk.nfc;
 
 import com.ocrmobilesdk.BuildConfig;
 
@@ -284,9 +285,7 @@ public class PassiveAuthentication {
                             "SOD signature verification failed: " + e.getMessage(),
                             new PAMetadata(true, true, false, chainValid, digestAlgorithm,
                                     signatureAlgorithm, certChain.size(), 
-                                    System.currentTimeMillis() - startTime, new HashMap<>(), 
-                                    new ArrayList<>(), new ArrayList<>(), new ArrayList<>(),
-                                    new ArrayList<>(), new ArrayList<>(), 0, 0, 0));
+                                    System.currentTimeMillis() - startTime));
                 }
                 
                 if (!signatureValid) {
@@ -294,9 +293,7 @@ public class PassiveAuthentication {
                             "SOD signature is invalid",
                             new PAMetadata(true, true, false, chainValid, digestAlgorithm,
                                     signatureAlgorithm, certChain.size(),
-                                    System.currentTimeMillis() - startTime, new HashMap<>(), 
-                                    new ArrayList<>(), new ArrayList<>(), new ArrayList<>(),
-                                    new ArrayList<>(), new ArrayList<>(), 0, 0, 0));
+                                    System.currentTimeMillis() - startTime));
                 }
                 
                 // All validations passed
@@ -306,9 +303,7 @@ public class PassiveAuthentication {
                 }
                 
                 PAMetadata metadata = new PAMetadata(true, true, true, chainValid,
-                        digestAlgorithm, signatureAlgorithm, certChain.size(), duration,
-                        new HashMap<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(),
-                        new ArrayList<>(), new ArrayList<>(), 0, 0, 0);
+                        digestAlgorithm, signatureAlgorithm, certChain.size(), duration);
                 return PAResult.success(metadata);
                 
             } catch (Exception e) {
