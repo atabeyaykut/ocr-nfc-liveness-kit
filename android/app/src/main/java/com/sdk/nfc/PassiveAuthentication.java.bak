@@ -223,7 +223,7 @@ public class PassiveAuthentication {
                     return PAResult.failure(ERR_NFC_HASH_FAILED,
                             "Data group hash verification failed: " + e.getMessage(),
                             new PAMetadata(true, false, false, false, digestAlgorithm, 
-                                    signatureAlgorithm, 0, System.currentTimeMillis() - startTime, new HashMap<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), 0, 0, 0));
+                                    signatureAlgorithm, 0, System.currentTimeMillis() - startTime));
                 }
                 
                 if (!hashesValid) {
@@ -231,7 +231,7 @@ public class PassiveAuthentication {
                     return PAResult.failure(ERR_NFC_SOD_MISMATCH,
                             "Data group hashes do not match SOD",
                             new PAMetadata(true, false, false, false, digestAlgorithm,
-                                    signatureAlgorithm, 0, System.currentTimeMillis() - startTime, new HashMap<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), 0, 0, 0));
+                                    signatureAlgorithm, 0, System.currentTimeMillis() - startTime));
                 }
                 
                 // Step 4: Extract and validate certificate chain
@@ -246,7 +246,7 @@ public class PassiveAuthentication {
                     return PAResult.failure(ERR_NFC_CHAIN_FAILED,
                             "Failed to extract certificate chain: " + e.getMessage(),
                             new PAMetadata(true, true, false, false, digestAlgorithm,
-                                    signatureAlgorithm, 0, System.currentTimeMillis() - startTime, new HashMap<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), 0, 0, 0));
+                                    signatureAlgorithm, 0, System.currentTimeMillis() - startTime));
                 }
                 
                 // Step 5: Validate certificate chain
@@ -394,7 +394,7 @@ public class PassiveAuthentication {
     private boolean verifyDataGroupHashes(SignedData signedData, Map<Integer, byte[]> dataGroups,
                                          String digestAlgorithm) throws Exception {
         // Extract LDS Security Object (eContent)
-        ASN1OctetString eContent = (ASN1OctetString) signedData.getEncapContentInfo().getContent();
+        ASN1OctetString eContent = signedData.getEncapContentInfo().getContent();
         ASN1Sequence ldsSecurityObject = ASN1Sequence.getInstance(
                 new ASN1InputStream(eContent.getOctets()).readObject());
         
@@ -550,7 +550,7 @@ public class PassiveAuthentication {
     private boolean verifySODSignature(SignedData signedData, PublicKey publicKey,
                                       String signatureAlgorithm) throws Exception {
         // Extract signed content
-        ASN1OctetString eContent = (ASN1OctetString) signedData.getEncapContentInfo().getContent();
+        ASN1OctetString eContent = signedData.getEncapContentInfo().getContent();
         byte[] signedContent = eContent.getOctets();
         
         // Extract signature

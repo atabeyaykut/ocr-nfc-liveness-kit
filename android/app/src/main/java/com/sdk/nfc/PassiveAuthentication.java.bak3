@@ -394,7 +394,7 @@ public class PassiveAuthentication {
     private boolean verifyDataGroupHashes(SignedData signedData, Map<Integer, byte[]> dataGroups,
                                          String digestAlgorithm) throws Exception {
         // Extract LDS Security Object (eContent)
-        ASN1OctetString eContent = (ASN1OctetString) signedData.getEncapContentInfo().getContent();
+        ASN1OctetString eContent = signedData.getEncapContentInfo().getContent();
         ASN1Sequence ldsSecurityObject = ASN1Sequence.getInstance(
                 new ASN1InputStream(eContent.getOctets()).readObject());
         
@@ -550,7 +550,7 @@ public class PassiveAuthentication {
     private boolean verifySODSignature(SignedData signedData, PublicKey publicKey,
                                       String signatureAlgorithm) throws Exception {
         // Extract signed content
-        ASN1OctetString eContent = (ASN1OctetString) signedData.getEncapContentInfo().getContent();
+        ASN1OctetString eContent = signedData.getEncapContentInfo().getContent();
         byte[] signedContent = eContent.getOctets();
         
         // Extract signature
