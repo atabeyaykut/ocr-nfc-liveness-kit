@@ -1,7 +1,7 @@
 package com.sdk.nfc;
 
 import android.nfc.tech.IsoDep;
-import android.util.Log;
+import com.sdk.utils.LogSanitizer;
 
 import org.bouncycastle.asn1.*;
 import org.bouncycastle.asn1.cms.ContentInfo;
@@ -60,7 +60,7 @@ public class NfcSignatureValidator {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
             Security.addProvider(new BouncyCastleProvider());
             if (BuildConfig.DEBUG) {
-                Log.d(TAG, "BouncyCastle provider registered");
+                LogSanitizer.d(TAG, "BouncyCastle provider registered");
             }
         }
     }
@@ -158,7 +158,7 @@ public class NfcSignatureValidator {
             try {
                 // SEC-LOG: No PII in logs
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "Starting PA validation");
+                    LogSanitizer.d(TAG, "Starting PA validation");
                 }
                 
                 // Prepare data groups map
@@ -174,12 +174,12 @@ public class NfcSignatureValidator {
                 try {
                     paResult = paFuture.get(VALIDATION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                 } catch (TimeoutException e) {
-                    Log.e(TAG, "PA timeout", e);
+                    LogSanitizer.e(TAG, "PA timeout", e);
                     return ValidationResult.failure("ERR_NFC_PA_TIMEOUT",
                             "Passive authentication timed out",
                             ValidationMetadata.empty());
                 } catch (InterruptedException | ExecutionException e) {
-                    Log.e(TAG, "PA execution error", e);
+                    LogSanitizer.e(TAG, "PA execution error", e);
                     return ValidationResult.failure("ERR_NFC_PA_FAILED",
                             "Passive authentication failed: " + e.getMessage(),
                             ValidationMetadata.empty());
@@ -197,7 +197,7 @@ public class NfcSignatureValidator {
                 
                 // PA successful
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, String.format("PA completed in %dms",
+                    LogSanitizer.d(TAG, String.format("PA completed in %dms",
                             System.currentTimeMillis() - startTime));
                 }
                 
@@ -216,7 +216,7 @@ public class NfcSignatureValidator {
                 
             } catch (Exception e) {
                 // SEC-ERR: Catch-all
-                Log.e(TAG, "PA validation error", e);
+                LogSanitizer.e(TAG, "PA validation error", e);
                 return ValidationResult.failure("ERR_NFC_VALIDATION_FAILED",
                         "Validation failed: " + e.getMessage(),
                         ValidationMetadata.empty());
@@ -245,7 +245,7 @@ public class NfcSignatureValidator {
             try {
                 // SEC-LOG: No PII in logs
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "Starting PA+AA validation");
+                    LogSanitizer.d(TAG, "Starting PA+AA validation");
                 }
                 
                 // Step 1: Perform Passive Authentication
@@ -260,12 +260,12 @@ public class NfcSignatureValidator {
                 try {
                     paResult = paFuture.get(VALIDATION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                 } catch (TimeoutException e) {
-                    Log.e(TAG, "PA timeout", e);
+                    LogSanitizer.e(TAG, "PA timeout", e);
                     return ValidationResult.failure("ERR_NFC_PA_TIMEOUT",
                             "Passive authentication timed out",
                             ValidationMetadata.empty());
                 } catch (InterruptedException | ExecutionException e) {
-                    Log.e(TAG, "PA execution error", e);
+                    LogSanitizer.e(TAG, "PA execution error", e);
                     return ValidationResult.failure("ERR_NFC_PA_FAILED",
                             "Passive authentication failed: " + e.getMessage(),
                             ValidationMetadata.empty());
@@ -273,7 +273,7 @@ public class NfcSignatureValidator {
                 
                 if (!paResult.isValid) {
                     // SEC-ERR: PA failed, return without AA
-                    Log.w(TAG, "PA failed, skipping AA");
+                    LogSanitizer.w(TAG, "PA failed, skipping AA");
                     return ValidationResult.failure(paResult.errorCode, paResult.errorMessage,
                             new ValidationMetadata(false, paResult.metadata.hashesValid,
                                     paResult.metadata.chainValid, false, false,
@@ -283,7 +283,7 @@ public class NfcSignatureValidator {
                 }
                 
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "PA passed, starting AA");
+                    LogSanitizer.d(TAG, "PA passed, starting AA");
                 }
                 
                 // Step 2: Perform Active Authentication
@@ -294,7 +294,7 @@ public class NfcSignatureValidator {
                 try {
                     aaResult = aaFuture.get(VALIDATION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                 } catch (TimeoutException e) {
-                    Log.e(TAG, "AA timeout", e);
+                    LogSanitizer.e(TAG, "AA timeout", e);
                     // WARN: PA passed but AA timed out
                     return ValidationResult.failure(ActiveAuthentication.ERR_NFC_AA_TIMEOUT,
                             "Active authentication timed out (PA passed)",
@@ -307,7 +307,7 @@ public class NfcSignatureValidator {
                                     paResult.metadata.signatureAlgorithm,
                                     System.currentTimeMillis() - startTime));
                 } catch (InterruptedException | ExecutionException e) {
-                    Log.e(TAG, "AA execution error", e);
+                    LogSanitizer.e(TAG, "AA execution error", e);
                     // WARN: PA passed but AA failed
                     return ValidationResult.failure("ERR_NFC_AA_FAILED",
                             "Active authentication failed (PA passed): " + e.getMessage(),
@@ -323,7 +323,7 @@ public class NfcSignatureValidator {
                 
                 if (!aaResult.isValid) {
                     // SEC-ERR: PA passed but AA failed
-                    Log.w(TAG, "AA failed: " + aaResult.errorMessage);
+                    LogSanitizer.w(TAG, "AA failed: " + aaResult.errorMessage);
                     return ValidationResult.failure(aaResult.errorCode, aaResult.errorMessage,
                             new ValidationMetadata(paResult.metadata.signatureValid,
                                     paResult.metadata.hashesValid,
@@ -337,7 +337,7 @@ public class NfcSignatureValidator {
                 
                 // Both PA and AA successful
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, String.format("PA+AA completed in %dms",
+                    LogSanitizer.d(TAG, String.format("PA+AA completed in %dms",
                             System.currentTimeMillis() - startTime));
                 }
                 
@@ -356,7 +356,7 @@ public class NfcSignatureValidator {
                 
             } catch (Exception e) {
                 // SEC-ERR: Catch-all
-                Log.e(TAG, "PA+AA validation error", e);
+                LogSanitizer.e(TAG, "PA+AA validation error", e);
                 return ValidationResult.failure("ERR_NFC_VALIDATION_FAILED",
                         "Validation failed: " + e.getMessage(),
                         ValidationMetadata.empty());
@@ -377,17 +377,17 @@ public class NfcSignatureValidator {
     @Deprecated
     public ValidationResult validateSignature(byte[] dg1, byte[] dg2, byte[] sod, byte[] dg15) {
         try {
-            Log.d(TAG, "Starting signature validation");
-            Log.d(TAG, String.format("DG1 size: %d, DG2 size: %d, SOD size: %d, DG15 size: %d",
+            LogSanitizer.d(TAG, "Starting signature validation");
+            LogSanitizer.d(TAG, String.format("DG1 size: %d, DG2 size: %d, SOD size: %d, DG15 size: %d",
                     dg1.length, dg2.length, sod.length, dg15.length));
             
             // Step 1: Parse SOD
             SignedData signedData;
             try {
                 signedData = parseSOD(sod);
-                Log.d(TAG, "SOD parsed successfully");
+                LogSanitizer.d(TAG, "SOD parsed successfully");
             } catch (Exception e) {
-                Log.e(TAG, "Failed to parse SOD", e);
+                LogSanitizer.e(TAG, "Failed to parse SOD", e);
                 return ValidationResult.failure("NFC_004", 
                         "Chip signature invalid: Failed to parse SOD - " + e.getMessage(),
                         ValidationMetadata.empty());
@@ -397,9 +397,9 @@ public class NfcSignatureValidator {
             String digestAlgorithm;
             try {
                 digestAlgorithm = extractDigestAlgorithm(signedData);
-                Log.d(TAG, "Digest algorithm: " + digestAlgorithm);
+                LogSanitizer.d(TAG, "Digest algorithm: " + digestAlgorithm);
             } catch (Exception e) {
-                Log.e(TAG, "Failed to extract digest algorithm", e);
+                LogSanitizer.e(TAG, "Failed to extract digest algorithm", e);
                 return ValidationResult.failure("NFC_004",
                         "Chip signature invalid: Unsupported digest algorithm - " + e.getMessage(),
                         ValidationMetadata.empty());
@@ -410,27 +410,27 @@ public class NfcSignatureValidator {
             try {
                 hashesValid = verifyDataGroupHashes(signedData, dg1, dg2, digestAlgorithm);
             } catch (Exception e) {
-                Log.e(TAG, "Failed to verify data group hashes", e);
+                LogSanitizer.e(TAG, "Failed to verify data group hashes", e);
                 return ValidationResult.failure("NFC_004",
                         "Chip signature invalid: Hash verification failed - " + e.getMessage(),
                         new ValidationMetadata(false, false, false, digestAlgorithm, null));
             }
             
             if (!hashesValid) {
-                Log.e(TAG, "Data group hashes validation failed");
+                LogSanitizer.e(TAG, "Data group hashes validation failed");
                 return ValidationResult.failure("NFC_004",
                         "Chip signature invalid: Data group hashes do not match",
                         new ValidationMetadata(false, false, false, digestAlgorithm, null));
             }
-            Log.d(TAG, "Data group hashes validated successfully");
+            LogSanitizer.d(TAG, "Data group hashes validated successfully");
             
             // Step 4: Extract public key from DG15
             PublicKey publicKey;
             try {
                 publicKey = extractPublicKeyFromDG15(dg15);
-                Log.d(TAG, "Public key extracted from DG15");
+                LogSanitizer.d(TAG, "Public key extracted from DG15");
             } catch (Exception e) {
-                Log.e(TAG, "Failed to extract public key", e);
+                LogSanitizer.e(TAG, "Failed to extract public key", e);
                 return ValidationResult.failure("NFC_004",
                         "Chip signature invalid: Failed to extract public key - " + e.getMessage(),
                         new ValidationMetadata(false, true, false, digestAlgorithm, null));
@@ -441,23 +441,23 @@ public class NfcSignatureValidator {
             boolean signatureValid;
             try {
                 signatureAlgorithm = extractSignatureAlgorithm(signedData);
-                Log.d(TAG, "Signature algorithm: " + signatureAlgorithm);
+                LogSanitizer.d(TAG, "Signature algorithm: " + signatureAlgorithm);
                 
                 signatureValid = verifySODSignature(signedData, publicKey, signatureAlgorithm);
             } catch (Exception e) {
-                Log.e(TAG, "Failed to verify SOD signature", e);
+                LogSanitizer.e(TAG, "Failed to verify SOD signature", e);
                 return ValidationResult.failure("NFC_004",
                         "Chip signature invalid: Signature verification failed - " + e.getMessage(),
                         new ValidationMetadata(false, true, false, digestAlgorithm, null));
             }
             
             if (!signatureValid) {
-                Log.e(TAG, "SOD signature validation failed");
+                LogSanitizer.e(TAG, "SOD signature validation failed");
                 return ValidationResult.failure("NFC_004",
                         "Chip signature invalid: SOD signature verification failed",
                         new ValidationMetadata(false, true, false, digestAlgorithm, signatureAlgorithm));
             }
-            Log.d(TAG, "SOD signature validated successfully");
+            LogSanitizer.d(TAG, "SOD signature validated successfully");
             
             // All validations passed
             ValidationMetadata metadata = new ValidationMetadata(
@@ -465,7 +465,7 @@ public class NfcSignatureValidator {
             return ValidationResult.success(metadata);
             
         } catch (Exception e) {
-            Log.e(TAG, "Signature validation error", e);
+            LogSanitizer.e(TAG, "Signature validation error", e);
             return ValidationResult.failure("NFC_004",
                     "Chip signature validation error: " + e.getMessage(),
                     ValidationMetadata.empty());
@@ -500,7 +500,7 @@ public class NfcSignatureValidator {
                 try {
                     asn1InputStream.close();
                 } catch (IOException e) {
-                    Log.w(TAG, "Failed to close ASN1InputStream", e);
+                    LogSanitizer.w(TAG, "Failed to close ASN1InputStream", e);
                 }
             }
         }
@@ -614,15 +614,15 @@ public class NfcSignatureValidator {
         
         // Verify hashes
         if (dg1HashFromSOD == null || dg2HashFromSOD == null) {
-            Log.e(TAG, "Required data group hashes not found in SOD");
+            LogSanitizer.e(TAG, "Required data group hashes not found in SOD");
             return false;
         }
         
         boolean dg1Valid = MessageDigest.isEqual(dg1Hash, dg1HashFromSOD);
         boolean dg2Valid = MessageDigest.isEqual(dg2Hash, dg2HashFromSOD);
         
-        Log.d(TAG, "DG1 hash valid: " + dg1Valid);
-        Log.d(TAG, "DG2 hash valid: " + dg2Valid);
+        LogSanitizer.d(TAG, "DG1 hash valid: " + dg1Valid);
+        LogSanitizer.d(TAG, "DG2 hash valid: " + dg2Valid);
         
         return dg1Valid && dg2Valid;
     }
@@ -659,7 +659,7 @@ public class NfcSignatureValidator {
                 try {
                     asn1InputStream.close();
                 } catch (IOException e) {
-                    Log.w(TAG, "Failed to close ASN1InputStream", e);
+                    LogSanitizer.w(TAG, "Failed to close ASN1InputStream", e);
                 }
             }
         }
