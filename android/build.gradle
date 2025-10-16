@@ -20,21 +20,6 @@ ext {
   javaVersion = JavaVersion.VERSION_17
 }
 
-// Java Toolchain Configuration - Auto-download JDK if not found
-subprojects {
-  tasks.withType(JavaCompile).configureEach {
-    options.release = 17
-  }
-  
-  // Enable Java toolchain auto-provisioning
-  java {
-    toolchain {
-      languageVersion = JavaLanguageVersion.of(17)
-      vendor = JvmVendorSpec.ADOPTIUM  // Eclipse Temurin (formerly AdoptOpenJDK)
-    }
-  }
-}
-
 // Project-level repositories (repositoriesMode is PREFER_PROJECT)
 allprojects {
   repositories {
