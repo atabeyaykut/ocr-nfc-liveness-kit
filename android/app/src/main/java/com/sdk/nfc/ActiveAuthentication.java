@@ -1,7 +1,7 @@
 package com.sdk.nfc;
 
 import android.nfc.tech.IsoDep;
-import android.util.Log;
+import com.sdk.utils.LogSanitizer;
 
 import org.bouncycastle.asn1.*;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
@@ -70,7 +70,7 @@ public class ActiveAuthentication {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
             Security.addProvider(new BouncyCastleProvider());
             if (BuildConfig.DEBUG) {
-                Log.d(TAG, "BouncyCastle provider registered");
+                LogSanitizer.d(TAG, "BouncyCastle provider registered");
             }
         }
     }
@@ -146,7 +146,7 @@ public class ActiveAuthentication {
             try {
                 // SEC-LOG: No PII in logs
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, String.format("AA started: DG15=%d bytes", dg15.length));
+                    LogSanitizer.d(TAG, String.format("AA started: DG15=%d bytes", dg15.length));
                 }
                 
                 // Step 1: Extract public key from DG15
@@ -159,11 +159,11 @@ public class ActiveAuthentication {
                     keySize = getKeySize(publicKey);
                     
                     if (BuildConfig.DEBUG) {
-                        Log.d(TAG, String.format("Public key extracted: %s-%d", 
+                        LogSanitizer.d(TAG, String.format("Public key extracted: %s-%d", 
                                 keyAlgorithm, keySize));
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "DG15 parse failed", e);
+                    LogSanitizer.e(TAG, "DG15 parse failed", e);
                     return AAResult.failure(ERR_NFC_AA_DG15_PARSE_FAILED,
                             "Failed to extract public key from DG15: " + e.getMessage(),
                             AAMetadata.empty());
@@ -179,7 +179,7 @@ public class ActiveAuthentication {
                     // Select MRTD application
                     byte[] response = isoDep.transceive(SELECT_MRTD_APP);
                     if (!isSuccess(response)) {
-                        Log.e(TAG, "Failed to select MRTD application");
+                        LogSanitizer.e(TAG, "Failed to select MRTD application");
                         return AAResult.failure(ERR_NFC_AA_CHIP_ERROR,
                                 "Failed to select MRTD application",
                                 new AAMetadata(true, false, false, false, keyAlgorithm,
@@ -187,10 +187,10 @@ public class ActiveAuthentication {
                     }
                     
                     if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "MRTD application selected");
+                        LogSanitizer.d(TAG, "MRTD application selected");
                     }
                 } catch (IOException e) {
-                    Log.e(TAG, "Chip connection failed", e);
+                    LogSanitizer.e(TAG, "Chip connection failed", e);
                     return AAResult.failure(ERR_NFC_AA_CHIP_ERROR,
                             "Failed to connect to chip: " + e.getMessage(),
                             new AAMetadata(true, false, false, false, keyAlgorithm,
@@ -206,7 +206,7 @@ public class ActiveAuthentication {
                 for (retryCount = 0; retryCount <= MAX_RETRIES; retryCount++) {
                     try {
                         if (BuildConfig.DEBUG && retryCount > 0) {
-                            Log.d(TAG, "Retry attempt: " + retryCount);
+                            LogSanitizer.d(TAG, "Retry attempt: " + retryCount);
                         }
                         
                         // Send INTERNAL AUTHENTICATE command
@@ -217,16 +217,16 @@ public class ActiveAuthentication {
                         if (isSuccess(signedResponse)) {
                             responseReceived = true;
                             if (BuildConfig.DEBUG) {
-                                Log.d(TAG, "Challenge-response successful");
+                                LogSanitizer.d(TAG, "Challenge-response successful");
                             }
                             break; // Success, exit retry loop
                         } else {
-                            Log.w(TAG, "Challenge-response failed, status: " + 
+                            LogSanitizer.w(TAG, "Challenge-response failed, status: " + 
                                     getStatusWord(signedResponse));
                         }
                         
                     } catch (IOException e) {
-                        Log.w(TAG, "Challenge-response IO error (attempt " + (retryCount + 1) + ")", e);
+                        LogSanitizer.w(TAG, "Challenge-response IO error (attempt " + (retryCount + 1) + ")", e);
                         if (retryCount == MAX_RETRIES) {
                             return AAResult.failure(ERR_NFC_AA_CHALLENGE_FAILED,
                                     "Challenge-response failed after " + (retryCount + 1) + " attempts",
@@ -239,7 +239,7 @@ public class ActiveAuthentication {
                                 MAX_BACKOFF_MS
                         );
                         if (BuildConfig.DEBUG) {
-                            Log.d(TAG, "Backing off for " + backoffMs + "ms before retry");
+                            LogSanitizer.d(TAG, "Backing off for " + backoffMs + "ms before retry");
                         }
                         try {
                             Thread.sleep(backoffMs);
@@ -268,10 +268,10 @@ public class ActiveAuthentication {
                     signatureValid = verifySignature(publicKey, challenge, signature, keyAlgorithm);
                     
                     if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "Signature verification: " + (signatureValid ? "PASS" : "FAIL"));
+                        LogSanitizer.d(TAG, "Signature verification: " + (signatureValid ? "PASS" : "FAIL"));
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "Signature verification failed", e);
+                    LogSanitizer.e(TAG, "Signature verification failed", e);
                     return AAResult.failure(ERR_NFC_AA_SIGNATURE_INVALID,
                             "Signature verification failed: " + e.getMessage(),
                             new AAMetadata(true, true, true, false, keyAlgorithm,
@@ -288,7 +288,7 @@ public class ActiveAuthentication {
                 // All validations passed
                 long duration = System.currentTimeMillis() - startTime;
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, String.format("AA completed successfully in %dms (retries: %d)",
+                    LogSanitizer.d(TAG, String.format("AA completed successfully in %dms (retries: %d)",
                             duration, retryCount));
                 }
                 
@@ -298,7 +298,7 @@ public class ActiveAuthentication {
                 
             } catch (Exception e) {
                 // SEC-ERR: Catch-all for unexpected errors
-                Log.e(TAG, "AA unexpected error", e);
+                LogSanitizer.e(TAG, "AA unexpected error", e);
                 return AAResult.failure("ERR_NFC_AA_FAILED",
                         "Active authentication failed: " + e.getMessage(),
                         AAMetadata.empty());
@@ -309,7 +309,7 @@ public class ActiveAuthentication {
                         isoDep.close();
                     }
                 } catch (IOException e) {
-                    Log.w(TAG, "Failed to close IsoDep", e);
+                    LogSanitizer.w(TAG, "Failed to close IsoDep", e);
                 }
             }
         });
@@ -373,7 +373,7 @@ public class ActiveAuthentication {
         
         if (BuildConfig.DEBUG) {
             // SEC-LOG: Challenge is not PII, but still be careful
-            Log.d(TAG, "Challenge generated: " + challenge.length + " bytes");
+            LogSanitizer.d(TAG, "Challenge generated: " + challenge.length + " bytes");
         }
         
         return challenge;
