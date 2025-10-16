@@ -1,0 +1,35 @@
+{
+  "description": "Invalid SOD signature",
+  "sod": {
+    "raw": "SU5WQUxJRF9TT0RfREFUQQ==",
+    "parsed": {
+      "error": "invalid"
+    }
+  },
+  "dg1": {
+    "raw": "UDxVVE9URVNUUEVSU09OPDxTWU5USEVUSUM8PDw8PDw8PDw8PDw8PDw8PDw8PDw8CjEyMzQ1Njc4OTBVVE83MDAxMDE0TTI1MDEwMTc8PDw8PDw8PDw8PDw8PDA0",
+    "parsed": {
+      "documentType": "P",
+      "issuingCountry": "UTO",
+      "surname": "TESTPERSON",
+      "givenNames": "SYNTHETIC",
+      "documentNumber": "123456789",
+      "nationality": "UTO",
+      "birthDate": "700101",
+      "sex": "M",
+      "expiryDate": "250101",
+      "personalNumber": "04"
+    }
+  },
+  "dg2": {
+    "raw": "U1lOVEhFVElDX0ZBQ0VfSU1BR0VfREFUQV9QTEFDRUhPTERFUg==",
+    "parsed": {
+      "imageFormat": "JPEG2000",
+      "imageSize": 37,
+      "width": 300,
+      "height": 400,
+      "colorSpace": "RGB"
+    }
+  },
+  "expectedResult": "PA_SOD_INVALID"
+}
