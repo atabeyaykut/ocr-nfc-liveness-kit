@@ -33,12 +33,6 @@ android {
     targetCompatibility JavaVersion.VERSION_17
   }
 
-  // Java Toolchain - Auto-download JDK 17 if not found
-  // This enables Gradle to automatically provision the correct JDK
-  kotlinOptions {
-    jvmTarget = '17'
-  }
-
   def keystorePropertiesFile = rootProject.file("keystore.properties")
   def keystoreProperties = new Properties()
   if (keystorePropertiesFile.exists()) {
