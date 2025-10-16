@@ -7,7 +7,16 @@ pluginManagement {
     google()
   }
   // Provides the React Native Gradle plugins: com.facebook.react and com.facebook.react.rootproject
-  includeBuild("../node_modules/@react-native/gradle-plugin")
+  def reactNativeGradlePlugin = new File("../node_modules/@react-native/gradle-plugin")
+  if (reactNativeGradlePlugin.exists()) {
+    includeBuild("../node_modules/@react-native/gradle-plugin")
+  } else {
+    // Fallback for CI/CD environments where node_modules might not be in parent directory
+    def altPath = new File(rootDir, "../node_modules/@react-native/gradle-plugin")
+    if (altPath.exists()) {
+      includeBuild(altPath.absolutePath)
+    }
+  }
 }
 
 dependencyResolutionManagement {
