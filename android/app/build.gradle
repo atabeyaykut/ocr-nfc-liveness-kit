@@ -3,7 +3,7 @@
 
 plugins {
   id 'com.android.application'
-  id 'com.facebook.react'
+  // id 'com.facebook.react'  // Commented out - not required for native modules
   id 'jacoco'
 }
 
