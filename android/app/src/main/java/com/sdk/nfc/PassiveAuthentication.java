@@ -90,7 +90,7 @@ public class PassiveAuthentication {
     }
     
     /**
-     * Passive Authentication Metadata
+     * Passive Authentication Metadata (Enhanced)
      */
     public static class PAMetadata {
         public final boolean sodParsed;
@@ -102,9 +102,30 @@ public class PassiveAuthentication {
         public final int certificateCount;
         public final long validationDurationMs;
         
+        // Enhanced: Per-DG validation results
+        public final Map<Integer, Boolean> dataGroupValidation; // DG number -> valid
+        public final List<Integer> validDataGroups;
+        public final List<Integer> invalidDataGroups;
+        public final List<Integer> missingDataGroups;
+        
+        // Enhanced: Supported/unsupported OIDs
+        public final List<String> supportedOIDs;
+        public final List<String> unsupportedOIDs;
+        
+        // Enhanced: Hash computation times
+        public final long hashVerificationMs;
+        public final long signatureVerificationMs;
+        public final long chainVerificationMs;
+        
         public PAMetadata(boolean sodParsed, boolean hashesValid, boolean signatureValid,
                          boolean chainValid, String digestAlgorithm, String signatureAlgorithm,
-                         int certificateCount, long validationDurationMs) {
+                         int certificateCount, long validationDurationMs,
+                         Map<Integer, Boolean> dataGroupValidation,
+                         List<Integer> validDataGroups, List<Integer> invalidDataGroups,
+                         List<Integer> missingDataGroups,
+                         List<String> supportedOIDs, List<String> unsupportedOIDs,
+                         long hashVerificationMs, long signatureVerificationMs,
+                         long chainVerificationMs) {
             this.sodParsed = sodParsed;
             this.hashesValid = hashesValid;
             this.signatureValid = signatureValid;
@@ -113,10 +134,21 @@ public class PassiveAuthentication {
             this.signatureAlgorithm = signatureAlgorithm;
             this.certificateCount = certificateCount;
             this.validationDurationMs = validationDurationMs;
+            this.dataGroupValidation = dataGroupValidation != null ? dataGroupValidation : new HashMap<>();
+            this.validDataGroups = validDataGroups != null ? validDataGroups : new ArrayList<>();
+            this.invalidDataGroups = invalidDataGroups != null ? invalidDataGroups : new ArrayList<>();
+            this.missingDataGroups = missingDataGroups != null ? missingDataGroups : new ArrayList<>();
+            this.supportedOIDs = supportedOIDs != null ? supportedOIDs : new ArrayList<>();
+            this.unsupportedOIDs = unsupportedOIDs != null ? unsupportedOIDs : new ArrayList<>();
+            this.hashVerificationMs = hashVerificationMs;
+            this.signatureVerificationMs = signatureVerificationMs;
+            this.chainVerificationMs = chainVerificationMs;
         }
         
         public static PAMetadata empty() {
-            return new PAMetadata(false, false, false, false, null, null, 0, 0);
+            return new PAMetadata(false, false, false, false, null, null, 0, 0,
+                    new HashMap<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(),
+                    new ArrayList<>(), new ArrayList<>(), 0, 0, 0);
         }
     }
     
@@ -334,7 +366,24 @@ public class PassiveAuthentication {
     }
     
     /**
-     * Verify data group hashes against SOD
+     * Data Group Validation Result
+     */
+    private static class DGValidationResult {
+        final int dgNumber;
+        final boolean valid;
+        final String errorReason;
+        final long verificationTimeMs;
+        
+        DGValidationResult(int dgNumber, boolean valid, String errorReason, long verificationTimeMs) {
+            this.dgNumber = dgNumber;
+            this.valid = valid;
+            this.errorReason = errorReason;
+            this.verificationTimeMs = verificationTimeMs;
+        }
+    }
+    
+    /**
+     * Verify data group hashes against SOD (Enhanced with parallel processing)
      */
     private boolean verifyDataGroupHashes(SignedData signedData, Map<Integer, byte[]> dataGroups,
                                          String digestAlgorithm) throws Exception {
