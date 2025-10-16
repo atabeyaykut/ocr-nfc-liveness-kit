@@ -7,7 +7,8 @@ plugins {
   id("org.jetbrains.kotlin.android") version "1.9.24" apply false
   // The React Native Gradle plugin is provided via includeBuild in settings.gradle
   // Do not set a version here; it is resolved from node_modules/react-native-gradle-plugin
-  id("com.facebook.react") apply false
+  // Made optional to prevent build failures in CI/CD when plugin is not available
+  // id("com.facebook.react") apply false  // Commented out - applied in app/build.gradle if available
 }
 
 ext {
