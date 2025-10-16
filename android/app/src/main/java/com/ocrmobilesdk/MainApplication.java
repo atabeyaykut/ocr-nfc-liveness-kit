@@ -10,6 +10,8 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
 import com.facebook.react.defaults.DefaultReactNativeHost;
 
 import com.ocrmobilesdk.BuildConfig;
+import com.ocr.OCRSDKPackage;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -38,8 +40,10 @@ public class MainApplication extends MultiDexApplication implements ReactApplica
 
     @Override
     protected List<ReactPackage> getPackages() {
-      // Hızlı çözüm: Autolinking RN Gradle plugin ile sağlanır; burada boş liste döndürüyoruz.
-      return Collections.emptyList();
+      // Add custom packages
+      List<ReactPackage> packages = new ArrayList<>();
+      packages.add(new OCRSDKPackage());
+      return packages;
     }
   };
 
