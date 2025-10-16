@@ -59,7 +59,10 @@ public class ActiveAuthentication {
     
     // Timeouts and retries
     private static final int OPERATION_TIMEOUT_MS = 10000; // 10 seconds
-    private static final int MAX_RETRIES = 2;
+    private static final int MAX_RETRIES = 3; // Increased from 2 to 3
+    private static final int INITIAL_BACKOFF_MS = 100; // Initial backoff delay
+    private static final int MAX_BACKOFF_MS = 2000; // Max backoff delay
+    private static final double BACKOFF_MULTIPLIER = 2.0; // Exponential multiplier
     private static final int CHALLENGE_SIZE = 8; // 8 bytes for challenge
     
     static {
@@ -230,11 +233,22 @@ public class ActiveAuthentication {
                                     new AAMetadata(true, challengeSent, false, false, keyAlgorithm,
                                             keySize, retryCount, System.currentTimeMillis() - startTime));
                         }
-                        // Wait before retry
+                        // Exponential backoff: 100ms, 200ms, 400ms, ...
+                        long backoffMs = Math.min(
+                                (long)(INITIAL_BACKOFF_MS * Math.pow(BACKOFF_MULTIPLIER, retryCount)),
+                                MAX_BACKOFF_MS
+                        );
+                        if (BuildConfig.DEBUG) {
+                            Log.d(TAG, "Backing off for " + backoffMs + "ms before retry");
+                        }
                         try {
-                            Thread.sleep(500);
+                            Thread.sleep(backoffMs);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
+                            return AAResult.failure(ERR_NFC_AA_TIMEOUT,
+                                    "Operation interrupted during backoff",
+                                    new AAMetadata(true, challengeSent, false, false, keyAlgorithm,
+                                            keySize, retryCount, System.currentTimeMillis() - startTime));
                         }
                     }
                 }
