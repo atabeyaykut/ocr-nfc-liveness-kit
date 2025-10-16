@@ -1,0 +1,64 @@
+{
+  "description": "Valid synthetic passport data",
+  "sod": {
+    "raw": "eyJ2ZXJzaW9uIjogIjEuMCIsICJoYXNoQWxnb3JpdGhtIjogIlNIQS0yNTYiLCAiZGF0YUdyb3VwcyI6IHsiMSI6IHsiaGFzaCI6ICIxMDRjYzRjMTA2OGZhNzRmNmViNjE0ZmYzMTRlZTY0MDlhMWMyNmEzZmM0OGUxOWNlOTkxZjAxZjZmZjYyYzQzIiwgImRlc2NyaXB0aW9uIjogIk1hY2hpbmUgUmVhZGFibGUgWm9uZSJ9LCAiMiI6IHsiaGFzaCI6ICI3ODI2ZGQzZGFiMGJlODIyNWM3NDc5Mzc4NDhiZjFjMTM3ZTkzZWYwMGQ2Yzc0NzE1OTRmOWVhMDZkZTQ1MDNlIiwgImRlc2NyaXB0aW9uIjogIkVuY29kZWQgRmFjZSJ9LCAiMTUiOiB7Imhhc2giOiAiNDhiZjBmZWY5MzlkMmQ4ZTk4YzBlNjFlNjU4ZTcyYWI4NTJmZTIxYmU3NWU1M2E2ODc4MWUyYWFjYTBmZGI2NSIsICJkZXNjcmlwdGlvbiI6ICJBY3RpdmUgQXV0aGVudGljYXRpb24gUHVibGljIEtleSJ9fSwgInNpZ25hdHVyZSI6ICJTWU5USEVUSUNfU0lHTkFUVVJFX0RBVEEiLCAiY2VydGlmaWNhdGVzIjogWyJTWU5USEVUSUNfQ0VSVF8xIiwgIlNZTlRIRVRJQ19DRVJUXzIiXX0=",
+    "parsed": {
+      "version": "1.0",
+      "hashAlgorithm": "SHA-256",
+      "dataGroups": {
+        "1": {
+          "hash": "104cc4c1068fa74f6eb614ff314ee6409a1c26a3fc48e19ce991f01f6ff62c43",
+          "description": "Machine Readable Zone"
+        },
+        "2": {
+          "hash": "7826dd3dab0be8225c747937848bf1c137e93ef00d6c7471594f9ea06de4503e",
+          "description": "Encoded Face"
+        },
+        "15": {
+          "hash": "48bf0fef939d2d8e98c0e61e658e72ab852fe21be75e53a68781e2aaca0fdb65",
+          "description": "Active Authentication Public Key"
+        }
+      },
+      "signature": "SYNTHETIC_SIGNATURE_DATA",
+      "certificates": [
+        "SYNTHETIC_CERT_1",
+        "SYNTHETIC_CERT_2"
+      ]
+    }
+  },
+  "dg1": {
+    "raw": "UDxVVE9URVNUUEVSU09OPDxTWU5USEVUSUM8PDw8PDw8PDw8PDw8PDw8PDw8PDw8CjEyMzQ1Njc4OTBVVE83MDAxMDE0TTI1MDEwMTc8PDw8PDw8PDw8PDw8PDA0",
+    "parsed": {
+      "documentType": "P",
+      "issuingCountry": "UTO",
+      "surname": "TESTPERSON",
+      "givenNames": "SYNTHETIC",
+      "documentNumber": "123456789",
+      "nationality": "UTO",
+      "birthDate": "700101",
+      "sex": "M",
+      "expiryDate": "250101",
+      "personalNumber": "04"
+    }
+  },
+  "dg2": {
+    "raw": "U1lOVEhFVElDX0ZBQ0VfSU1BR0VfREFUQV9QTEFDRUhPTERFUg==",
+    "parsed": {
+      "imageFormat": "JPEG2000",
+      "imageSize": 37,
+      "width": 300,
+      "height": 400,
+      "colorSpace": "RGB"
+    }
+  },
+  "dg15": {
+    "raw": "eyJhbGdvcml0aG0iOiAiUlNBIiwgImtleVNpemUiOiAyMDQ4LCAiZXhwb25lbnQiOiA2NTUzNywgIm1vZHVsdXMiOiAiU1lOVEhFVElDX1JTQV9NT0RVTFVTX0RBVEFfRk9SX1RFU1RJTkdfUFVSUE9TRVNfT05MWSJ9",
+    "parsed": {
+      "algorithm": "RSA",
+      "keySize": 2048,
+      "exponent": 65537,
+      "modulus": "SYNTHETIC_RSA_MODULUS_DATA_FOR_TESTING_PURPOSES_ONLY"
+    }
+  },
+  "expectedResult": "PA_SUCCESS"
+}
