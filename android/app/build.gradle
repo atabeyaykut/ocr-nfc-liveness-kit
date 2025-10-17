@@ -34,6 +34,13 @@ android {
     targetCompatibility JavaVersion.VERSION_17
   }
 
+  // Java toolchain for CI/CD compatibility
+  java {
+    toolchain {
+      languageVersion = JavaLanguageVersion.of(17)
+    }
+  }
+
   // React Native Hermes configuration
   react {
     enableHermes = true  // Enable Hermes JavaScript engine
