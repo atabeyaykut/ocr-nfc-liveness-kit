@@ -3,7 +3,6 @@
 
 plugins {
   id 'com.android.application'
-  id 'com.facebook.react'
   id 'jacoco'
 }
 
@@ -41,13 +40,15 @@ android {
     }
   }
 
-  // React Native Hermes configuration
-  react {
-    enableHermes = true  // Enable Hermes JavaScript engine
-    hermesCommand = "../node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc"
-    debuggableVariants = ["debug"]
-    enableVmCleanup = true
-  }
+  // Manual React Native configuration (without plugin)
+  project.ext.react = [
+    enableHermes: true,
+    bundleInDebug: false,
+    bundleInRelease: true,
+    devDisabledInDebug: true,
+    entryFile: "index.js",
+    root: "../../"
+  ]
 
   def keystorePropertiesFile = rootProject.file("keystore.properties")
   def keystoreProperties = new Properties()
@@ -147,6 +148,8 @@ dependencies {
   testImplementation "androidx.test:core:1.6.1"
   testImplementation "androidx.test.ext:junit:1.2.1"
 }
+
+// React Native manual configuration (simplified)
 
 // JaCoCo test coverage configuration
 jacoco {
