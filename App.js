@@ -1,13 +1,15 @@
 /**
- * Main App Entry Point for React Native Test Environment
- * Entry point for the OCR, NFC, and Liveness testing application
+ * Main App Entry Point - Production App
+ * OCR, NFC, and Liveness Detection
+ * NO MOCK DATA - Production Ready
+ * Android 11+ Compatible
  */
 
 import React from 'react';
-import TestEnvironmentApp from './TestEnvironmentApp';
+import MainApp from './MainApp';
 
 const App = () => {
-  return <TestEnvironmentApp />;
+  return <MainApp />;
 };
 
 export default App;

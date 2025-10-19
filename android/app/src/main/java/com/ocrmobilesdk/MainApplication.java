@@ -6,13 +6,20 @@ import androidx.multidex.MultiDexApplication;
 import com.facebook.react.ReactApplication;
 import com.facebook.react.ReactNativeHost;
 import com.facebook.react.ReactPackage;
+import com.facebook.react.PackageList;
+import com.facebook.react.shell.MainReactPackage;
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
 import com.facebook.react.defaults.DefaultReactNativeHost;
+import com.facebook.soloader.SoLoader;
 
 import com.ocrmobilesdk.BuildConfig;
 import com.ocr.OCRSDKPackage;
+import com.ocr.modules.FaceDetectionPackage;
+
+// Native modules will be auto-linked via PackageList
+
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 
 public class MainApplication extends MultiDexApplication implements ReactApplication {
@@ -40,9 +47,13 @@ public class MainApplication extends MultiDexApplication implements ReactApplica
 
     @Override
     protected List<ReactPackage> getPackages() {
-      // Add custom packages
-      List<ReactPackage> packages = new ArrayList<>();
+      @SuppressWarnings("UnnecessaryLocalVariable")
+      List<ReactPackage> packages = new PackageList(this).getPackages();
+      // Add custom OCR SDK package
       packages.add(new OCRSDKPackage());
+      // Add Face Detection package
+      packages.add(new FaceDetectionPackage());
+      
       return packages;
     }
   };
@@ -55,6 +66,7 @@ public class MainApplication extends MultiDexApplication implements ReactApplica
   @Override
   public void onCreate() {
     super.onCreate();
+    SoLoader.init(this, false);
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       DefaultNewArchitectureEntryPoint.load();
     }

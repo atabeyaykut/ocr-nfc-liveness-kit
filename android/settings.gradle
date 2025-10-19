@@ -20,10 +20,12 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-  repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+  repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
   repositories {
-    mavenCentral()
     google()
+    mavenCentral()
+    maven { url "https://repo1.maven.org/maven2/" }
+    maven { url "https://www.jitpack.io" }
     // React Native and JSC artifacts - made optional for CI/CD
     def reactNativeDir = new File("$rootDir/../node_modules/react-native/android")
     if (reactNativeDir.exists()) {
@@ -38,3 +40,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "OCRMobileSDK"
 include(":app")
+
+// React Native CLI Autolinking
+apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesSettingsGradle(settings)

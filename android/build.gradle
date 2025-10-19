@@ -2,8 +2,8 @@
 // Uses the plugins DSL with versions managed here and plugin resolution in settings.gradle
 
 plugins {
-  id("com.android.application") version "8.4.2" apply false
-  id("com.android.library") version "8.4.2" apply false
+  id("com.android.application") version "8.6.1" apply false
+  id("com.android.library") version "8.6.1" apply false
   id("org.jetbrains.kotlin.android") version "1.9.24" apply false
   // The React Native Gradle plugin is provided via includeBuild in settings.gradle
   // Do not set a version here; it is resolved from node_modules/react-native-gradle-plugin
@@ -12,19 +12,23 @@ plugins {
 }
 
 ext {
-  buildToolsVersion = "34.0.0"
+  buildToolsVersion = "35.0.0"
   minSdkVersion = 23
-  compileSdkVersion = 34
+  compileSdkVersion = 35
   targetSdkVersion = 34
   kotlinVersion = "1.9.24"
   javaVersion = JavaVersion.VERSION_17
+  // Explicitly set React Native version to resolve dynamic version issues
+  reactNativeVersion = "0.74.7"
 }
 
 // Project-level repositories (repositoriesMode is PREFER_PROJECT)
 allprojects {
   repositories {
-    mavenCentral()
     google()
+    mavenCentral()
+    maven { url "https://repo1.maven.org/maven2/" }
+    maven { url "https://www.jitpack.io" }
     // React Native and JSC artifacts - made optional for CI/CD
     def reactNativeDir = new File("$rootDir/../node_modules/react-native/android")
     if (reactNativeDir.exists()) {
@@ -33,6 +37,42 @@ allprojects {
     def jscDir = new File("$rootDir/../node_modules/jsc-android/dist")
     if (jscDir.exists()) {
       maven { url("$rootDir/../node_modules/jsc-android/dist") }
+    }
+  }
+
+  // Global build configuration for all Android projects
+  afterEvaluate { project ->
+    if (project.hasProperty("android")) {
+      project.android {
+        buildFeatures {
+          buildConfig true
+        }
+      }
+    }
+    
+    // Global force resolution for all subprojects - Use react-android instead
+    project.configurations.all {
+      resolutionStrategy {
+        // Don't force react-native, use react-android which is available
+        force "com.facebook.react:react-android:0.74.7"
+        force "com.facebook.react:hermes-android:0.74.7"
+        // Replace react-native:+ with react-android
+        eachDependency { details ->
+          if (details.requested.group == 'com.facebook.react' && details.requested.name == 'react-native') {
+            details.useTarget group: 'com.facebook.react', name: 'react-android', version: '0.74.7'
+          }
+        }
+      }
+    }
+    
+    // Fix JVM target compatibility issue between Java and Kotlin
+    if (project.hasProperty("android")) {
+      project.android {
+        compileOptions {
+          sourceCompatibility JavaVersion.VERSION_17
+          targetCompatibility JavaVersion.VERSION_17
+        }
+      }
     }
   }
 }
