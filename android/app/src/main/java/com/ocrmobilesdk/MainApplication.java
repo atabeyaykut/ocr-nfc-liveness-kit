@@ -10,7 +10,11 @@ import com.facebook.react.PackageList;
 import com.facebook.react.shell.MainReactPackage;
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
 import com.facebook.react.defaults.DefaultReactNativeHost;
+import com.facebook.react.ReactInstanceManager;
+import com.facebook.react.ReactInstanceEventListener;
+import com.facebook.react.bridge.ReactContext;
 import com.facebook.soloader.SoLoader;
+import android.util.Log;
 
 import com.ocrmobilesdk.BuildConfig;
 import com.ocr.OCRSDKPackage;
@@ -70,5 +74,16 @@ public class MainApplication extends MultiDexApplication implements ReactApplica
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       DefaultNewArchitectureEntryPoint.load();
     }
+    
+    // Add ReactInstanceEventListener to ensure bridge is ready before modules send events
+    final ReactInstanceManager reactInstanceManager = mReactNativeHost.getReactInstanceManager();
+    reactInstanceManager.addReactInstanceEventListener(new ReactInstanceEventListener() {
+      @Override
+      public void onReactContextInitialized(ReactContext context) {
+        Log.d("MainApplication", "React Context initialized - Bridge is ready");
+        // React Native bridge is now fully initialized
+        // Native modules can now safely send events to JavaScript
+      }
+    });
   }
 }

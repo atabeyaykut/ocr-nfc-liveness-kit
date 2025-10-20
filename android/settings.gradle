@@ -1,4 +1,4 @@
-// android/settings.gradle aligned with React Native 0.74.7
+// android/settings.gradle aligned with React Native 0.78.0
 
 pluginManagement {
   repositories {

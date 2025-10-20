@@ -1,0 +1,27 @@
+diff --git a/node_modules/react-native-vision-camera/android/src/main/java/com/mrousavy/camera/react/CameraDevicesManager.kt b/node_modules/react-native-vision-camera/android/src/main/java/com/mrousavy/camera/react/CameraDevicesManager.kt
+index 0000000..1111111 100644
+--- a/node_modules/react-native-vision-camera/android/src/main/java/com/mrousavy/camera/react/CameraDevicesManager.kt
++++ b/node_modules/react-native-vision-camera/android/src/main/java/com/mrousavy/camera/react/CameraDevicesManager.kt
+@@ -99,9 +99,19 @@ class CameraDevicesManager(private val reactContext: ReactApplicationContext) :
+   }
+ 
+   fun sendAvailableDevicesChangedEvent() {
+-    val eventEmitter = reactContext.getJSModule(RCTDeviceEventEmitter::class.java)
+-    val devices = getDevicesJson()
+-    eventEmitter.emit("CameraDevicesChanged", devices)
++    // Safety check: Only send events if React context is fully initialized
++    if (!reactContext.hasActiveReactInstance()) {
++      Log.d(TAG, "Skipping CameraDevicesChanged event - React context not ready yet")
++      return
++    }
++    
++    try {
++      val eventEmitter = reactContext.getJSModule(RCTDeviceEventEmitter::class.java)
++      val devices = getDevicesJson()
++      eventEmitter.emit("CameraDevicesChanged", devices)
++    } catch (e: Exception) {
++      Log.e(TAG, "Failed to send CameraDevicesChanged event: ${e.message}", e)
++    }
+   }
+ 
+   override fun getConstants(): MutableMap<String, Any?> {
