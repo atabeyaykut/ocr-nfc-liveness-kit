@@ -136,7 +136,12 @@ dependencies {
   
   // ML Kit dependencies - Native modül için gerekli
   implementation "com.google.mlkit:face-detection:16.1.6"
-  implementation "com.google.android.gms:play-services-mlkit-text-recognition:19.0.0"
+  
+  // ML Kit Text Recognition - UNBUNDLED model (react-native-text-recognition için gerekli)
+  implementation "com.google.mlkit:text-recognition:16.0.0"
+  
+  // Eski versiyon (bundled - react-native-text-recognition ile uyumlu değil)
+  // implementation "com.google.android.gms:play-services-mlkit-text-recognition:19.0.0"
   
   // React Native annotations already included via react-android above
 

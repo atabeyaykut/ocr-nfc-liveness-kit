@@ -36,6 +36,8 @@ const CameraTestScreen = ({ onBack }) => {
   const [isActive, setIsActive] = useState(false);
   const [photo, setPhoto] = useState(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [torchEnabled, setTorchEnabled] = useState(false);
+  const [flashMode, setFlashMode] = useState('off'); // 'off', 'on', 'auto'
   const cameraRef = useRef(null);
   
   const { hasPermission, requestPermission } = useCameraPermission();
@@ -43,6 +45,11 @@ const CameraTestScreen = ({ onBack }) => {
 
   useEffect(() => {
     checkPermissions();
+    
+    return () => {
+      // Cleanup: deactivate camera on unmount
+      setIsActive(false);
+    };
   }, []);
 
   const checkPermissions = async () => {
@@ -71,7 +78,7 @@ const CameraTestScreen = ({ onBack }) => {
       setIsCapturing(true);
       const photo = await cameraRef.current.takePhoto({
         qualityPrioritization: 'quality',
-        flash: 'off',
+        flash: flashMode,
       });
       
       setPhoto(photo);
@@ -161,14 +168,43 @@ const CameraTestScreen = ({ onBack }) => {
       {/* Camera View */}
       {isActive ? (
         <View style={styles.cameraContainer}>
-          <Camera
-            ref={cameraRef}
-            style={StyleSheet.absoluteFill}
-            device={device}
-            isActive={isActive}
-            photo={true}
-          />
+          {device && (
+            <Camera
+              ref={cameraRef}
+              style={StyleSheet.absoluteFill}
+              device={device}
+              isActive={isActive}
+              photo={true}
+              torch={torchEnabled ? 'on' : 'off'}
+            />
+          )}
           
+          {/* Top Controls - Flash & Torch */}
+          <View style={styles.topControls}>
+            <TouchableOpacity
+              style={[styles.iconButton, torchEnabled && styles.iconButtonActive]}
+              onPress={() => setTorchEnabled(!torchEnabled)}
+            >
+              <Text style={styles.iconText}>{torchEnabled ? '🔦' : '🔦'}</Text>
+              <Text style={styles.iconLabel}>{torchEnabled ? 'Fener: Açık' : 'Fener: Kapalı'}</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.iconButton, flashMode !== 'off' && styles.iconButtonActive]}
+              onPress={() => {
+                const modes = ['off', 'on', 'auto'];
+                const currentIndex = modes.indexOf(flashMode);
+                const nextMode = modes[(currentIndex + 1) % modes.length];
+                setFlashMode(nextMode);
+              }}
+            >
+              <Text style={styles.iconText}>⚡</Text>
+              <Text style={styles.iconLabel}>
+                Flaş: {flashMode === 'off' ? 'Kapalı' : flashMode === 'on' ? 'Açık' : 'Oto'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Camera Controls */}
           <View style={styles.controlsContainer}>
             <TouchableOpacity
@@ -317,6 +353,37 @@ const styles = StyleSheet.create({
   },
   cameraContainer: {
     flex: 1,
+  },
+  topControls: {
+    position: 'absolute',
+    top: 20,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+  },
+  iconButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  iconButtonActive: {
+    backgroundColor: 'rgba(33, 150, 243, 0.8)',
+    borderColor: '#fff',
+  },
+  iconText: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  iconLabel: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
   },
   controlsContainer: {
     position: 'absolute',
