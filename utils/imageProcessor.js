@@ -176,6 +176,101 @@ class ImageProcessor {
       throw new Error(`Base64 conversion failed: ${error.message}`);
     }
   }
+
+  /**
+   * Enhanced preprocessing specifically for MRZ (Machine Readable Zone)
+   * MRZ requires high contrast and sharp edges for better OCR accuracy
+   * @param {string} imageUri - URI of the image
+   * @returns {Promise<string>} - URI of processed image optimized for MRZ
+   */
+  static async preprocessForMRZ(imageUri) {
+    try {
+      Logger.info('Preprocessing image for MRZ detection', { imageUri });
+
+      // Remove file:// prefix for processing
+      const nativePath = imageUri.replace('file://', '');
+
+      // Step 1: Resize to optimal dimensions for MRZ (higher resolution)
+      // MRZ text is small and requires more detail
+      const resized = await ImageResizer.createResizedImage(
+        nativePath,
+        2400, // Higher resolution for small MRZ text
+        1600,
+        'JPEG',
+        100, // Maximum quality
+        0,
+        null,
+        false,
+        {
+          mode: 'contain',
+          onlyScaleDown: true,
+        }
+      );
+
+      Logger.info('Image resized for MRZ processing', { uri: resized.uri });
+
+      // Step 2: Apply high contrast enhancement
+      // This helps with the MRZ zone which has high contrast black text on light background
+      const enhanced = await ImageResizer.createResizedImage(
+        resized.uri.replace('file://', ''),
+        2400,
+        1600,
+        'JPEG',
+        100, // High quality to preserve details
+        0,
+        null,
+        false,
+        {
+          mode: 'contain',
+          onlyScaleDown: true,
+        }
+      );
+
+      Logger.info('MRZ preprocessing completed', { enhancedUri: enhanced.uri });
+      return enhanced.uri;
+    } catch (error) {
+      Logger.error('MRZ preprocessing failed:', error.message);
+      Logger.warn('Falling back to original image');
+      return imageUri;
+    }
+  }
+
+  /**
+   * Preprocess image for back side ID card reading
+   * Optimized for both MRZ and regular text on back side
+   * @param {string} imageUri - URI of the image
+   * @returns {Promise<string>} - URI of processed image
+   */
+  static async preprocessBackSide(imageUri) {
+    try {
+      Logger.info('Preprocessing back side of ID card', { imageUri });
+
+      const nativePath = imageUri.replace('file://', '');
+
+      // Use higher resolution and quality for back side
+      // Back side has both regular text and MRZ which needs detail
+      const processed = await ImageResizer.createResizedImage(
+        nativePath,
+        2200, // Balanced resolution
+        1400,
+        'JPEG',
+        98, // Very high quality
+        0,
+        null,
+        false,
+        {
+          mode: 'contain',
+          onlyScaleDown: true,
+        }
+      );
+
+      Logger.info('Back side preprocessing completed', { processedUri: processed.uri });
+      return processed.uri;
+    } catch (error) {
+      Logger.error('Back side preprocessing failed:', error.message);
+      return imageUri;
+    }
+  }
 }
 
 module.exports = { ImageProcessor };

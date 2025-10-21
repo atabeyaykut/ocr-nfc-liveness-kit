@@ -33,6 +33,7 @@ const OCRDemoScreen = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState(OCR_STATUS.IDLE);
   const [logs, setLogs] = useState([]);
+  const [cardSide, setCardSide] = useState('front'); // 'front' or 'back'
 
   function handleOCRSuccess(result) {
     Logger.info('OCR Success callback triggered', result);
@@ -72,15 +73,15 @@ const OCRDemoScreen = () => {
   const startOCRSession = async () => {
     try {
       setIsProcessing(true);
-      addLog('🚀 OCR sistemi başlatılıyor...');
+      addLog(`🚀 OCR sistemi başlatılıyor... (${cardSide === 'front' ? 'Ön Yüz' : 'Arka Yüz'})`);
 
-      await ocrReader.startOCR();
+      await ocrReader.startOCR({ cardSide });
       setIsOCRActive(true);
       addLog('✅ OCR sistemi hazır');
 
       Alert.alert(
         'Başarılı',
-        'OCR sistemi başlatıldı. Şimdi kamera ile fotoğraf çekebilirsiniz.'
+        `OCR sistemi başlatıldı (${cardSide === 'front' ? 'Ön Yüz' : 'Arka Yüz'}). Şimdi kamera ile fotoğraf çekebilirsiniz.`
       );
     } catch (error) {
       addLog(`❌ OCR başlatma hatası: ${error.message}`);
@@ -167,6 +168,7 @@ const OCRDemoScreen = () => {
     setExtractedFields({});
     setShowCamera(false);
     setIsProcessing(false);
+    setCardSide('front');
     addLog('🔄 OCR sistemi sıfırlandı');
   };
 
@@ -186,6 +188,41 @@ const OCRDemoScreen = () => {
               {getStatusText(status)}
             </Text>
           </Text>
+        </View>
+
+        {/* Card Side Selection */}
+        <View style={styles.cardSideContainer}>
+          <Text style={styles.cardSideLabel}>Kart Yüzü:</Text>
+          <View style={styles.cardSideButtons}>
+            <TouchableOpacity
+              style={[
+                styles.cardSideButton,
+                cardSide === 'front' && styles.cardSideButtonActive,
+                isOCRActive && styles.buttonDisabled,
+              ]}
+              onPress={() => setCardSide('front')}
+              disabled={isOCRActive}
+            >
+              <Text style={[
+                styles.cardSideButtonText,
+                cardSide === 'front' && styles.cardSideButtonTextActive,
+              ]}>📄 Ön Yüz</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.cardSideButton,
+                cardSide === 'back' && styles.cardSideButtonActive,
+                isOCRActive && styles.buttonDisabled,
+              ]}
+              onPress={() => setCardSide('back')}
+              disabled={isOCRActive}
+            >
+              <Text style={[
+                styles.cardSideButtonText,
+                cardSide === 'back' && styles.cardSideButtonTextActive,
+              ]}>📋 Arka Yüz (MRZ)</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Control Buttons */}
@@ -437,6 +474,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  cardSideContainer: {
+    backgroundColor: '#fff',
+    padding: 15,
+    marginTop: 10,
+    borderRadius: 8,
+    marginHorizontal: 10,
+  },
+  cardSideLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  cardSideButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  cardSideButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginHorizontal: 5,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    backgroundColor: '#f5f5f5',
+  },
+  cardSideButtonActive: {
+    borderColor: '#007AFF',
+    backgroundColor: '#E3F2FD',
+  },
+  cardSideButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    textAlign: 'center',
+  },
+  cardSideButtonTextActive: {
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
   processingContainer: {
     backgroundColor: '#fff',

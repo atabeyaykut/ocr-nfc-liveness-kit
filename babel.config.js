@@ -4,6 +4,7 @@ module.exports = {
     ['@babel/plugin-proposal-class-properties', { loose: true }],
     ['@babel/plugin-transform-private-methods', { loose: true }],
     ['@babel/plugin-transform-private-property-in-object', { loose: true }],
+    ['@babel/plugin-transform-classes', { loose: true }],
     // Optimize imports for better tree shaking
     ['babel-plugin-transform-imports', {
       'react-native-vector-icons': {

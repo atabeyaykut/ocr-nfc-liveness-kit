@@ -11,7 +11,11 @@ A comprehensive React Native SDK for Optical Character Recognition (OCR), Near F
 - ✅ Real-time text extraction
 - ✅ Confidence scoring and validation
 - ✅ Turkish ID card field extraction
-- ✅ Performance optimization (1-3s processing)
+- ✅ **3-line MRZ reading** (ICAO compliant)
+- ✅ **Dual-side scanning** (front + back with cross-validation)
+- ✅ **Check digit validation** (7-3-1 algorithm)
+- ✅ **Smart data merging** (conflict detection & resolution)
+- ✅ Performance optimization (1-3s per side)
 
 ### NFC Module ✅ PRODUCTION READY
 - ✅ Real NFC hardware integration
@@ -65,6 +69,37 @@ npm install mobile-sdk-ocr-nfc-liveness
 - ✅ Memory management and cleanup systems
 
 ## 🎯 Quick Start Guide
+
+### Dual-Side ID Card Scanning (NEW!)
+
+```javascript
+import OCRReaderModule from './modules/ocr/OCRReaderModule';
+
+// Scan both sides of ID card with cross-validation
+const scanBothSides = async (frontImagePath, backImagePath) => {
+  const ocrReader = new OCRReaderModule();
+  
+  // Process both sides and merge data
+  const result = await ocrReader.processBothSides(
+    frontImagePath,  // Front side photo
+    backImagePath    // Back side photo (with MRZ)
+  );
+  
+  console.log('Merged Data:', result.data);
+  console.log('Confidence:', result.data.confidence + '%');
+  console.log('Completeness:', result.data.completeness + '%');
+  console.log('Conflicts:', result.data.conflicts);
+  
+  // Access all 14 fields
+  const {
+    tcNo, name, surname, birthDate, gender,
+    documentNo, validUntil, motherName, fatherName, 
+    issuedBy, serialNo, nationality
+  } = result.data;
+  
+  return result;
+};
+```
 
 ### Complete Biometric Workflow Integration
 
