@@ -69,6 +69,24 @@ const CHALLENGES = {
     duration: 3000,
     detectionKey: 'mouth',
   },
+  LOOKUP: {
+    id: 'lookUp',
+    instruction: 'Yukarı bakın',
+    voice: 'Lütfen yukarı bakın',
+    duration: 3000,
+  },
+  LOOKDOWN: {
+    id: 'lookDown',
+    instruction: 'Aşağı bakın',
+    voice: 'Lütfen aşağı bakın',
+    duration: 3000,
+  },
+  TILTHEAD: {
+    id: 'tiltHead',
+    instruction: 'Başınızı yana eğin',
+    voice: 'Lütfen başınızı yana eğin',
+    duration: 3000,
+  },
 };
 
 class LivenessDetectionModule {
@@ -281,8 +299,28 @@ class LivenessDetectionModule {
       case 'openMouth':
         // Simple detection based on face bounds change
         // More sophisticated detection would require ML Kit
-        const bounds = face.bounds;
-        if (bounds && bounds.size.height > bounds.size.width * 1.3) {
+        return false;
+
+      case 'lookUp':
+        // Detect head tilted up (looking up)
+        const xAngleUp = face.xAngle;
+        if (xAngleUp !== undefined && xAngleUp < -15) {
+          return true;
+        }
+        break;
+
+      case 'lookDown':
+        // Detect head tilted down (looking down)
+        const xAngleDown = face.xAngle;
+        if (xAngleDown !== undefined && xAngleDown > 15) {
+          return true;
+        }
+        break;
+
+      case 'tiltHead':
+        // Detect head tilted sideways (roll)
+        const zAngleTilt = face.zAngle;
+        if (zAngleTilt !== undefined && Math.abs(zAngleTilt) > 20) {
           return true;
         }
         break;
@@ -477,11 +515,8 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
         if (faces && faces.length > 0) {
           setFaceDetected(true);
           
-          // Log ML Kit face data to see available properties
-          const mlKitFace = faces[0];
-          console.log('ML Kit Face Data:', JSON.stringify(mlKitFace, null, 2));
-          
           // Convert ML Kit face format to our expected format
+          const mlKitFace = faces[0];
           const faceData = [{
             leftEyeOpenProbability: mlKitFace.leftEyeOpenProbability || 0.5,
             rightEyeOpenProbability: mlKitFace.rightEyeOpenProbability || 0.5,
@@ -490,8 +525,6 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
             xAngle: mlKitFace.rotationX || 0,  // X-axis rotation (head tilt up/down)
             zAngle: mlKitFace.rotationZ || 0,  // Z-axis rotation (head roll)
           }];
-          
-          console.log('Converted Face Data:', JSON.stringify(faceData[0], null, 2));
           
           livenessModule.processFaceData(faceData);
         } else {
@@ -550,8 +583,14 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
       setCountdown(null);
       setIsDetecting(true);
       
-      // Start liveness module
-      await livenessModule.startLiveness(['blink', 'smile', 'turnHeadLeft']);
+      // Start liveness module with 5 challenges
+      await livenessModule.startLiveness([
+        'blink',        // Göz kırp
+        'smile',        // Gülümse
+        'turnHeadLeft', // Kafayı sola çevir
+        'turnHeadRight',// Kafayı sağa çevir
+        'tiltHead'      // Kafayı yana yatır
+      ]);
       
     } catch (error) {
       console.error('Start detection error:', error);
