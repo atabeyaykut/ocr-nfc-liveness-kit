@@ -26,6 +26,7 @@ import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import { OCRReaderScreen } from './modules/ocr/OCRReaderModule';
 import { NFCReaderScreen } from './modules/nfc/NFCReaderModule';
 import { LivenessDetectionScreen } from './modules/liveness/LivenessDetectionModule';
+import DualSideOCRDemo from './examples/DualSideOCRDemo';
 
 const Stack = createStackNavigator();
 
@@ -62,7 +63,7 @@ const MainMenuScreen = ({ navigation }) => {
   };
 
   const navigateToModule = async (moduleName) => {
-    if (moduleName === 'OCR' || moduleName === 'Liveness') {
+    if (moduleName === 'OCR' || moduleName === 'DualSideOCR' || moduleName === 'Liveness') {
       if (!permissions.camera) {
         const granted = await requestCameraPermission();
         if (!granted) {
@@ -112,9 +113,32 @@ const MainMenuScreen = ({ navigation }) => {
               source={{ uri: 'https://img.icons8.com/color/80/000000/ocr.png' }}
               style={styles.moduleIcon}
             />
-            <Text style={styles.moduleTitle}>OCR Okuma</Text>
+            <Text style={styles.moduleTitle}>OCR Okuma (Tek Yüz)</Text>
             <Text style={styles.moduleDescription}>
-              Kimlik kartınızı kamera ile tarayın ve bilgilerini otomatik çıkarın
+              Kimlik kartının tek yüzünü tarayın (hızlı, temel bilgiler)
+            </Text>
+            <View style={[
+              styles.permissionBadge,
+              { backgroundColor: permissions.camera ? '#4CAF50' : '#FF9800' }
+            ]}>
+              <Text style={styles.permissionText}>
+                {permissions.camera ? '✓ Hazır' : '⚠ İzin Gerekli'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.moduleCard, { backgroundColor: '#E8F5E9' }]}
+            onPress={() => navigateToModule('DualSideOCR')}
+            activeOpacity={0.8}
+          >
+            <Image 
+              source={{ uri: 'https://img.icons8.com/color/80/000000/id-card.png' }}
+              style={styles.moduleIcon}
+            />
+            <Text style={styles.moduleTitle}>Çift Taraflı Tarama ⭐</Text>
+            <Text style={styles.moduleDescription}>
+              Ön ve arka yüzü birlikte tarayarak %100 eksiksiz veri çıkarın
             </Text>
             <View style={[
               styles.permissionBadge,
@@ -266,6 +290,7 @@ export default function MainApp() {
       >
         <Stack.Screen name="MainMenu" component={MainMenuScreen} />
         <Stack.Screen name="OCR" component={OCRReaderScreen} />
+        <Stack.Screen name="DualSideOCR" component={DualSideOCRDemo} />
         <Stack.Screen name="NFC" component={NFCReaderScreen} />
         <Stack.Screen name="Liveness" component={LivenessDetectionScreen} />
         <Stack.Screen name="TestResult" component={TestResultScreen} />
