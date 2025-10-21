@@ -24,12 +24,18 @@ class OCRReader {
 
   /**
    * Initialize OCR system and request necessary permissions
+   * @param {object} options - OCR options {cardSide, language, etc.}
    * @returns {Promise<boolean>} - Success status
    */
-  async startOCR() {
+  async startOCR(options = {}) {
     try {
-      Logger.info("Starting OCR initialization...");
+      Logger.info("Starting OCR initialization...", options);
       this.status = OCR_STATUS.INITIALIZING;
+
+      // Merge options with existing config
+      if (options.cardSide) {
+        this.config = { ...this.config, cardSide: options.cardSide };
+      }
 
       // Request camera permission
       const cameraPermission =
@@ -46,7 +52,7 @@ class OCRReader {
       }
 
       this.status = OCR_STATUS.READY;
-      Logger.info("OCR system initialized successfully");
+      Logger.info("OCR system initialized successfully with config:", this.config);
       return true;
     } catch (error) {
       this.status = OCR_STATUS.ERROR;
@@ -151,10 +157,15 @@ class OCRReader {
 
       let processedImageUri = imageUri;
 
-      // Enhance image quality if requested
+      // Apply special preprocessing based on card side
       if (ocrOptions.enhanceImage) {
-        Logger.info("Enhancing image for better OCR results...");
-        processedImageUri = await ImageProcessor.enhanceImage(imageUri);
+        if (this.config.cardSide === 'back') {
+          Logger.info("Preprocessing for back side (MRZ)...");
+          processedImageUri = await ImageProcessor.preprocessBackSide(imageUri);
+        } else {
+          Logger.info("Enhancing image for better OCR results...");
+          processedImageUri = await ImageProcessor.enhanceImage(imageUri);
+        }
       }
 
       // Perform OCR using react-native-text-recognition

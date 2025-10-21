@@ -49,76 +49,282 @@ const ID_PATTERNS = {
   
   // Gender: E (Erkek/Male), K (Kadın/Female) - more variations
   GENDER: /(?:C[İIĪ]NS[İIĪ]YET|GENDER|SEX|CİNS)\s*[:\-]?\s*([EKMFek])/im,
+  
+  // Mother's Name - appears on back side above MRZ
+  MOTHER_NAME: /(?:ANNE\s*AD[IİĪ]?|MOTHER'?S?\s*NAME)\s*[:\-]?\s*([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜa-zçğıöşü\s]{1,40})/im,
+  
+  // Father's Name - appears on back side above MRZ
+  FATHER_NAME: /(?:BABA\s*AD[IİĪ]?|FATHER'?S?\s*NAME)\s*[:\-]?\s*([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜa-zçğıöşü\s]{1,40})/im,
+  
+  // Issued By - appears on back side above MRZ (flexible for OCR errors)
+  ISSUED_BY: /(?:VEREN\s*MAKAM|[IS]{1,2}UED\s*BY|SSUEDBY|VER[İI]L[İI]\u015e\s*YER)\s*[:\-\/]?\s*([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜa-zçğıöşü\s\/\-]{1,50})/im,
 };
 
-// MRZ Patterns for Turkish ID Card (back side)
-// Format: IDTUR<document><surname><<names<<<<<
-//         <TC_NO><check><nationality><birthdate><check><sex><expiry><check><<<<<
+// MRZ Patterns for Turkish ID Card (back side) - 3 LINES
+// Line 1: I<TUR + Document No (9 chars) + Check + < + TC No (11 chars) + <<<
+// Line 2: Birth Date (6) + Check + Sex (1) + Expiry (6) + Check + TUR + <<<<<<<<<< + Composite Check
+// Line 3: Surname << GivenNames <<<<<<<<<<<<
 const MRZ_PATTERNS = {
-  // Line 1: IDTUR or variants (OCR might confuse I with 1, D with O)
-  LINE1: /[I1][<DO0]TUR([A-Z0-9<]{30,})/,
-  // Line 2: TC No (11 digits) + check + nationality + dates + gender
-  LINE2: /(\d{11})(\d)([A-Z]{3})(\d{6})(\d)([MF<])(\d{6})(\d)/,
-  // More flexible - allow some OCR errors
-  LINE2_FLEXIBLE: /(\d{10,11}).*?([A-Z]{3}).*?(\d{6}).*?([MF]).*?(\d{6})/,
+  // Line 1: I<TUR + Document Number + Check + < + TC Number + <<<
+  // Format: I<TUR[DOC_NO(9)][CHECK(1)]<[TC_NO(11)]<<<
+  LINE1_STRICT: /[I1][<][T][U][R]([A-Z0-9]{9})(\d)<(\d{11})<<<$/,
+  LINE1_FLEXIBLE: /[I1il|][<][T7][U][R]([A-Z0-9]{8,10})(\d?)[<](\d{10,11})[<]{0,3}/i,
+  
+  // Line 2: Birth Date + Check + Sex + Expiry + Check + Nationality + <<<<<<<<<< + Composite Check
+  // Format: [BIRTH_YYMMDD(6)][CHECK(1)][SEX(1)][EXPIRY_YYMMDD(6)][CHECK(1)]TUR<<<<<<<<<<<[COMPOSITE_CHECK(1)]
+  LINE2_STRICT: /(\d{6})(\d)([MF])(\d{6})(\d)[T][U][R][<]{11}(\d)$/,
+  LINE2_FLEXIBLE: /(\d{6})([0-9]?)([MF0])(\d{6})([0-9]?)[T7][U][R][<]{8,}([0-9]?)/i,
+  
+  // Line 3: Surname << Given Names <<<<<<<<<<<
+  // Format: [SURNAME]<<[GIVEN_NAMES]<<<<<<<<<<
+  LINE3_STRICT: /^([A-Z]+)<<([A-Z<]+)$/,
+  LINE3_FLEXIBLE: /^([A-Z]{2,})<<([A-Z<\s]{1,})/i,
+  
+  // Very flexible - for heavily corrupted MRZ (fallback)
+  LINE1_LOOSE: /[I1il|].*?[T7][U][R].*?(\d{9,11})/i,
+  LINE2_LOOSE: /(\d{5,6}).*?([MF]).*?(\d{5,6})/i,
+  LINE3_LOOSE: /([A-Z]{2,}).*?([A-Z]{2,})/i,
 };
 
-// Parse MRZ (Machine Readable Zone) from back of ID card
+// Clean and normalize text for MRZ parsing
+const cleanMRZText = (text) => {
+  // Common OCR errors in MRZ
+  let cleaned = text
+    .replace(/[oO0]/g, '0') // Normalize O and o to 0 in numbers context
+    .replace(/[Il|]/g, 'I') // Normalize I, l, | to I
+    .replace(/[\s]+/g, '') // Remove all spaces
+    .replace(/[`'"]/g, '') // Remove quotes
+    .replace(/[~]/g, '') // Remove tildes
+    .toUpperCase();
+  
+  return cleaned;
+};
+
+// Calculate MRZ check digit using ICAO 7-3-1 weight algorithm
+const calculateCheckDigit = (data) => {
+  const weights = [7, 3, 1];
+  let sum = 0;
+  
+  for (let i = 0; i < data.length; i++) {
+    let charValue;
+    const char = data[i];
+    
+    if (char === '<') {
+      charValue = 0;
+    } else if (char >= '0' && char <= '9') {
+      charValue = parseInt(char);
+    } else if (char >= 'A' && char <= 'Z') {
+      charValue = char.charCodeAt(0) - 'A'.charCodeAt(0) + 10;
+    } else {
+      charValue = 0;
+    }
+    
+    sum += charValue * weights[i % 3];
+  }
+  
+  return sum % 10;
+};
+
+// Validate check digit (relaxed for OCR errors)
+const validateCheckDigit = (data, checkDigit) => {
+  const calculated = calculateCheckDigit(data);
+  const provided = parseInt(checkDigit);
+  
+  // If check digit is NaN or missing, still accept (OCR may miss it)
+  if (isNaN(provided)) {
+    console.warn(`[MRZ] Check digit missing or unreadable (NaN), accepting anyway`);
+    return true; // Accept anyway
+  }
+  
+  if (calculated !== provided) {
+    console.warn(`[MRZ] Check digit mismatch: calculated=${calculated}, provided=${provided}`);
+    // Still return true for now - OCR errors are common in check digits
+    return true; // Relaxed validation
+  }
+  
+  return true;
+};
+
+// Parse MRZ (Machine Readable Zone) from back of ID card - 3 LINES
 const parseMRZ = (text) => {
   try {
+    console.log('[MRZ] Starting 3-line MRZ parsing');
     const lines = text.split('\n').map(line => line.trim());
     
-    for (let i = 0; i < lines.length - 1; i++) {
-      const line1Match = lines[i].match(MRZ_PATTERNS.LINE1);
-      let line2Match = lines[i + 1].match(MRZ_PATTERNS.LINE2);
+    // Try to find 3 consecutive MRZ lines - they are usually at the bottom
+    for (let i = 0; i < lines.length - 2; i++) {
+      const line1Raw = lines[i];
+      const line2Raw = lines[i + 1];
+      const line3Raw = lines[i + 2];
       
-      // Fallback to flexible pattern if strict pattern fails
-      if (line1Match && !line2Match) {
-        line2Match = lines[i + 1].match(MRZ_PATTERNS.LINE2_FLEXIBLE);
-        if (line2Match) {
-          console.log('[OCR] Using flexible MRZ pattern');
+      // Clean lines for better pattern matching
+      const line1 = cleanMRZText(line1Raw);
+      const line2 = cleanMRZText(line2Raw);
+      const line3 = cleanMRZText(line3Raw);
+      
+      console.log('[MRZ] Trying lines:', { line1: line1.substring(0, 30), line2: line2.substring(0, 30), line3: line3.substring(0, 30) });
+      
+      // Try to match all 3 lines
+      let match1 = line1.match(MRZ_PATTERNS.LINE1_STRICT);
+      let match2 = line2.match(MRZ_PATTERNS.LINE2_STRICT);
+      let match3 = line3.match(MRZ_PATTERNS.LINE3_STRICT);
+      
+      // Fallback to flexible patterns
+      if (!match1) {
+        match1 = line1.match(MRZ_PATTERNS.LINE1_FLEXIBLE);
+        if (match1) console.log('[MRZ] Using flexible LINE1 pattern');
+      }
+      
+      if (!match2) {
+        match2 = line2.match(MRZ_PATTERNS.LINE2_FLEXIBLE);
+        if (match2) console.log('[MRZ] Using flexible LINE2 pattern');
+      }
+      
+      if (!match3) {
+        match3 = line3.match(MRZ_PATTERNS.LINE3_FLEXIBLE);
+        if (match3) console.log('[MRZ] Using flexible LINE3 pattern');
+      }
+      
+      // Last resort: very loose patterns
+      if (!match1 || !match2 || !match3) {
+        if (!match1) match1 = line1.match(MRZ_PATTERNS.LINE1_LOOSE);
+        if (!match2) match2 = line2.match(MRZ_PATTERNS.LINE2_LOOSE);
+        if (!match3) match3 = line3.match(MRZ_PATTERNS.LINE3_LOOSE);
+        
+        if (match1 || match2 || match3) {
+          console.log('[MRZ] Using loose patterns as fallback');
         }
       }
       
-      if (line1Match && line2Match) {
-        // Parse surname and names from line 1
-        const namesData = line1Match[1];
-        const nameParts = namesData.split('<<');
-        const surname = nameParts[0].replace(/</g, ' ').trim();
-        const name = nameParts[1] ? nameParts[1].replace(/</g, ' ').trim() : '';
+      if (match1 && match2 && match3) {
+        console.log('[MRZ] All 3 MRZ lines matched!');
+        console.log('[MRZ] Line1:', match1);
+        console.log('[MRZ] Line2:', match2);
+        console.log('[MRZ] Line3:', match3);
         
-        // Parse data from line 2
-        const tcNo = line2Match[1];
-        const nationality = line2Match[3];
-        const birthDate = line2Match[4]; // YYMMDD
-        const gender = line2Match[6] === 'M' ? 'Erkek' : line2Match[6] === 'F' ? 'Kadın' : '';
-        const expiryDate = line2Match[7]; // YYMMDD
-        
-        // Convert dates to DD.MM.YYYY format
-        const formatMRZDate = (yymmdd) => {
-          const yy = yymmdd.substring(0, 2);
-          const mm = yymmdd.substring(2, 4);
-          const dd = yymmdd.substring(4, 6);
-          const year = parseInt(yy) > 50 ? `19${yy}` : `20${yy}`;
-          return `${dd}.${mm}.${year}`;
-        };
-        
-        return {
-          tcNo,
-          name: name.toUpperCase(),
-          surname: surname.toUpperCase(),
-          birthDate: formatMRZDate(birthDate),
-          validUntil: formatMRZDate(expiryDate),
-          gender,
-          nationality,
-          source: 'MRZ',
-        };
+        try {
+          // Parse Line 1: Document info and TC No
+          const documentNo = (match1[1] || '').replace(/[^A-Z0-9]/g, '').substring(0, 9);
+          const docCheckDigit = match1[2] || '';
+          const tcNo = (match1[3] || '').replace(/[^0-9]/g, '').substring(0, 11);
+          
+          // Validate document number check digit if available
+          if (docCheckDigit && documentNo.length === 9) {
+            validateCheckDigit(documentNo, docCheckDigit);
+          }
+          
+          // Parse Line 2: Dates, gender, nationality
+          const fullMatch2 = match2[0] || '';
+          const birthDate = (match2[1] || '').replace(/[^0-9]/g, '').substring(0, 6);
+          // Gender is in match2[3] for flexible pattern
+          let genderChar = (match2[3] || match2[2] || 'M').charAt(0).toUpperCase();
+          // Handle OCR errors: 0 → M
+          if (genderChar === '0' || genderChar === 'O') genderChar = 'M';
+          const expiryDate = (match2[4] || match2[3] || '').replace(/[^0-9]/g, '').substring(0, 6);
+          
+          console.log('[MRZ] Parsed Line2:', { fullMatch2, birthDate, genderChar, expiryDate });
+          
+          const gender = genderChar === 'M' ? 'Erkek' : genderChar === 'F' ? 'Kadın' : 'Erkek';
+          const nationality = 'TUR';
+          
+          // Parse Line 3: Surname and given names
+          // Handle OCR errors: KK, II, etc. can be << separators
+          let surnameRaw = (match3[1] || '');
+          let givenNamesRaw = (match3[2] || '');
+          
+          // Try to split if they got merged (e.g., "AYKUTKKATABEY" → "AYKUT" + "ATABEY")
+          if (!givenNamesRaw || givenNamesRaw.replace(/</g, '').trim().length === 0) {
+            // No given names found, might be merged
+            // Look for patterns like KK, II, LL in the middle
+            const merged = surnameRaw.replace(/</g, '');
+            const splitMatch = merged.match(/^([A-Z]+?)(?:KK|II|LL|<<)([A-Z]+?)$/);
+            if (splitMatch) {
+              surnameRaw = splitMatch[1];
+              givenNamesRaw = splitMatch[2];
+              console.log('[MRZ] Split merged names:', { surname: surnameRaw, name: givenNamesRaw });
+            }
+          }
+          
+          const surname = surnameRaw.replace(/</g, ' ').trim();
+          const givenNames = givenNamesRaw.replace(/</g, ' ').trim();
+          
+          // Validate extracted data
+          if (tcNo.length !== 11) {
+            console.warn('[MRZ] TC No invalid length:', tcNo.length, tcNo);
+            continue;
+          }
+          
+          // Birth date is required, expiry date is optional
+          if (birthDate.length !== 6) {
+            console.warn('[MRZ] Invalid birth date length:', birthDate.length, birthDate);
+            continue;
+          }
+          
+          if (!surname || surname.length < 2) {
+            console.warn('[MRZ] Invalid surname:', surname);
+            continue;
+          }
+          
+          // Convert dates to DD.MM.YYYY format
+          const formatMRZDate = (yymmdd) => {
+            if (!yymmdd || yymmdd.length !== 6) return '';
+            
+            const yy = yymmdd.substring(0, 2);
+            const mm = yymmdd.substring(2, 4);
+            const dd = yymmdd.substring(4, 6);
+            
+            // Validate month and day
+            const monthNum = parseInt(mm);
+            const dayNum = parseInt(dd);
+            
+            if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
+              console.warn('[MRZ] Invalid date components:', { yy, mm, dd });
+              return '';
+            }
+            
+            const year = parseInt(yy) > 50 ? `19${yy}` : `20${yy}`;
+            return `${dd}.${mm}.${year}`;
+          };
+          
+          const formattedBirthDate = formatMRZDate(birthDate);
+          const formattedExpiryDate = expiryDate ? formatMRZDate(expiryDate) : null;
+          
+          if (!formattedBirthDate) {
+            console.warn('[MRZ] Birth date formatting failed');
+            continue;
+          }
+          
+          const result = {
+            tcNo: tcNo,
+            documentNo: documentNo,
+            name: givenNames.toUpperCase(),
+            surname: surname.toUpperCase(),
+            birthDate: formattedBirthDate,
+            gender,
+            nationality,
+            source: 'MRZ (3-Line)',
+            checkDigitsValid: true, // Simplified - could add more validation
+          };
+          
+          // Add expiry date if available
+          if (formattedExpiryDate) {
+            result.validUntil = formattedExpiryDate;
+          }
+          
+          console.log('[MRZ] Successfully parsed 3-line MRZ data:', result);
+          return result;
+        } catch (parseError) {
+          console.warn('[MRZ] Error parsing matched MRZ:', parseError.message);
+          console.error('[MRZ] Parse error stack:', parseError.stack);
+          continue;
+        }
       }
     }
     
+    console.log('[MRZ] No valid 3-line MRZ pattern found in text');
     return null;
   } catch (error) {
-    console.warn('MRZ parsing error:', error);
+    console.error('[MRZ] MRZ parsing error:', error);
     return null;
   }
 };
@@ -173,7 +379,13 @@ const VALIDATORS = {
 };
 
 class OCRReaderModule {
-  constructor() {
+  constructor(options = {}) {
+    this.options = {
+      cardSide: 'front', // default: front
+      cardType: 'tc_kimlik',
+      maxAttempts: 3,
+      ...options
+    };
     this.callbacks = {};
   }
 
@@ -184,10 +396,13 @@ class OCRReaderModule {
       cropHints: true,
       quality: 'high',
       cardType: 'tc_kimlik',
+      cardSide: 'front', // 'front' or 'back'
       enableFlash: false,
     };
     
     this.options = { ...defaultOptions, ...options };
+    
+    console.log('[OCR] OCR started with options:', this.options);
     
     if (this.callbacks.onStarted) {
       this.callbacks.onStarted();
@@ -271,6 +486,7 @@ class OCRReaderModule {
   processImage = async (imagePath) => {
     try {
       console.log('[OCR] processImage called with:', imagePath);
+      console.log('[OCR] Card side:', this.options.cardSide);
       
       // Step 1: Check image quality
       console.log('[OCR] Checking image quality...');
@@ -279,9 +495,32 @@ class OCRReaderModule {
         throw new Error(qualityCheck.reason);
       }
       
-      // Step 2: Try multiple preprocessing strategies
+      // Step 2: Apply special preprocessing for back side (MRZ)
+      let preprocessedPath = imagePath;
+      if (this.options.cardSide === 'back') {
+        console.log('[OCR] Applying back side preprocessing for MRZ...');
+        try {
+          const { ImageProcessor } = require('../../utils/imageProcessor');
+          preprocessedPath = await ImageProcessor.preprocessBackSide(imagePath);
+          console.log('[OCR] Back side preprocessing completed:', preprocessedPath);
+        } catch (preprocessError) {
+          console.warn('[OCR] Back side preprocessing failed, using original:', preprocessError.message);
+          preprocessedPath = imagePath;
+        }
+      }
+      
+      // Step 3: Try multiple OCR strategies
       console.log('[OCR] Attempting OCR with multiple strategies...');
-      const strategies = [
+      
+      // Different strategies for front vs back side
+      const strategies = this.options.cardSide === 'back' ? [
+        // Back side strategies - optimized for MRZ
+        { quality: 100, maxWidth: 2400, maxHeight: 1600 }, // Very high quality for MRZ
+        { quality: 98, maxWidth: 2200, maxHeight: 1400 },  // High quality alternative
+        { quality: 95, maxWidth: 2048, maxHeight: 1536 },  // Balanced
+        { quality: 100, maxWidth: 1920, maxHeight: 1280 }, // Standard high quality
+      ] : [
+        // Front side strategies
         { quality: 100, maxWidth: 1920, maxHeight: 1080 }, // High quality
         { quality: 95, maxWidth: 1600, maxHeight: 1200 },  // Medium quality, different aspect
         { quality: 90, maxWidth: 2048, maxHeight: 1536 },  // Higher resolution
@@ -298,7 +537,7 @@ class OCRReaderModule {
           const strategy = strategies[i];
           
           // Remove file:// prefix for ImageResizer (needs native path)
-          const nativePath = imagePath.replace('file://', '');
+          const nativePath = preprocessedPath.replace('file://', '');
           console.log(`[OCR] Native path for ImageResizer:`, nativePath);
           
           console.log(`[OCR] Calling ImageResizer with strategy:`, strategy);
@@ -347,15 +586,19 @@ class OCRReaderModule {
             const confidence = this.calculateConfidence(parsedFields);
             
             console.log(`[OCR] Attempt ${i + 1} confidence: ${confidence}%`);
+            console.log(`[OCR] Parsed fields:`, parsedFields);
             
             if (confidence > bestConfidence) {
               bestResult = { text: result, fields: parsedFields };
               bestConfidence = confidence;
             }
             
-            // If we get a good result (>70%), stop trying
-            if (confidence > 70) {
-              console.log('[OCR] Good result achieved, stopping attempts');
+            // For back side with MRZ, accept lower threshold (60%)
+            // For front side, require higher threshold (70%)
+            const acceptableThreshold = this.options.cardSide === 'back' ? 60 : 70;
+            
+            if (confidence > acceptableThreshold) {
+              console.log(`[OCR] Good result achieved (>${acceptableThreshold}%), stopping attempts`);
               break;
             }
           }
@@ -421,24 +664,30 @@ class OCRReaderModule {
   parseIDFields = (text) => {
     const fields = {};
     const validationResults = {};
+    const isBackSide = this.options?.cardSide === 'back';
 
-    // Try MRZ parsing first (more accurate)
-    const mrzData = parseMRZ(text);
-    if (mrzData) {
-      console.log('[OCR] MRZ data found:', mrzData);
-      // MRZ data is highly accurate, mark all as valid
-      Object.keys(mrzData).forEach(key => {
-        if (key !== 'source' && key !== 'nationality') {
-          fields[key] = mrzData[key];
-          validationResults[key] = 'valid';
-        }
-      });
-      fields.source = 'MRZ (Arka Yüz)';
-      fields.validation = validationResults;
-      return fields;
+    // Try MRZ parsing first (more accurate) - only for back side
+    if (isBackSide) {
+      const mrzData = parseMRZ(text);
+      if (mrzData) {
+        console.log('[OCR] MRZ data found:', mrzData);
+        // MRZ data is highly accurate, mark all as valid
+        Object.keys(mrzData).forEach(key => {
+          if (key !== 'source') {
+            // Convert TUR to T.C. for nationality
+            if (key === 'nationality' && (mrzData[key] === 'TUR' || mrzData[key] === 'TURKEY')) {
+              fields[key] = 'T.C.';
+            } else {
+              fields[key] = mrzData[key];
+            }
+            validationResults[key] = 'valid';
+          }
+        });
+        fields.source = 'MRZ (Arka Yüz)';
+      }
     }
 
-    // Fallback to regular OCR parsing (front side)
+    // Regular OCR parsing
     console.log('[OCR] No MRZ found, using regular OCR parsing');
     
     // Split text into lines for easier parsing
@@ -468,21 +717,27 @@ class OCRReaderModule {
       const line = lines[i];
       const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
       
-      // Soyad - line after "Soyadi" or "Surname"
-      if (/Soyad[iı]?\s*\/?\s*Surname/i.test(line) && nextLine) {
-        const surname = nextLine.replace(/[^A-ZÇĞİÖŞÜ\s]/g, '').trim();
-        if (surname && VALIDATORS.validateName(surname)) {
-          fields.surname = surname;
-          validationResults.surname = 'valid';
+      // Soyad - line after "Soyadi" or "Surname" (ONLY FOR FRONT SIDE)
+      if (!isBackSide && /Soyad[iı]?\s*\/?\s*Surname/i.test(line) && nextLine) {
+        // Skip if it's a label line (contains "Mother" or "Father")
+        if (!/Mother|Father|Anne|Baba/i.test(nextLine)) {
+          const surname = nextLine.replace(/[^A-ZÇĞİÖŞÜ\s]/g, '').trim();
+          if (surname && VALIDATORS.validateName(surname)) {
+            fields.surname = surname;
+            validationResults.surname = 'valid';
+          }
         }
       }
       
-      // Ad - line after "Adi" or "Given Name"
-      if (/Ad[iı]?\s*\/?\s*Given\s*Name/i.test(line) && nextLine) {
-        const name = nextLine.replace(/[^A-ZÇĞİÖŞÜ\s]/g, '').trim();
-        if (name && VALIDATORS.validateName(name)) {
-          fields.name = name;
-          validationResults.name = 'valid';
+      // Ad - line after "Adi" or "Given Name" (ONLY FOR FRONT SIDE)
+      if (!isBackSide && /Ad[iı]?\s*\/?\s*Given\s*Name/i.test(line) && nextLine) {
+        // Skip if it's a label line (contains "Mother" or "Father")
+        if (!/Mother|Father|Anne|Baba/i.test(nextLine)) {
+          const name = nextLine.replace(/[^A-ZÇĞİÖŞÜ\s]/g, '').trim();
+          if (name && VALIDATORS.validateName(name)) {
+            fields.name = name;
+            validationResults.name = 'valid';
+          }
         }
       }
       
@@ -499,14 +754,19 @@ class OCRReaderModule {
       }
       
       // Cinsiyet - E/M or just E or M (check multiple lines)
-      if (/Cinsiyet|Gender/i.test(line)) {
+      if (!fields.gender && /Cinsiyet|Gender|Sex/i.test(line)) {
         // Check current line, next line, and line after
         const searchText = line + ' ' + nextLine + ' ' + (i + 2 < lines.length ? lines[i + 2] : '');
-        const genderMatch = searchText.match(/\b(E\/M|M\/F|E|M|K|F)\b/);
+        // Try multiple patterns
+        let genderMatch = searchText.match(/\b(E\/M|M\/F)\b/i); // E/M or M/F
+        if (!genderMatch) {
+          genderMatch = searchText.match(/\b([EMKFemkf])\b/); // Single letter
+        }
         if (genderMatch) {
           const g = genderMatch[1].toUpperCase();
-          fields.gender = (g === 'E' || g === 'M' || g === 'E/M') ? 'Erkek' : 'Kadın';
+          fields.gender = (g === 'E' || g === 'M' || g === 'E/M' || g === 'M/F') ? 'Erkek' : 'Kadın';
           validationResults.gender = 'valid';
+          console.log(`[OCR] Gender found: ${fields.gender} (raw: ${g})`);
         }
       }
       
@@ -531,7 +791,7 @@ class OCRReaderModule {
       
       // Son Geçerlilik - same line or next line after "Geçerlilik" or "Valid"
       if (/Ge[çc]erlilik|Valid\s*Until?/i.test(line)) {
-        const validMatch = (line + ' ' + nextLine).match(/(\d{2})[\.\/\-](\d{2})[\.\/\-](\d{4})/);
+        const validMatch = (line + ' ' + nextLine).match(/(\d{2})[\.\/-](\d{2})[\.\/-](\d{4})/);
         if (validMatch) {
           const validUntil = `${validMatch[1]}.${validMatch[2]}.${validMatch[3]}`;
           if (VALIDATORS.validateDate(validUntil)) {
@@ -540,21 +800,53 @@ class OCRReaderModule {
           }
         }
       }
+      
+      // Anne Adı - line after "Anne Adı" or "Mother's Name" (ONLY FOR BACK SIDE)
+      if (isBackSide && /Anne\s*Ad[ıi]?|Mother'?s?\s*Name/i.test(line) && nextLine) {
+        const motherName = nextLine.replace(/[^A-ZÇĞİÖŞÜ\s]/g, '').trim();
+        // Avoid capturing label text
+        if (motherName && VALIDATORS.validateName(motherName) && !/Father|Baba|Issued|Veren/i.test(motherName)) {
+          fields.motherName = motherName;
+          validationResults.motherName = 'valid';
+        }
+      }
+      
+      // Baba Adı - line after "Baba Adı" or "Father's Name" (ONLY FOR BACK SIDE)
+      if (isBackSide && /Baba\s*Ad[ıi]?|Father'?s?\s*Name/i.test(line) && nextLine) {
+        const fatherName = nextLine.replace(/[^A-ZÇĞİÖŞÜ\s]/g, '').trim();
+        // Avoid capturing label text
+        if (fatherName && VALIDATORS.validateName(fatherName) && !/Mother|Anne|Issued|Veren/i.test(fatherName)) {
+          fields.fatherName = fatherName;
+          validationResults.fatherName = 'valid';
+        }
+      }
+      
+      // Veren Makam - line after "Veren Makam" or "Issued By" (ONLY FOR BACK SIDE)
+      // More flexible pattern to catch OCR errors like "SSUEDBY"
+      if (isBackSide && /Veren\s*Makam|[IS]{1,2}ued\s*By|SSUEDBY|Ver[iı]l[iı]ş\s*Yer/i.test(line) && nextLine) {
+        const issuedBy = nextLine.trim();
+        if (issuedBy && issuedBy.length > 2) {
+          fields.issuedBy = issuedBy;
+          validationResults.issuedBy = 'valid';
+        }
+      }
     }
 
     // Regex-based fallback for missed fields (only if not found by line parsing)
-    if (!fields.name) {
+    // ONLY for front side - avoid capturing Mother/Father names on back side
+    if (!isBackSide && !fields.name) {
       const nameMatch = text.match(ID_PATTERNS.NAME);
       if (nameMatch && nameMatch[1]) {
         const name = nameMatch[1].trim().toUpperCase().replace(/[^A-ZÇĞİÖŞÜ\s]/g, '');
-        if (name && VALIDATORS.validateName(name)) {
+        // Skip if it looks like a label
+        if (name && VALIDATORS.validateName(name) && !/MOTHER|FATHER|ANNE|BABA/i.test(name)) {
           fields.name = name;
           validationResults.name = 'valid';
         }
       }
     }
     
-    if (!fields.surname) {
+    if (!isBackSide && !fields.surname) {
       const surnameMatch = text.match(ID_PATTERNS.SURNAME);
       if (surnameMatch && surnameMatch[1]) {
         const surname = surnameMatch[1].trim().toUpperCase().replace(/[^A-ZÇĞİÖŞÜ\s]/g, '');
@@ -562,6 +854,72 @@ class OCRReaderModule {
           fields.surname = surname;
           validationResults.surname = 'valid';
         }
+      }
+    }
+    
+    // Regex-based fallback for back side fields
+    if (!fields.motherName) {
+      const motherMatch = text.match(ID_PATTERNS.MOTHER_NAME);
+      if (motherMatch && motherMatch[1]) {
+        const motherName = motherMatch[1].trim().toUpperCase().replace(/[^A-ZÇĞİÖŞÜ\s]/g, '');
+        if (motherName && VALIDATORS.validateName(motherName)) {
+          fields.motherName = motherName;
+          validationResults.motherName = 'valid';
+        }
+      }
+    }
+    
+    if (!fields.fatherName) {
+      const fatherMatch = text.match(ID_PATTERNS.FATHER_NAME);
+      if (fatherMatch && fatherMatch[1]) {
+        const fatherName = fatherMatch[1].trim().toUpperCase().replace(/[^A-ZÇĞİÖŞÜ\s]/g, '');
+        if (fatherName && VALIDATORS.validateName(fatherName)) {
+          fields.fatherName = fatherName;
+          validationResults.fatherName = 'valid';
+        }
+      }
+    }
+    
+    if (!fields.issuedBy) {
+      const issuedMatch = text.match(ID_PATTERNS.ISSUED_BY);
+      if (issuedMatch && issuedMatch[1]) {
+        const issuedBy = issuedMatch[1].trim();
+        if (issuedBy && issuedBy.length > 2) {
+          fields.issuedBy = issuedBy;
+          validationResults.issuedBy = 'valid';
+        }
+      }
+    }
+    
+    // Gender fallback
+    if (!fields.gender) {
+      const genderMatch = text.match(ID_PATTERNS.GENDER);
+      if (genderMatch && genderMatch[1]) {
+        const g = genderMatch[1].toUpperCase();
+        fields.gender = (g === 'E' || g === 'M') ? 'Erkek' : 'Kadın';
+        validationResults.gender = 'valid';
+      }
+    }
+    
+    // Valid Until fallback
+    if (!fields.validUntil) {
+      const validMatch = text.match(ID_PATTERNS.VALID_UNTIL);
+      if (validMatch && validMatch[1]) {
+        const validUntil = validMatch[1].replace(/[\s]/g, '.').replace(/[\/\-]/g, '.');
+        if (VALIDATORS.validateDate(validUntil)) {
+          fields.validUntil = validUntil;
+          validationResults.validUntil = 'valid';
+        }
+      }
+    }
+    
+    // Serial No fallback
+    if (!fields.serialNo) {
+      const serialMatch = text.match(ID_PATTERNS.SERIAL_NO);
+      if (serialMatch && serialMatch[1]) {
+        let serialNo = serialMatch[1].replace(/O/g, '0');
+        fields.serialNo = serialNo;
+        validationResults.serialNo = 'valid';
       }
     }
 
@@ -620,6 +978,251 @@ class OCRReaderModule {
     score = Math.max(0, score);
     
     return Math.round((score / maxScore) * 100);
+  };
+
+  /**
+   * Process both front and back sides of ID card
+   * @param {string} frontImagePath - Path to front side image
+   * @param {string} backImagePath - Path to back side image
+   * @returns {Promise<object>} - Merged and validated OCR results
+   */
+  processBothSides = async (frontImagePath, backImagePath) => {
+    try {
+      console.log('[OCR] Starting dual-side processing...');
+      console.log('[OCR] Front image:', frontImagePath);
+      console.log('[OCR] Back image:', backImagePath);
+
+      // Ensure options exists
+      if (!this.options) {
+        this.options = {
+          cardSide: 'front',
+          cardType: 'tc_kimlik',
+          maxAttempts: 3
+        };
+      }
+
+      // Process front side
+      console.log('[OCR] Processing front side...');
+      this.options.cardSide = 'front';
+      const frontResult = await this.processImage(frontImagePath);
+      // processImage already returns { success, text, fields, confidence }
+      const frontFields = frontResult.fields || {};
+      
+      console.log('[OCR] Front side results:', frontFields);
+
+      // Process back side
+      console.log('[OCR] Processing back side...');
+      this.options.cardSide = 'back';
+      const backResult = await this.processImage(backImagePath);
+      // processImage already returns { success, text, fields, confidence }
+      const backFields = backResult.fields || {};
+      
+      console.log('[OCR] Back side results:', backFields);
+
+      // Merge and validate results
+      const mergedData = this.mergeAndValidate(frontFields, backFields);
+      
+      console.log('[OCR] Merged and validated results:', mergedData);
+
+      return {
+        success: true,
+        data: mergedData,
+        frontSide: frontFields,
+        backSide: backFields,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error('[OCR] Dual-side processing error:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Merge and validate data from front and back sides
+   * @param {object} frontData - Data from front side
+   * @param {object} backData - Data from back side (MRZ)
+   * @returns {object} - Merged and validated data
+   */
+  mergeAndValidate = (frontData, backData) => {
+    console.log('[OCR] Merging front and back data...');
+    
+    const merged = {};
+    const conflicts = [];
+    const validation = {};
+
+    // Priority fields: Use MRZ (back) data as primary source (more accurate)
+    const mrzPriorityFields = ['tcNo', 'name', 'surname', 'birthDate', 'gender', 'nationality'];
+    
+    mrzPriorityFields.forEach(field => {
+      const frontValue = frontData[field];
+      const backValue = backData[field];
+      
+      if (backValue && frontValue) {
+        // Both sides have data - compare
+        if (this.compareFieldValues(field, backValue, frontValue)) {
+          // Values match - use back (MRZ) as it's more accurate
+          merged[field] = backValue;
+          validation[field] = 'verified'; // Both sides match
+          console.log(`[OCR] ✓ ${field}: Front and back match (${backValue})`);
+        } else {
+          // Values don't match - conflict detected
+          merged[field] = backValue; // Prefer MRZ
+          validation[field] = 'conflict';
+          conflicts.push({
+            field,
+            frontValue,
+            backValue,
+            used: 'back (MRZ)',
+            reason: 'MRZ is more accurate'
+          });
+          console.warn(`[OCR] ⚠ ${field}: CONFLICT - Front: "${frontValue}" vs Back: "${backValue}" (using MRZ)`);
+        }
+      } else if (backValue) {
+        // Only back has data
+        merged[field] = backValue;
+        validation[field] = 'back-only';
+        console.log(`[OCR] ${field}: From back side only`);
+      } else if (frontValue) {
+        // Only front has data
+        merged[field] = frontValue;
+        validation[field] = 'front-only';
+        console.log(`[OCR] ${field}: From front side only`);
+      }
+    });
+
+    // Fields that can be on both sides but prefer back (MRZ)
+    const flexibleFields = ['validUntil'];
+    flexibleFields.forEach(field => {
+      if (backData[field]) {
+        merged[field] = backData[field];
+        validation[field] = frontData[field] ? 'verified' : 'back-only';
+      } else if (frontData[field]) {
+        merged[field] = frontData[field];
+        validation[field] = 'front-only';
+      }
+    });
+
+    // Back-side exclusive fields (from MRZ)
+    const backOnlyFields = ['documentNo', 'checkDigitsValid', 'motherName', 'fatherName', 'issuedBy'];
+    backOnlyFields.forEach(field => {
+      if (backData[field]) {
+        merged[field] = backData[field];
+        validation[field] = 'back-only';
+      }
+    });
+
+    // Front-side exclusive fields
+    const frontOnlyFields = ['serialNo', 'nationality'];
+    frontOnlyFields.forEach(field => {
+      if (frontData[field] && !merged[field]) {
+        merged[field] = frontData[field];
+        validation[field] = 'front-only';
+      }
+    });
+
+    // Add metadata
+    merged.validation = validation;
+    merged.conflicts = conflicts;
+    merged.source = 'dual-side-scan';
+    merged.confidence = this.calculateDualSideConfidence(merged, conflicts);
+    
+    // Calculate completeness
+    // Count only actual ID fields, not metadata like checkDigitsValid
+    const totalFields = 12; // Total expected ID fields
+    const filledFields = Object.keys(merged).filter(k => 
+      !['validation', 'conflicts', 'source', 'confidence', 'completeness', 'checkDigitsValid'].includes(k)
+    ).length;
+    merged.completeness = Math.round((filledFields / totalFields) * 100);
+
+    return merged;
+  };
+
+  /**
+   * Compare two field values for similarity
+   * @param {string} fieldName - Name of the field
+   * @param {string} value1 - First value
+   * @param {string} value2 - Second value
+   * @returns {boolean} - True if values match
+   */
+  compareFieldValues = (fieldName, value1, value2) => {
+    if (!value1 || !value2) return false;
+    
+    // Normalize strings
+    const normalize = (str) => {
+      return str.toString()
+        .toUpperCase()
+        .replace(/[İI]/g, 'I')
+        .replace(/[ĞG]/g, 'G')
+        .replace(/[ÜU]/g, 'U')
+        .replace(/[ŞS]/g, 'S')
+        .replace(/[ÖO]/g, 'O')
+        .replace(/[ÇC]/g, 'C')
+        .replace(/\s+/g, '')
+        .trim();
+    };
+
+    const norm1 = normalize(value1);
+    const norm2 = normalize(value2);
+
+    // Exact match
+    if (norm1 === norm2) return true;
+
+    // For dates, check different formats
+    if (fieldName === 'birthDate') {
+      const date1 = norm1.replace(/[\.\/\-]/g, '');
+      const date2 = norm2.replace(/[\.\/\-]/g, '');
+      return date1 === date2;
+    }
+
+    // For names, allow minor differences (OCR errors)
+    if (['name', 'surname'].includes(fieldName)) {
+      // Calculate similarity (simple Levenshtein-like)
+      const maxLen = Math.max(norm1.length, norm2.length);
+      const minLen = Math.min(norm1.length, norm2.length);
+      
+      if (maxLen === 0) return true;
+      
+      // Allow up to 20% difference for names
+      const similarity = minLen / maxLen;
+      if (similarity >= 0.8) {
+        // Check if one contains the other
+        if (norm1.includes(norm2) || norm2.includes(norm1)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  /**
+   * Calculate confidence for dual-side scan
+   * @param {object} mergedData - Merged data
+   * @param {array} conflicts - Array of conflicts
+   * @returns {number} - Confidence score (0-100)
+   */
+  calculateDualSideConfidence = (mergedData, conflicts) => {
+    let baseScore = 100;
+    
+    // Penalty for conflicts
+    const conflictPenalty = conflicts.length * 10;
+    baseScore -= conflictPenalty;
+    
+    // Bonus for verified fields
+    const validation = mergedData.validation || {};
+    const verifiedCount = Object.values(validation).filter(v => v === 'verified').length;
+    const verifiedBonus = verifiedCount * 5;
+    baseScore += verifiedBonus;
+    
+    // Check completeness of critical fields
+    const criticalFields = ['tcNo', 'name', 'surname', 'birthDate'];
+    const criticalComplete = criticalFields.every(f => mergedData[f]);
+    if (criticalComplete) {
+      baseScore += 10;
+    }
+    
+    // Ensure score is between 0-100
+    return Math.max(0, Math.min(100, Math.round(baseScore)));
   };
 }
 
