@@ -28,6 +28,8 @@ const OCRCamera = ({
   const [hasPermission, setHasPermission] = useState(null);
   const [showCropOverlay, setShowCropOverlay] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
+  const [torchEnabled, setTorchEnabled] = useState(false);
+  const [flashMode, setFlashMode] = useState('off');
   const [cropArea, setCropArea] = useState({
     x: 50,
     y: 150,
@@ -45,6 +47,11 @@ const OCRCamera = ({
   useEffect(() => {
     requestCameraPermission();
     startPulseAnimation();
+    
+    return () => {
+      // Cleanup camera on unmount
+      setCameraStatus(OCR_STATUS.IDLE);
+    };
   }, []);
 
   const startPulseAnimation = () => {
@@ -102,6 +109,7 @@ const OCRCamera = ({
       const photo = await cameraRef.current.takePhoto({
         quality: 0.8,
         skipMetadata: true,
+        flash: flashMode,
       });
 
       const photoUri = `file://${photo.path}`;
@@ -250,7 +258,34 @@ const OCRCamera = ({
         device={device}
         isActive={!showCropOverlay}
         photo={true}
+        torch={torchEnabled ? 'on' : 'off'}
       />
+
+      {!showCropOverlay && (
+        <View style={styles.topControls}>
+          <TouchableOpacity
+            style={[styles.iconButton, torchEnabled && styles.iconButtonActive]}
+            onPress={() => setTorchEnabled(!torchEnabled)}
+          >
+            <Text style={styles.iconText}>{torchEnabled ? '🔦' : '🔦'}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.iconButton, flashMode !== 'off' && styles.iconButtonActive]}
+            onPress={() => {
+              const modes = ['off', 'on', 'auto'];
+              const currentIndex = modes.indexOf(flashMode);
+              const nextMode = modes[(currentIndex + 1) % modes.length];
+              setFlashMode(nextMode);
+            }}
+          >
+            <Text style={styles.iconText}>⚡</Text>
+            <Text style={styles.iconLabel}>
+              {flashMode === 'off' ? 'Kapalı' : flashMode === 'on' ? 'Açık' : 'Oto'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {!showCropOverlay && renderGuidanceOverlay()}
       {showCropOverlay && renderCropOverlay()}
@@ -284,6 +319,38 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+  },
+  topControls: {
+    position: 'absolute',
+    top: 20,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+    zIndex: 10,
+  },
+  iconButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  iconButtonActive: {
+    backgroundColor: 'rgba(0, 122, 255, 0.8)',
+    borderColor: '#fff',
+  },
+  iconText: {
+    fontSize: 22,
+  },
+  iconLabel: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
   },
   errorContainer: {
     flex: 1,

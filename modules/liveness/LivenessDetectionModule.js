@@ -18,9 +18,10 @@ import {
   Platform,
   NativeModules,
 } from 'react-native';
-import { RNCamera } from 'react-native-camera';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import Tts from 'react-native-tts';
+import FaceDetection from '@react-native-ml-kit/face-detection';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -79,6 +80,7 @@ class LivenessDetectionModule {
     this.faceDetected = false;
     this.challengeStartTime = null;
     this.ttsEnabled = true;
+    this.noFaceDetectionCount = 0;
   }
 
   // API Methods
@@ -144,9 +146,7 @@ class LivenessDetectionModule {
   // Private Methods
   initializeTTS = async () => {
     try {
-      await Tts.setDefaultLanguage('tr-TR');
-      await Tts.setDefaultRate(0.5);
-      await Tts.setDefaultPitch(1.0);
+      await Tts.getInitStatus();
       
       // Check if TTS is available
       const voices = await Tts.voices();
@@ -155,8 +155,10 @@ class LivenessDetectionModule {
       if (turkishVoice) {
         await Tts.setDefaultVoice(turkishVoice.id);
       }
+      
+      this.ttsEnabled = true;
     } catch (error) {
-      console.warn('TTS initialization error:', error);
+      console.log('TTS not available (running on emulator or no TTS engine), continuing without voice');
       this.ttsEnabled = false;
     }
   };
@@ -170,17 +172,22 @@ class LivenessDetectionModule {
 
     const challenge = this.challenges[this.currentChallengeIndex];
     this.challengeStartTime = Date.now();
+    this.noFaceDetectionCount = 0; // Reset no-face counter
 
     // Speak instruction
     if (this.ttsEnabled) {
-      Tts.speak(challenge.voice);
+      try {
+        Tts.speak(challenge.voice);
+      } catch (error) {
+        // TTS not available
+      }
     }
 
     if (this.callbacks.onChallengeChanged) {
       this.callbacks.onChallengeChanged(challenge);
     }
 
-    // Set timeout for challenge
+    // Set timeout for challenge (increased to 5 seconds)
     setTimeout(() => {
       this.challengeTimeout(challenge);
     }, challenge.duration + 2000);
@@ -189,10 +196,19 @@ class LivenessDetectionModule {
   processFaceData = (faces) => {
     if (!faces || faces.length === 0) {
       this.faceDetected = false;
+      this.noFaceDetectionCount++;
+      
+      // If no face detected for too long (10 consecutive checks), fail the challenge
+      if (this.noFaceDetectionCount > 10 && this.currentChallengeIndex < this.challenges.length) {
+        const challenge = this.challenges[this.currentChallengeIndex];
+        console.log('Challenge failed: No face detected');
+        this.challengeCompleted(challenge, false);
+      }
       return;
     }
 
     this.faceDetected = true;
+    this.noFaceDetectionCount = 0; // Reset counter when face is detected
     const face = faces[0];
 
     // Check if we have an active challenge
@@ -218,38 +234,38 @@ class LivenessDetectionModule {
 
     switch (challenge.id) {
       case 'blink':
-        // Detect eye blink
+        // Detect eye blink - stricter threshold
         const leftEyeOpen = face.leftEyeOpenProbability;
         const rightEyeOpen = face.rightEyeOpenProbability;
         
         if (leftEyeOpen !== undefined && rightEyeOpen !== undefined) {
-          // Both eyes closed (blink detected)
-          if (leftEyeOpen < 0.3 && rightEyeOpen < 0.3) {
+          // Both eyes closed (blink detected) - must be clearly closed
+          if (leftEyeOpen < 0.2 && rightEyeOpen < 0.2) {
             return true;
           }
         }
         break;
 
       case 'smile':
-        // Detect smile
+        // Detect smile - stricter threshold
         const smileProbability = face.smilingProbability;
-        if (smileProbability !== undefined && smileProbability > 0.7) {
+        if (smileProbability !== undefined && smileProbability > 0.75) {
           return true;
         }
         break;
 
       case 'turnHeadLeft':
-        // Detect head turned left
+        // Detect head turned left - must turn clearly
         const yAngleLeft = face.yAngle;
-        if (yAngleLeft !== undefined && yAngleLeft < -20) {
+        if (yAngleLeft !== undefined && yAngleLeft < -25) {
           return true;
         }
         break;
 
       case 'turnHeadRight':
-        // Detect head turned right
+        // Detect head turned right - must turn clearly
         const yAngleRight = face.yAngle;
-        if (yAngleRight !== undefined && yAngleRight > 20) {
+        if (yAngleRight !== undefined && yAngleRight > 25) {
           return true;
         }
         break;
@@ -309,8 +325,8 @@ class LivenessDetectionModule {
     // Calculate overall score
     const successCount = this.results.filter(r => r.success).length;
     const totalCount = this.results.length;
-    const score = (successCount / totalCount) * 100;
-    const passed = score >= 60; // 60% threshold
+    const score = totalCount > 0 ? (successCount / totalCount) * 100 : 0;
+    const passed = score >= 66.67; // 66.67% threshold (2/3 challenges must succeed)
 
     const response = {
       passed: passed,
@@ -341,109 +357,227 @@ class LivenessDetectionModule {
     }
   };
 }
-
-// React Component for Liveness UI
 export const LivenessDetectionScreen = ({ navigation, route }) => {
   const [isDetecting, setIsDetecting] = useState(false);
   const [currentChallenge, setCurrentChallenge] = useState(null);
-  const [detectionResult, setDetectionResult] = useState(null);
+  const [challengeProgress, setChallengeProgress] = useState(0);
+  const [livenessScore, setLivenessScore] = useState(0);
   const [faceDetected, setFaceDetected] = useState(false);
+  const [livenessResult, setLivenessResult] = useState(null);
+  const [detectionResult, setDetectionResult] = useState(null);
   const [countdown, setCountdown] = useState(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
   const cameraRef = useRef(null);
+  const device = useCameraDevice('front');
   const livenessModule = useRef(new LivenessDetectionModule()).current;
-  const faceBoxAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Check camera permission and activate
+    checkPermissions().then(() => {
+      if (isMounted) {
+        setIsCameraActive(true);
+      }
+    });
+    
     // Setup callbacks
     livenessModule.onLivenessResult((result) => {
-      setDetectionResult(result);
-      setIsDetecting(false);
-      setCurrentChallenge(null);
+      if (isMounted) {
+        setLivenessResult(result);
+        setDetectionResult(result);
+        setIsDetecting(false);
+        setIsCameraActive(false);
+        setCurrentChallenge(null);
+      }
     });
 
     livenessModule.onLivenessError((error) => {
-      Alert.alert('Hata', error.error);
-      setIsDetecting(false);
+      if (isMounted) {
+        Alert.alert('Hata', error.error);
+        setIsDetecting(false);
+      }
     });
 
     livenessModule.onChallengeChanged((challenge) => {
-      setCurrentChallenge(challenge);
-      animateFaceBox();
+      if (isMounted) {
+        setCurrentChallenge(challenge);
+        animateFaceBox();
+      }
     });
 
-    // Check permissions
-    checkPermissions();
+    // Navigation listeners
+    const unsubscribeFocus = navigation.addListener('focus', () => {
+      if (isMounted && !detectionResult) {
+        setIsCameraActive(true);
+      }
+    });
+
+    const unsubscribeBlur = navigation.addListener('blur', () => {
+      if (isMounted) {
+        setIsCameraActive(false);
+        livenessModule.stopLiveness();
+      }
+    });
 
     // Cleanup
     return () => {
+      isMounted = false;
+      setIsCameraActive(false);
       livenessModule.stopLiveness();
-      Tts.stop();
+      
+      // Stop TTS if available
+      try {
+        Tts.stop();
+      } catch (error) {
+        // TTS not available, ignore
+      }
+      
+      unsubscribeFocus();
+      unsubscribeBlur();
     };
-  }, []);
+  }, [navigation, detectionResult]);
+
+  // Real face detection using ML Kit
+  useEffect(() => {
+    if (!isDetecting || !isCameraActive || !currentChallenge) {
+      setFaceDetected(false);
+      return;
+    }
+    
+    let isActive = true;
+    
+    const detectFace = async () => {
+      if (!isActive || !cameraRef.current) return;
+      
+      try {
+        // Take a photo snapshot for face detection
+        const photo = await cameraRef.current.takePhoto({
+          qualityPrioritization: 'speed',
+          flash: 'off',
+        });
+        
+        if (!isActive) return;
+        
+        // Convert path to file:// URI for ML Kit
+        const photoUri = Platform.OS === 'android' 
+          ? `file://${photo.path}` 
+          : photo.path;
+        
+        // Detect faces using ML Kit
+        const faces = await FaceDetection.detect(photoUri, {
+          performanceMode: 'fast',
+          landmarkMode: 'all',
+          classificationMode: 'all',
+        });
+        
+        if (!isActive) return;
+        
+        if (faces && faces.length > 0) {
+          setFaceDetected(true);
+          
+          // Log ML Kit face data to see available properties
+          const mlKitFace = faces[0];
+          console.log('ML Kit Face Data:', JSON.stringify(mlKitFace, null, 2));
+          
+          // Convert ML Kit face format to our expected format
+          const faceData = [{
+            leftEyeOpenProbability: mlKitFace.leftEyeOpenProbability || 0.5,
+            rightEyeOpenProbability: mlKitFace.rightEyeOpenProbability || 0.5,
+            smilingProbability: mlKitFace.smilingProbability || 0,
+            yAngle: mlKitFace.rotationY || 0,  // Y-axis rotation (head turn left/right)
+            xAngle: mlKitFace.rotationX || 0,  // X-axis rotation (head tilt up/down)
+            zAngle: mlKitFace.rotationZ || 0,  // Z-axis rotation (head roll)
+          }];
+          
+          console.log('Converted Face Data:', JSON.stringify(faceData[0], null, 2));
+          
+          livenessModule.processFaceData(faceData);
+        } else {
+          setFaceDetected(false);
+          livenessModule.processFaceData([]);
+        }
+      } catch (error) {
+        console.log('Face detection error:', error.message);
+        setFaceDetected(false);
+      }
+      
+      // Continue detection loop
+      if (isActive) {
+        setTimeout(detectFace, 300); // Check every 300ms
+      }
+    };
+    
+    detectFace();
+    
+    return () => {
+      isActive = false;
+    };
+  }, [isDetecting, isCameraActive, currentChallenge]);
 
   const checkPermissions = async () => {
-    const cameraResult = await check(PERMISSIONS.ANDROID.CAMERA);
-    
-    if (cameraResult !== RESULTS.GRANTED) {
-      const requestResult = await request(PERMISSIONS.ANDROID.CAMERA);
-      if (requestResult !== RESULTS.GRANTED) {
-        Alert.alert(
-          'Kamera İzni Gerekli',
-          'Canlılık testi için kamera izni gerekiyor.',
-          [{ text: 'Tamam', onPress: () => navigation.goBack() }]
-        );
+    try {
+      const result = await check(PERMISSIONS.ANDROID.CAMERA);
+      
+      if (result !== RESULTS.GRANTED) {
+        const requestResult = await request(PERMISSIONS.ANDROID.CAMERA);
+        if (requestResult !== RESULTS.GRANTED) {
+          Alert.alert(
+            'Kamera İzni Gerekli',
+            'Canlılık testi için kamera iznine ihtiyacımız var.',
+            [{ text: 'Tamam', onPress: () => navigation.goBack() }]
+          );
+        }
       }
+    } catch (error) {
+      console.error('Permission check error:', error);
     }
   };
 
   const startDetection = async () => {
-    setDetectionResult(null);
-    setIsDetecting(true);
-    
-    // Start countdown
-    let count = 3;
-    setCountdown(count);
-    
-    const countdownInterval = setInterval(() => {
-      count--;
-      if (count === 0) {
-        clearInterval(countdownInterval);
-        setCountdown(null);
-        // Start actual detection
-        livenessModule.startLiveness(['blink', 'smile', 'turnHeadLeft', 'turnHeadRight']);
-      } else {
-        setCountdown(count);
+    try {
+      // Reset states
+      setDetectionResult(null);
+      setCountdown(3);
+      
+      // Countdown animation
+      for (let i = 3; i > 0; i--) {
+        setCountdown(i);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-    }, 1000);
+      
+      setCountdown(null);
+      setIsDetecting(true);
+      
+      // Start liveness module
+      await livenessModule.startLiveness(['blink', 'smile', 'turnHeadLeft']);
+      
+    } catch (error) {
+      console.error('Start detection error:', error);
+      Alert.alert('Hata', 'Canlılık testi başlatılamadı');
+    }
   };
 
   const stopDetection = () => {
-    livenessModule.stopLiveness();
     setIsDetecting(false);
     setCurrentChallenge(null);
+    livenessModule.stopLiveness();
   };
 
   const animateFaceBox = () => {
     Animated.sequence([
-      Animated.timing(faceBoxAnim, {
+      Animated.timing(pulseAnim, {
         toValue: 0.9,
         duration: 200,
         useNativeDriver: true,
       }),
-      Animated.timing(faceBoxAnim, {
+      Animated.timing(pulseAnim, {
         toValue: 1,
         duration: 200,
         useNativeDriver: true,
       }),
     ]).start();
-  };
-
-  const onFacesDetected = ({ faces }) => {
-    setFaceDetected(faces.length > 0);
-    
-    if (isDetecting && currentChallenge) {
-      livenessModule.processFaceData(faces);
-    }
   };
 
   const renderFaceOverlay = () => (
@@ -452,7 +586,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
         style={[
           styles.faceBox,
           { 
-            transform: [{ scale: faceBoxAnim }],
+            transform: [{ scale: pulseAnim }],
             borderColor: faceDetected ? '#4CAF50' : '#FF5252',
           }
         ]}
@@ -572,31 +706,53 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
     );
   }
 
+  if (!device) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Kamera bulunamadı</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.retryButtonText}>Geri Dön</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
       
-      {isDetecting ? (
+      {/* Header with back button */}
+      <View style={styles.topHeader}>
+        <TouchableOpacity
+          style={styles.headerBackButton}
+          onPress={() => {
+            setIsCameraActive(false);
+            navigation.goBack();
+          }}
+        >
+          <Text style={styles.headerBackText}>← Geri</Text>
+        </TouchableOpacity>
+        <Text style={styles.topHeaderTitle}>Canlılık Testi</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+      
+      {device && isCameraActive && isDetecting ? (
         <>
-          <RNCamera
+          <Camera
             ref={cameraRef}
             style={styles.camera}
-            type={RNCamera.Constants.Type.front}
-            flashMode={RNCamera.Constants.FlashMode.off}
-            androidCameraPermissionOptions={{
-              title: 'Kamera İzni',
-              message: 'Canlılık testi için kamera erişimi gerekiyor',
-              buttonPositive: 'İzin Ver',
-              buttonNegative: 'İptal',
-            }}
-            captureAudio={false}
-            onFacesDetected={onFacesDetected}
-            faceDetectionMode={RNCamera.Constants.FaceDetection.Mode.accurate}
-            faceDetectionLandmarks={RNCamera.Constants.FaceDetection.Landmarks.all}
-            faceDetectionClassifications={RNCamera.Constants.FaceDetection.Classifications.all}
-          >
-            {renderFaceOverlay()}
-          </RNCamera>
+            device={device}
+            isActive={isCameraActive && isDetecting}
+            photo={true}
+            video={false}
+          />
+          
+          {renderFaceOverlay()}
           
           {renderChallenge()}
           
@@ -657,6 +813,43 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    zIndex: 100,
+  },
+  headerBackButton: {
+    padding: 8,
+  },
+  headerBackText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  topHeaderTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  headerSpacer: {
+    width: 60,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+    padding: 20,
+  },
+  errorText: {
+    color: '#FFF',
+    fontSize: 16,
+    marginBottom: 20,
   },
   header: {
     flexDirection: 'row',

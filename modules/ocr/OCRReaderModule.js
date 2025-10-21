@@ -17,7 +17,7 @@ import {
   StatusBar,
   Platform,
 } from 'react-native';
-import { RNCamera } from 'react-native-camera';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import ImageCropPicker from 'react-native-image-crop-picker';
 import TextRecognition from 'react-native-text-recognition';
 import RNFS from 'react-native-fs';
@@ -72,18 +72,25 @@ class OCRReaderModule {
   // Processing Methods
   processImage = async (imagePath) => {
     try {
+      console.log('[OCR] processImage called with:', imagePath);
+      
       // Text recognition
+      console.log('[OCR] Calling TextRecognition.recognize...');
       const result = await TextRecognition.recognize(imagePath);
+      console.log('[OCR] TextRecognition result:', result);
       
       if (!result || result.length === 0) {
         throw new Error('Metin algılanamadı. Lütfen daha net bir fotoğraf çekin.');
       }
 
       // Parse fields
+      console.log('[OCR] Parsing ID fields...');
       const parsedFields = this.parseIDFields(result);
+      console.log('[OCR] Parsed fields:', parsedFields);
       
       // Calculate confidence
       const confidence = this.calculateConfidence(parsedFields);
+      console.log('[OCR] Confidence score:', confidence);
       
       // Get base64 if requested
       let imageBase64 = null;
@@ -101,12 +108,16 @@ class OCRReaderModule {
         cardType: this.options.cardType,
       };
 
+      console.log('[OCR] Final response ready');
       if (this.callbacks.onResult) {
         this.callbacks.onResult(response);
       }
 
       return response;
     } catch (error) {
+      console.error('[OCR] processImage ERROR:', error);
+      console.error('[OCR] Error message:', error.message);
+      
       const errorResponse = {
         success: false,
         error: error.message,
@@ -193,26 +204,62 @@ class OCRReaderModule {
 // React Component for OCR UI
 export const OCRReaderScreen = ({ navigation, route }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [flashMode, setFlashMode] = useState(false);
+  const [flashMode, setFlashMode] = useState('off'); // 'off', 'on', 'auto'
+  const [torchEnabled, setTorchEnabled] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [ocrResult, setOcrResult] = useState(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
   const cameraRef = useRef(null);
+  const device = useCameraDevice('back');
   const ocrModule = useRef(new OCRReaderModule()).current;
 
   // Setup callbacks
   React.useEffect(() => {
-    checkCameraPermission();
+    let isMounted = true;
+    
+    checkCameraPermission().then(() => {
+      if (isMounted) {
+        setIsCameraActive(true);
+      }
+    });
     
     ocrModule.onOCRResult((result) => {
-      setOcrResult(result);
-      setIsProcessing(false);
+      if (isMounted) {
+        setOcrResult(result);
+        setIsProcessing(false);
+        setIsCameraActive(false);
+      }
     });
 
     ocrModule.onOCRError((error) => {
-      Alert.alert('Hata', error.error || 'OCR işlemi başarısız oldu');
-      setIsProcessing(false);
+      if (isMounted) {
+        Alert.alert('Hata', error.error || 'OCR işlemi başarısız oldu');
+        setIsProcessing(false);
+      }
     });
-  }, []);
+    
+    // Listen to navigation focus/blur to control camera
+    const unsubscribeFocus = navigation.addListener('focus', () => {
+      if (isMounted && !ocrResult) {
+        setIsCameraActive(true);
+      }
+    });
+    
+    const unsubscribeBlur = navigation.addListener('blur', () => {
+      if (isMounted) {
+        setIsCameraActive(false);
+        setTorchEnabled(false);
+      }
+    });
+    
+    return () => {
+      isMounted = false;
+      setIsCameraActive(false);
+      setTorchEnabled(false);
+      unsubscribeFocus();
+      unsubscribeBlur();
+    };
+  }, [navigation, ocrResult]);
 
   const checkCameraPermission = async () => {
     const result = await check(PERMISSIONS.ANDROID.CAMERA);
@@ -234,23 +281,27 @@ export const OCRReaderScreen = ({ navigation, route }) => {
       setIsProcessing(true);
       
       try {
-        const options = {
-          quality: 0.9,
-          base64: false,
-          fixOrientation: true,
-          forceUpOrientation: true,
-        };
-        
-        const data = await cameraRef.current.takePictureAsync(options);
-        setPreviewImage(data.uri);
+        console.log('[OCR] Step 1: Taking picture...');
+        const data = await cameraRef.current.takePhoto({
+          quality: 90,
+          flash: flashMode,
+        });
+        const photoUri = `file://${data.path}`;
+        console.log('[OCR] Step 2: Picture taken successfully:', photoUri);
+        setPreviewImage(photoUri);
         
         // Process with OCR
+        console.log('[OCR] Step 3: Starting OCR processing...');
         ocrModule.startOCR({ includeImage: true });
-        const result = await ocrModule.processImage(data.uri);
+        
+        console.log('[OCR] Step 4: Calling processImage...');
+        const result = await ocrModule.processImage(photoUri);
+        console.log('[OCR] Step 5: OCR Complete! Result:', JSON.stringify(result, null, 2));
         
       } catch (error) {
-        console.error('Fotoğraf çekme hatası:', error);
-        Alert.alert('Hata', 'Fotoğraf çekilemedi. Lütfen tekrar deneyin.');
+        console.error('[OCR] ERROR:', error);
+        console.error('[OCR] Error details:', error.message, error.stack);
+        Alert.alert('Hata', `Fotoğraf çekme/işleme hatası: ${error.message}`);
         setIsProcessing(false);
       }
     }
@@ -284,6 +335,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
   const retryOCR = () => {
     setOcrResult(null);
     setPreviewImage(null);
+    setIsCameraActive(true);
   };
 
   const renderOverlay = () => (
@@ -384,51 +436,91 @@ export const OCRReaderScreen = ({ navigation, route }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
       
-      <RNCamera
-        ref={cameraRef}
-        style={styles.camera}
-        type={RNCamera.Constants.Type.back}
-        flashMode={flashMode ? RNCamera.Constants.FlashMode.torch : RNCamera.Constants.FlashMode.off}
-        androidCameraPermissionOptions={{
-          title: 'Kamera İzni',
-          message: 'OCR için kamera erişimi gerekiyor',
-          buttonPositive: 'İzin Ver',
-          buttonNegative: 'İptal',
-        }}
-        captureAudio={false}
-      >
-        {renderOverlay()}
-      </RNCamera>
-      
-      <View style={styles.controls}>
+      {/* Header with back button */}
+      <View style={styles.header}>
         <TouchableOpacity
-          style={styles.flashButton}
-          onPress={() => setFlashMode(!flashMode)}
+          style={styles.backButton}
+          onPress={() => {
+            setIsCameraActive(false);
+            setTorchEnabled(false);
+            navigation.goBack();
+          }}
         >
-          <Text style={styles.flashButtonText}>
-            {flashMode ? '⚡ Açık' : '⚡ Kapalı'}
-          </Text>
+          <Text style={styles.backButtonText}>← Geri</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.captureButton, isProcessing && styles.captureButtonDisabled]}
-          onPress={takePicture}
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <ActivityIndicator color="#FFF" size="large" />
-          ) : (
-            <View style={styles.captureButtonInner} />
-          )}
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.galleryButton}
-          onPress={selectFromGallery}
-        >
-          <Text style={styles.galleryButtonText}>📷</Text>
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>OCR Okuma</Text>
+        <View style={styles.headerSpacer} />
       </View>
+      
+      {device && isCameraActive ? (
+        <>
+          <Camera
+            ref={cameraRef}
+            style={styles.camera}
+            device={device}
+            isActive={isCameraActive}
+            photo={true}
+            torch={torchEnabled ? 'on' : 'off'}
+          />
+          
+          {renderOverlay()}
+          
+          {/* Flash & Torch Controls */}
+          <View style={styles.topControls}>
+            <TouchableOpacity
+              style={[styles.topControlButton, torchEnabled && styles.topControlButtonActive]}
+              onPress={() => setTorchEnabled(!torchEnabled)}
+            >
+              <Text style={styles.topControlIcon}>🔦</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.topControlButton, flashMode !== 'off' && styles.topControlButtonActive]}
+              onPress={() => {
+                const modes = ['off', 'on', 'auto'];
+                const currentIndex = modes.indexOf(flashMode);
+                const nextMode = modes[(currentIndex + 1) % modes.length];
+                setFlashMode(nextMode);
+              }}
+            >
+              <Text style={styles.topControlIcon}>⚡</Text>
+              <Text style={styles.topControlLabel}>
+                {flashMode === 'off' ? 'Kapalı' : flashMode === 'on' ? 'Açık' : 'Oto'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.controls}>
+            <TouchableOpacity
+              style={[styles.captureButton, isProcessing && styles.captureButtonDisabled]}
+              onPress={takePicture}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <ActivityIndicator color="#FFF" size="large" />
+              ) : (
+                <View style={styles.captureButtonInner} />
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.galleryButton}
+              onPress={selectFromGallery}
+            >
+              <Text style={styles.galleryButtonText}>📷</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : !device ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Kamera bulunamadı</Text>
+        </View>
+      ) : (
+        <View style={styles.errorContainer}>
+          <ActivityIndicator color="#FFF" size="large" />
+          <Text style={styles.errorText}>Kamera başlatılıyor...</Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -437,6 +529,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    zIndex: 100,
+  },
+  backButton: {
+    padding: 8,
+  },
+  backButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  headerSpacer: {
+    width: 60,
   },
   camera: {
     flex: 1,
@@ -611,6 +728,48 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  topControls: {
+    position: 'absolute',
+    top: 20,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+    zIndex: 10,
+  },
+  topControlButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  topControlButtonActive: {
+    backgroundColor: 'rgba(33, 150, 243, 0.8)',
+    borderColor: '#fff',
+  },
+  topControlIcon: {
+    fontSize: 22,
+  },
+  topControlLabel: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+  },
+  errorText: {
+    color: '#FFF',
+    fontSize: 16,
   },
 });
 
