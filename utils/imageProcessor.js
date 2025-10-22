@@ -2,7 +2,8 @@
 // Handles image manipulation operations for OCR
 const { Image } = require("react-native");
 const RNFS = require("react-native-fs");
-const ImageResizer = require("react-native-image-resizer");
+const ImageResizerModule = require("@bam.tech/react-native-image-resizer");
+const ImageResizer = ImageResizerModule.default || ImageResizerModule;
 const Logger = require("./logger");
 
 class ImageProcessor {

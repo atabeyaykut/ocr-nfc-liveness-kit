@@ -132,7 +132,14 @@ class LivenessDetectionModule {
   };
 
   stopLiveness = () => {
-    Tts.stop();
+    // 🔧 FIX: Handle TTS stop promise rejection
+    try {
+      Tts.stop().catch(() => {
+        // TTS not available, ignore
+      });
+    } catch (error) {
+      // TTS not available, ignore
+    }
     this.challenges = [];
     this.currentChallengeIndex = 0;
     
@@ -163,6 +170,7 @@ class LivenessDetectionModule {
 
   // Private Methods
   initializeTTS = async () => {
+    // 🔧 FIX: Properly handle all TTS promise rejections
     try {
       await Tts.getInitStatus();
       
@@ -176,6 +184,7 @@ class LivenessDetectionModule {
       
       this.ttsEnabled = true;
     } catch (error) {
+      // Catch ALL TTS errors here - no rethrow
       console.log('TTS not available (running on emulator or no TTS engine), continuing without voice');
       this.ttsEnabled = false;
     }
@@ -195,7 +204,10 @@ class LivenessDetectionModule {
     // Speak instruction
     if (this.ttsEnabled) {
       try {
-        Tts.speak(challenge.voice);
+        // 🔧 FIX: Handle promise rejection
+        Tts.speak(challenge.voice).catch(() => {
+          // TTS failed, continue without voice
+        });
       } catch (error) {
         // TTS not available
       }
