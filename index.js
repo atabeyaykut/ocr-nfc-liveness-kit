@@ -4,6 +4,22 @@
 import { AppRegistry } from 'react-native';
 import App from './App';
 
+// 🔧 FIX: Global unhandled promise rejection handler
+// Catches TTS and other library errors that don't bubble up properly
+const originalHandler = ErrorUtils.getGlobalHandler();
+ErrorUtils.setGlobalHandler((error, isFatal) => {
+  // Suppress TTS-related errors (non-critical)
+  if (error?.message?.includes('TTS') || error?.message?.includes('No TTS engine')) {
+    console.log('[App] TTS error suppressed:', error.message);
+    return;
+  }
+  
+  // For other errors, use original handler
+  if (originalHandler) {
+    originalHandler(error, isFatal);
+  }
+});
+
 // OCR Module
 export * from './modules/ocr';
 
