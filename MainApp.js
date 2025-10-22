@@ -259,6 +259,25 @@ const TestResultScreen = ({ route, navigation }) => {
 // Main App Component
 export default function MainApp() {
   useEffect(() => {
+    // 🚀 OPTIMIZATION: Preload ML Kit model for faster first scan
+    const preloadMLKit = async () => {
+      try {
+        console.log('[App] Preloading ML Kit model...');
+        const TextRecognition = require('@react-native-ml-kit/text-recognition').default;
+        // Trigger model load by recognizing an empty string
+        await TextRecognition.recognize('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
+          .catch(() => {
+            // Silent fail - just for preloading
+          });
+        console.log('[App] ML Kit model preloaded ✓');
+      } catch (error) {
+        // Silent fail - preload is optional
+        console.log('[App] ML Kit preload skipped');
+      }
+    };
+    
+    preloadMLKit();
+    
     // Handle back button on Android
     const backAction = () => {
       Alert.alert('Çıkış', 'Uygulamadan çıkmak istiyor musunuz?', [

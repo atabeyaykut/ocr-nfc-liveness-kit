@@ -25,6 +25,10 @@ const DualSideOCRDemo = ({ navigation }) => {
   const [result, setResult] = useState(null);
   const [logs, setLogs] = useState([]);
   const [currentStep, setCurrentStep] = useState(1); // 1: Front, 2: Back, 3: Results
+  
+  // 📊 OPTIMIZATION: Progress tracking
+  const [progressText, setProgressText] = useState('');
+  const [progressPercent, setProgressPercent] = useState(0);
 
   const ocrReader = useRef(new OCRReaderModule({
     cardType: 'tc_kimlik',
@@ -111,10 +115,29 @@ const DualSideOCRDemo = ({ navigation }) => {
 
     try {
       setIsProcessing(true);
+      setProgressPercent(0);
+      
+      // 📊 Progress: Starting
+      setProgressText('Tarama hazırlanıyor...');
+      setProgressPercent(10);
       addLog('🚀 Çift taraflı tarama başlatılıyor...');
-
+      await new Promise(resolve => setTimeout(resolve, 300)); // Small delay for UI update
+      
+      // 📊 Progress: Processing both sides in parallel
+      setProgressText('Ön ve arka yüz işleniyor...');
+      setProgressPercent(30);
+      
       const result = await ocrReader.processBothSides(frontImage, backImage);
-
+      
+      // 📊 Progress: Merging data
+      setProgressText('Veriler birleştiriliyor...');
+      setProgressPercent(90);
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // 📊 Progress: Complete
+      setProgressText('Tamamlandı!');
+      setProgressPercent(100);
+      
       addLog('✅ Tarama tamamlandı!');
       addLog(`📊 Güven: ${result.data.confidence}%`);
       addLog(`📊 Tamamlanma: ${result.data.completeness}%`);
@@ -128,6 +151,8 @@ const DualSideOCRDemo = ({ navigation }) => {
     } catch (error) {
       addLog(`❌ Tarama hatası: ${error.message}`);
       Alert.alert('Hata', `Tarama başarısız: ${error.message}`);
+      setProgressPercent(0);
+      setProgressText('');
     } finally {
       setIsProcessing(false);
     }
@@ -140,6 +165,8 @@ const DualSideOCRDemo = ({ navigation }) => {
     setResult(null);
     setCurrentStep(1);
     setLogs([]);
+    setProgressPercent(0);
+    setProgressText('');
     addLog('🔄 Sistem sıfırlandı');
   };
 
@@ -260,6 +287,17 @@ const DualSideOCRDemo = ({ navigation }) => {
             <Text style={styles.stepDescription}>
               Her iki tarafı da okuyup karşılaştırmaya hazır
             </Text>
+            
+            {/* 📊 OPTIMIZATION: Progress Indicator */}
+            {isProcessing && (
+              <View style={styles.progressContainer}>
+                <Text style={styles.progressText}>{progressText}</Text>
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${progressPercent}%` }]} />
+                </View>
+                <Text style={styles.progressPercent}>{progressPercent}%</Text>
+              </View>
+            )}
             
             <TouchableOpacity
               style={[styles.button, styles.processButton, isProcessing && styles.buttonDisabled]}
@@ -648,6 +686,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginBottom: 3,
+  },
+  // 📊 OPTIMIZATION: Progress Indicator Styles
+  progressContainer: {
+    backgroundColor: '#E3F2FD',
+    padding: 15,
+    borderRadius: 10,
+    marginVertical: 15,
+    alignItems: 'center',
+  },
+  progressText: {
+    fontSize: 14,
+    color: '#1976D2',
+    fontWeight: '500',
+    marginBottom: 10,
+  },
+  progressBarContainer: {
+    width: '100%',
+    height: 8,
+    backgroundColor: '#BBDEFB',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#2196F3',
+    borderRadius: 4,
+  },
+  progressPercent: {
+    fontSize: 16,
+    color: '#1976D2',
+    fontWeight: 'bold',
   },
 });
 
