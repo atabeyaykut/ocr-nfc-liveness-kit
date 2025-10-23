@@ -1,0 +1,295 @@
+# Azure Pipelines CI/CD Configuration
+# React Native Kimlik SDK - OCR, NFC, Liveness Detection
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+      - release/*
+  tags:
+    include:
+      - v*
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+
+variables:
+  - group: kimlik-sdk-variables
+  - name: nodeVersion
+    value: '18.x'
+  - name: npmRegistry
+    value: 'https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/'
+  - name: isMainBranch
+    value: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
+  - name: isReleaseBranch
+    value: $[startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')]
+  - name: isTagBuild
+    value: $[startsWith(variables['Build.SourceBranch'], 'refs/tags/v')]
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  # Stage 1: Build and Test
+  - stage: BuildTest
+    displayName: 'Build and Test'
+    jobs:
+      # Job 1: Lint and Unit Tests
+      - job: TestJob
+        displayName: 'Run Tests'
+        steps:
+          - task: NodeTool@0
+            displayName: 'Install Node.js'
+            inputs:
+              versionSpec: $(nodeVersion)
+
+          - task: Cache@2
+            displayName: 'Cache node_modules'
+            inputs:
+              key: 'npm | "$(Agent.OS)" | package-lock.json'
+              path: node_modules
+              cacheHitVar: CACHE_RESTORED
+
+          - script: npm ci
+            displayName: 'Install dependencies'
+            condition: ne(variables.CACHE_RESTORED, 'true')
+
+          - script: npm run lint
+            displayName: 'Run ESLint'
+
+          - script: npm test -- --coverage
+            displayName: 'Run unit tests with coverage'
+
+          - task: PublishTestResults@2
+            displayName: 'Publish test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/junit.xml'
+              failTaskOnFailedTests: true
+
+          - task: PublishCodeCoverageResults@1
+            displayName: 'Publish code coverage'
+            inputs:
+              codeCoverageTool: 'Cobertura'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'
+              reportDirectory: '$(System.DefaultWorkingDirectory)/coverage'
+
+      # Job 2: Build Package
+      - job: BuildJob
+        displayName: 'Build Package'
+        dependsOn: TestJob
+        steps:
+          - task: NodeTool@0
+            displayName: 'Install Node.js'
+            inputs:
+              versionSpec: $(nodeVersion)
+
+          - task: Cache@2
+            displayName: 'Cache node_modules'
+            inputs:
+              key: 'npm | "$(Agent.OS)" | package-lock.json'
+              path: node_modules
+
+          - script: npm ci
+            displayName: 'Install dependencies'
+
+          - script: npm run build
+            displayName: 'Build package'
+
+          - script: |
+              npm pack
+              mv *.tgz $(Build.ArtifactStagingDirectory)/
+            displayName: 'Create npm package'
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish package artifact'
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+              ArtifactName: 'npm-package'
+
+  # Stage 2: Security Scanning
+  - stage: Security
+    displayName: 'Security Scanning'
+    dependsOn: BuildTest
+    condition: and(succeeded(), or(eq(variables.isMainBranch, true), eq(variables.isReleaseBranch, true)))
+    jobs:
+      - job: SecurityScan
+        displayName: 'Run Security Scans'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+
+          - script: npm ci
+            displayName: 'Install dependencies'
+
+          - script: npm audit --audit-level=moderate
+            displayName: 'NPM Audit'
+            continueOnError: true
+
+          - task: WhiteSource@21
+            displayName: 'WhiteSource scan'
+            inputs:
+              cwd: '$(System.DefaultWorkingDirectory)'
+              projectName: 'kimlik-sdk'
+            continueOnError: true
+
+  # Stage 3: Android Build
+  - stage: AndroidBuild
+    displayName: 'Android Build'
+    dependsOn: Security
+    condition: and(succeeded(), or(eq(variables.isMainBranch, true), eq(variables.isReleaseBranch, true)))
+    jobs:
+      - job: AndroidJob
+        displayName: 'Build Android'
+        pool:
+          vmImage: 'macOS-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+
+          - script: |
+              cd android
+              ./gradlew clean assembleRelease
+            displayName: 'Build Android APK'
+
+          - task: CopyFiles@2
+            displayName: 'Copy APK'
+            inputs:
+              Contents: '**/*.apk'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish APK'
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+              ArtifactName: 'android-apk'
+
+  # Stage 4: iOS Build
+  - stage: iOSBuild
+    displayName: 'iOS Build'
+    dependsOn: Security
+    condition: and(succeeded(), or(eq(variables.isMainBranch, true), eq(variables.isReleaseBranch, true)))
+    jobs:
+      - job: iOSJob
+        displayName: 'Build iOS'
+        pool:
+          vmImage: 'macOS-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+
+          - script: |
+              cd ios
+              pod install
+            displayName: 'Install CocoaPods'
+
+          - task: Xcode@5
+            displayName: 'Build iOS App'
+            inputs:
+              actions: 'build'
+              scheme: 'OCRMobileSDK'
+              configuration: 'Release'
+              xcWorkspacePath: 'ios/OCRMobileSDK.xcworkspace'
+              xcodeVersion: 'default'
+              packageApp: true
+
+  # Stage 5: Publish to Azure Artifacts
+  - stage: Publish
+    displayName: 'Publish to Azure Artifacts'
+    dependsOn:
+      - AndroidBuild
+      - iOSBuild
+    condition: and(succeeded(), or(eq(variables.isMainBranch, true), eq(variables.isTagBuild, true)))
+    jobs:
+      - job: PublishPackage
+        displayName: 'Publish NPM Package'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+
+          - task: DownloadBuildArtifacts@0
+            displayName: 'Download package artifact'
+            inputs:
+              artifactName: 'npm-package'
+              downloadPath: '$(System.DefaultWorkingDirectory)'
+
+          - task: npmAuthenticate@0
+            displayName: 'Authenticate to Azure Artifacts'
+            inputs:
+              workingFile: '.npmrc'
+              customEndpoint: 'kimlik-sdk-npm-connection'
+
+          - script: |
+              # Set version for tagged builds
+              if [[ "$(Build.SourceBranch)" == refs/tags/* ]]; then
+                VERSION=${BUILD_SOURCEBRANCHNAME#v}
+                npm version $VERSION --no-git-tag-version
+              fi
+            displayName: 'Set package version'
+            condition: eq(variables.isTagBuild, true)
+
+          - script: |
+              # Publish to Azure Artifacts
+              npm publish npm-package/*.tgz --registry $(npmRegistry)
+            displayName: 'Publish to Azure Artifacts'
+
+          # Create GitHub Release
+          - task: GitHubRelease@1
+            displayName: 'Create GitHub Release'
+            condition: eq(variables.isTagBuild, true)
+            inputs:
+              gitHubConnection: 'github-connection'
+              repositoryName: '$(Build.Repository.Name)'
+              action: 'create'
+              target: '$(Build.SourceVersion)'
+              tagSource: 'gitTag'
+              releaseNotesSource: 'inline'
+              releaseNotesInline: |
+                ## Kimlik SDK $(Build.SourceBranchName)
+                
+                ### Features
+                - OCR ile kimlik okuma
+                - NFC ile kimlik okuma
+                - Canlılık testi
+                
+                ### Installation
+                ```bash
+                npm install @turkiye/kimlik-sdk@$(Build.SourceBranchName)
+                ```
+              assets: |
+                $(System.DefaultWorkingDirectory)/npm-package/*.tgz
+                $(System.DefaultWorkingDirectory)/android-apk/**/*.apk
+              changeLogCompareToRelease: 'lastFullRelease'
+              changeLogType: 'commitBased'
+
+  # Stage 6: Deploy Documentation
+  - stage: Documentation
+    displayName: 'Deploy Documentation'
+    dependsOn: Publish
+    condition: and(succeeded(), eq(variables.isMainBranch, true))
+    jobs:
+      - job: DeployDocs
+        displayName: 'Deploy Documentation'
+        steps:
+          - script: |
+              npm ci
+              npm run build:docs || echo "No docs build script"
+            displayName: 'Build documentation'
+
+          - task: AzureStaticWebApp@0
+            displayName: 'Deploy to Azure Static Web Apps'
+            inputs:
+              workingDirectory: '$(System.DefaultWorkingDirectory)'
+              app_location: 'docs'
+              api_location: ''
+              output_location: 'build'
+              azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN)
