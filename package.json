@@ -1,8 +1,9 @@
 {
-  "name": "ocr",
+  "name": "@turkiye/kimlik-sdk",
   "version": "1.0.0",
   "description": "A comprehensive React Native SDK for Optical Character Recognition (OCR), Near Field Communication (NFC), and Liveness Detection functionality with advanced biometric security features.",
-  "main": "index.js",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "directories": {
     "doc": "docs",
     "example": "examples"
@@ -14,7 +15,13 @@
     "start": "react-native start",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{js,jsx,json,md}\"",
-    "postinstall": "node scripts/fix-dependencies.js"
+    "postinstall": "node scripts/fix-dependencies.js",
+    "build": "npm run clean && npm run compile",
+    "clean": "rimraf lib",
+    "compile": "babel modules -d lib --copy-files",
+    "prepublishOnly": "npm run build && npm run test",
+    "version": "npm run format && git add -A .",
+    "postversion": "git push && git push --tags"
   },
   "keywords": [
     "react-native",
@@ -22,10 +29,39 @@
     "nfc",
     "liveness-detection",
     "biometric",
-    "mobile-sdk"
+    "mobile-sdk",
+    "turkish-id",
+    "identity-verification",
+    "document-scanner"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "Turkiye SDK Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/turkiye/kimlik-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/turkiye/kimlik-sdk/issues"
+  },
+  "homepage": "https://github.com/turkiye/kimlik-sdk#readme",
+  "files": [
+    "lib",
+    "ios",
+    "android",
+    "docs",
+    "*.md"
+  ],
+  "peerDependencies": {
+    "react": ">=16.13.1",
+    "react-native": ">=0.63.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/",
+    "access": "restricted"
+  },
   "dependencies": {
     "@bam.tech/react-native-image-resizer": "3.0.11",
     "@react-native-ml-kit/face-detection": "^2.0.1",
