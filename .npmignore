@@ -1,0 +1,87 @@
+# Source files (only include compiled lib)
+modules/
+src/
+components/
+
+# Development files
+__tests__/
+__mocks__/
+*.test.js
+*.spec.js
+jest.config.js
+babel.config.js
+
+# Example and test apps
+App.js
+MainApp.js
+SimpleTestApp.js
+TestEnvironmentApp.js
+ProductionTestApp.js
+LivenessApp.js
+CameraTestScreen.js
+
+# Build files
+android/build/
+ios/build/
+*.xcworkspace/
+*.xcodeproj/
+Podfile.lock
+
+# CI/CD
+.github/
+azure-pipelines.yml
+.circleci/
+.travis.yml
+
+# Tools and scripts
+tools/
+scripts/
+*.sh
+*.bat
+*.ps1
+gradlew
+gradlew.bat
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+.project
+.classpath
+
+# Logs and temp files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation source
+docs/
+
+# Test artifacts
+artifacts/
+coverage/
+files/
+
+# Node modules
+node_modules/
+
+# Local config
+.env
+.env.*
+
+# Patches
+patches/
+
+# Misc
+*.bak
+*.backup
+*.old
+*~
