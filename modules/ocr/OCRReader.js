@@ -63,8 +63,11 @@ class OCRReader {
 
   /**
    * Capture image from camera for OCR processing
-   * @param {object} options - Camera options {quality, maxWidth, maxHeight}
-   * @returns {Promise<string>} - Image URI
+   * NOTE: This method now requires UI integration with OCRCameraCapture component
+   * The camera UI must be rendered separately and call this.setCapturedImage()
+   * 
+   * @param {object} options - Camera options {quality, flash, cameraPosition}
+   * @returns {Promise<string>} - Image URI (resolved when image is captured)
    */
   async captureImage(options = {}) {
     try {
@@ -77,20 +80,34 @@ class OCRReader {
 
       const captureOptions = {
         quality: options.quality || this.config.IMAGE_QUALITY,
-        maxWidth: options.maxWidth || this.config.MAX_IMAGE_SIZE,
-        maxHeight: options.maxHeight || this.config.MAX_IMAGE_SIZE,
-        includeBase64: false,
-        mediaType: "photo",
+        flash: options.flash || 'auto',
+        cameraPosition: options.cameraPosition || 'back',
+        showGuide: options.showGuide !== false,
       };
 
-      // Placeholder implementation - will be replaced with actual camera integration
-      const mockImageUri = "file:///mock/path/captured_image.jpg";
-
-      this.currentImage = mockImageUri;
-      this.status = OCR_STATUS.READY;
-
-      Logger.info("Image captured successfully:", mockImageUri);
-      return mockImageUri;
+      // Return a promise that will be resolved when camera captures image
+      // The UI component (OCRCameraCapture) should call setCapturedImage()
+      return new Promise((resolve, reject) => {
+        this._captureResolve = resolve;
+        this._captureReject = reject;
+        this._captureOptions = captureOptions;
+        
+        // Notify listeners that camera UI should be shown
+        if (this.onStatusChange) {
+          this.onStatusChange(OCR_STATUS.CAPTURING, OCR_STATUS.READY);
+        }
+        
+        Logger.info("Camera capture initiated. Waiting for UI interaction...");
+        
+        // Set timeout for capture (30 seconds)
+        this._captureTimeout = setTimeout(() => {
+          if (this._captureReject) {
+            this.status = OCR_STATUS.READY;
+            this._captureReject(new Error("Image capture timeout"));
+            this._cleanupCapture();
+          }
+        }, 30000);
+      });
     } catch (error) {
       this.status = OCR_STATUS.ERROR;
       Logger.error("Image capture failed:", error.message);
@@ -98,6 +115,65 @@ class OCRReader {
         `${OCR_ERROR_CODES.IMAGE_CAPTURE_FAILED}: ${error.message}`
       );
     }
+  }
+
+  /**
+   * Set captured image (called by camera component)
+   * @param {string} imageUri - URI of captured image
+   * @param {Error} error - Error if capture failed
+   */
+  setCapturedImage(imageUri, error = null) {
+    if (error) {
+      Logger.error("Image capture failed:", error.message);
+      this.status = OCR_STATUS.ERROR;
+      if (this._captureReject) {
+        this._captureReject(error);
+        this._cleanupCapture();
+      }
+      return;
+    }
+
+    if (!imageUri) {
+      const captureError = new Error("No image URI provided");
+      Logger.error("Image capture failed:", captureError.message);
+      this.status = OCR_STATUS.ERROR;
+      if (this._captureReject) {
+        this._captureReject(captureError);
+        this._cleanupCapture();
+      }
+      return;
+    }
+
+    this.currentImage = imageUri;
+    this.status = OCR_STATUS.READY;
+    Logger.info("Image captured successfully:", imageUri);
+
+    if (this._captureResolve) {
+      this._captureResolve(imageUri);
+      this._cleanupCapture();
+    }
+  }
+
+  /**
+   * Get current capture options (used by camera component)
+   * @returns {object|null} Current capture options
+   */
+  getCaptureOptions() {
+    return this._captureOptions;
+  }
+
+  /**
+   * Clean up capture state
+   * @private
+   */
+  _cleanupCapture() {
+    if (this._captureTimeout) {
+      clearTimeout(this._captureTimeout);
+      this._captureTimeout = null;
+    }
+    this._captureResolve = null;
+    this._captureReject = null;
+    this._captureOptions = null;
   }
 
   /**
@@ -465,6 +541,7 @@ class OCRReader {
     this.currentImage = null;
     this.extractedText = null;
     this._cleanupWorkflow();
+    this._cleanupCapture();
     this.performanceMetrics = {
       totalProcessingTime: 0,
       imageProcessingTime: 0,

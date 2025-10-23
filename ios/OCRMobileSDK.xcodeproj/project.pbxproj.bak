@@ -20,6 +20,16 @@
 		7D05A0372EA8E2BA00E6D020 /* OCRModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 7D05A0272EA8E2BA00E6D020 /* OCRModule.m */; };
 		7D05A0382EA8E2BA00E6D020 /* CameraModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D05A0222EA8E2BA00E6D020 /* CameraModule.swift */; };
 		7DE070772EA8ECE5007399EB /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 7DE070762EA8ECE5007399EB /* AppDelegate.m */; };
+		7DE070852EA8ED23007399EB /* NFCReaderModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 7DE0707C2EA8ED23007399EB /* NFCReaderModule.m */; };
+		7DE070862EA8ED23007399EB /* OCRModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DE0707F2EA8ED23007399EB /* OCRModule.swift */; };
+		7DE070872EA8ED23007399EB /* LivenessDetectionModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DE0707B2EA8ED23007399EB /* LivenessDetectionModule.swift */; };
+		7DE070882EA8ED23007399EB /* SecureStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DE070812EA8ED23007399EB /* SecureStorage.swift */; };
+		7DE070892EA8ED23007399EB /* LivenessDetectionModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 7DE0707A2EA8ED23007399EB /* LivenessDetectionModule.m */; };
+		7DE0708A2EA8ED23007399EB /* FrameProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DE070832EA8ED23007399EB /* FrameProcessor.swift */; };
+		7DE0708B2EA8ED23007399EB /* OCRModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 7DE0707E2EA8ED23007399EB /* OCRModule.m */; };
+		7DE0708C2EA8ED23007399EB /* CameraModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DE070792EA8ED23007399EB /* CameraModule.swift */; };
+		7DE0708D2EA8ED23007399EB /* CameraModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 7DE070782EA8ED23007399EB /* CameraModule.m */; };
+		7DE0708E2EA8ED23007399EB /* NFCReaderModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DE0707D2EA8ED23007399EB /* NFCReaderModule.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		EC4CEEE3C3D07D9346717A07 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -46,6 +56,16 @@
 		7DE070742EA8EC8A007399EB /* OCRMobileSDK-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "OCRMobileSDK-Bridging-Header.h"; sourceTree = "<group>"; };
 		7DE070752EA8ECE5007399EB /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		7DE070762EA8ECE5007399EB /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
+		7DE070782EA8ED23007399EB /* CameraModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CameraModule.m; sourceTree = "<group>"; };
+		7DE070792EA8ED23007399EB /* CameraModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraModule.swift; sourceTree = "<group>"; };
+		7DE0707A2EA8ED23007399EB /* LivenessDetectionModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LivenessDetectionModule.m; sourceTree = "<group>"; };
+		7DE0707B2EA8ED23007399EB /* LivenessDetectionModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivenessDetectionModule.swift; sourceTree = "<group>"; };
+		7DE0707C2EA8ED23007399EB /* NFCReaderModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NFCReaderModule.m; sourceTree = "<group>"; };
+		7DE0707D2EA8ED23007399EB /* NFCReaderModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NFCReaderModule.swift; sourceTree = "<group>"; };
+		7DE0707E2EA8ED23007399EB /* OCRModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = OCRModule.m; sourceTree = "<group>"; };
+		7DE0707F2EA8ED23007399EB /* OCRModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRModule.swift; sourceTree = "<group>"; };
+		7DE070812EA8ED23007399EB /* SecureStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStorage.swift; sourceTree = "<group>"; };
+		7DE070832EA8ED23007399EB /* FrameProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameProcessor.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = OCRMobileSDK/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -125,6 +145,37 @@
 			path = OCR;
 			sourceTree = "<group>";
 		};
+		7DE070802EA8ED23007399EB /* Modules */ = {
+			isa = PBXGroup;
+			children = (
+				7DE070782EA8ED23007399EB /* CameraModule.m */,
+				7DE070792EA8ED23007399EB /* CameraModule.swift */,
+				7DE0707A2EA8ED23007399EB /* LivenessDetectionModule.m */,
+				7DE0707B2EA8ED23007399EB /* LivenessDetectionModule.swift */,
+				7DE0707C2EA8ED23007399EB /* NFCReaderModule.m */,
+				7DE0707D2EA8ED23007399EB /* NFCReaderModule.swift */,
+				7DE0707E2EA8ED23007399EB /* OCRModule.m */,
+				7DE0707F2EA8ED23007399EB /* OCRModule.swift */,
+			);
+			path = Modules;
+			sourceTree = "<group>";
+		};
+		7DE070822EA8ED23007399EB /* Security */ = {
+			isa = PBXGroup;
+			children = (
+				7DE070812EA8ED23007399EB /* SecureStorage.swift */,
+			);
+			path = Security;
+			sourceTree = "<group>";
+		};
+		7DE070842EA8ED23007399EB /* Utils */ = {
+			isa = PBXGroup;
+			children = (
+				7DE070832EA8ED23007399EB /* FrameProcessor.swift */,
+			);
+			path = Utils;
+			sourceTree = "<group>";
+		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
 			isa = PBXGroup;
 			children = (
@@ -135,6 +186,9 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				7DE070802EA8ED23007399EB /* Modules */,
+				7DE070822EA8ED23007399EB /* Security */,
+				7DE070842EA8ED23007399EB /* Utils */,
 				7DE070752EA8ECE5007399EB /* AppDelegate.h */,
 				7DE070762EA8ECE5007399EB /* AppDelegate.m */,
 				13B07FAE1A68108700A75B9A /* OCRMobileSDK */,
@@ -326,6 +380,16 @@
 				7D05A02F2EA8E2BA00E6D020 /* NFCReaderModule.swift in Sources */,
 				7D05A0302EA8E2BA00E6D020 /* LivenessDetectionModule.swift in Sources */,
 				7D05A0312EA8E2BA00E6D020 /* LivenessDetectionModule.m in Sources */,
+				7DE070852EA8ED23007399EB /* NFCReaderModule.m in Sources */,
+				7DE070862EA8ED23007399EB /* OCRModule.swift in Sources */,
+				7DE070872EA8ED23007399EB /* LivenessDetectionModule.swift in Sources */,
+				7DE070882EA8ED23007399EB /* SecureStorage.swift in Sources */,
+				7DE070892EA8ED23007399EB /* LivenessDetectionModule.m in Sources */,
+				7DE0708A2EA8ED23007399EB /* FrameProcessor.swift in Sources */,
+				7DE0708B2EA8ED23007399EB /* OCRModule.m in Sources */,
+				7DE0708C2EA8ED23007399EB /* CameraModule.swift in Sources */,
+				7DE0708D2EA8ED23007399EB /* CameraModule.m in Sources */,
+				7DE0708E2EA8ED23007399EB /* NFCReaderModule.swift in Sources */,
 				7D05A0322EA8E2BA00E6D020 /* CameraModule.m in Sources */,
 				7D05A0332EA8E2BA00E6D020 /* NFCReaderModule.m in Sources */,
 				7D05A0342EA8E2BA00E6D020 /* OCRModule.swift in Sources */,

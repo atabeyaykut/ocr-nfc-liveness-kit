@@ -353,10 +353,23 @@ class CameraModule: RCTEventEmitter {
     private func setupCamera(position: String, quality: String) throws {
         // Check permissions
         let authStatus = AVCaptureDevice.authorizationStatus(for: .video)
-        guard authStatus == .authorized else {
-            if authStatus == .notDetermined {
-                // Permission will be requested by system
+        
+        if authStatus == .notDetermined {
+            // Request permission synchronously
+            let semaphore = DispatchSemaphore(value: 0)
+            var granted = false
+            
+            AVCaptureDevice.requestAccess(for: .video) { success in
+                granted = success
+                semaphore.signal()
             }
+            
+            semaphore.wait()
+            
+            if !granted {
+                throw CameraError.permissionDenied
+            }
+        } else if authStatus != .authorized {
             throw CameraError.permissionDenied
         }
         
@@ -396,6 +409,7 @@ class CameraModule: RCTEventEmitter {
         videoOutput.videoSettings = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
         ]
+        videoOutput.alwaysDiscardsLateVideoFrames = true
         
         if session.canAddOutput(videoOutput) {
             session.addOutput(videoOutput)

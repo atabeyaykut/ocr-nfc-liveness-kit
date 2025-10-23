@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0C80B921A6F3F58F76C31292 /* libPods-OCRMobileSDK.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-OCRMobileSDK.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		7D05A02F2EA8E2BA00E6D020 /* NFCReaderModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D05A0262EA8E2BA00E6D020 /* NFCReaderModule.swift */; };
 		7D05A0302EA8E2BA00E6D020 /* LivenessDetectionModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D05A0242EA8E2BA00E6D020 /* LivenessDetectionModule.swift */; };
 		7D05A0312EA8E2BA00E6D020 /* LivenessDetectionModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 7D05A0232EA8E2BA00E6D020 /* LivenessDetectionModule.m */; };
@@ -19,7 +20,6 @@
 		7D05A0362EA8E2BA00E6D020 /* FrameProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D05A02C2EA8E2BA00E6D020 /* FrameProcessor.swift */; };
 		7D05A0372EA8E2BA00E6D020 /* OCRModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 7D05A0272EA8E2BA00E6D020 /* OCRModule.m */; };
 		7D05A0382EA8E2BA00E6D020 /* CameraModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D05A0222EA8E2BA00E6D020 /* CameraModule.swift */; };
-		7DE070772EA8ECE5007399EB /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 7DE070762EA8ECE5007399EB /* AppDelegate.m */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		EC4CEEE3C3D07D9346717A07 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -32,6 +32,7 @@
 		3B4392A12AC88292D35C810B /* Pods-OCRMobileSDK.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OCRMobileSDK.debug.xcconfig"; path = "Target Support Files/Pods-OCRMobileSDK/Pods-OCRMobileSDK.debug.xcconfig"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-OCRMobileSDK.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OCRMobileSDK.release.xcconfig"; path = "Target Support Files/Pods-OCRMobileSDK/Pods-OCRMobileSDK.release.xcconfig"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-OCRMobileSDK.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-OCRMobileSDK.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = OCRMobileSDK/AppDelegate.swift; sourceTree = "<group>"; };
 		7D05A0212EA8E2BA00E6D020 /* CameraModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CameraModule.m; sourceTree = "<group>"; };
 		7D05A0222EA8E2BA00E6D020 /* CameraModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraModule.swift; sourceTree = "<group>"; };
 		7D05A0232EA8E2BA00E6D020 /* LivenessDetectionModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LivenessDetectionModule.m; sourceTree = "<group>"; };
@@ -43,9 +44,6 @@
 		7D05A02A2EA8E2BA00E6D020 /* SecureStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStorage.swift; sourceTree = "<group>"; };
 		7D05A02C2EA8E2BA00E6D020 /* FrameProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameProcessor.swift; sourceTree = "<group>"; };
 		7D05A0392EA8E5DD00E6D020 /* OCRMobileSDK.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = OCRMobileSDK.entitlements; path = OCRMobileSDK/OCRMobileSDK.entitlements; sourceTree = "<group>"; };
-		7DE070742EA8EC8A007399EB /* OCRMobileSDK-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "OCRMobileSDK-Bridging-Header.h"; sourceTree = "<group>"; };
-		7DE070752EA8ECE5007399EB /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
-		7DE070762EA8ECE5007399EB /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = OCRMobileSDK/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -68,6 +66,7 @@
 				7D05A0392EA8E5DD00E6D020 /* OCRMobileSDK.entitlements */,
 				7D05A02E2EA8E2BA00E6D020 /* OCR */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
+				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
@@ -135,14 +134,11 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
-				7DE070752EA8ECE5007399EB /* AppDelegate.h */,
-				7DE070762EA8ECE5007399EB /* AppDelegate.m */,
 				13B07FAE1A68108700A75B9A /* OCRMobileSDK */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
-				7DE070742EA8EC8A007399EB /* OCRMobileSDK-Bridging-Header.h */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -259,13 +255,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-OCRMobileSDK/Pods-OCRMobileSDK-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-OCRMobileSDK/Pods-OCRMobileSDK-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -302,13 +294,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-OCRMobileSDK/Pods-OCRMobileSDK-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-OCRMobileSDK/Pods-OCRMobileSDK-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -322,7 +310,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7DE070772EA8ECE5007399EB /* AppDelegate.m in Sources */,
 				7D05A02F2EA8E2BA00E6D020 /* NFCReaderModule.swift in Sources */,
 				7D05A0302EA8E2BA00E6D020 /* LivenessDetectionModule.swift in Sources */,
 				7D05A0312EA8E2BA00E6D020 /* LivenessDetectionModule.m in Sources */,
@@ -333,6 +320,7 @@
 				7D05A0362EA8E2BA00E6D020 /* FrameProcessor.swift in Sources */,
 				7D05A0372EA8E2BA00E6D020 /* OCRModule.m in Sources */,
 				7D05A0382EA8E2BA00E6D020 /* CameraModule.swift in Sources */,
+				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -352,7 +340,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = OCRMobileSDK/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -383,7 +371,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = OCRMobileSDK/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -474,7 +462,10 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = "$(inherited)  ";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					" ",
+				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
@@ -548,7 +539,10 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = "$(inherited)  ";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					" ",
+				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_OBJC_BRIDGING_HEADER = "OCRMobileSDK/OCRMobileSDK-Bridging-Header.h";
