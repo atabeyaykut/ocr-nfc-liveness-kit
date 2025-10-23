@@ -2,5 +2,7 @@
 // This module handles Optical Character Recognition functionality
 
 export { default as OCRReader } from './OCRReader';
+export { default as SecureOCRReader } from './SecureOCRReader';
 export { default as OCRCamera } from './OCRCamera';
+export { default as OCRCameraCapture } from './OCRCameraCapture';
 export * from './types';

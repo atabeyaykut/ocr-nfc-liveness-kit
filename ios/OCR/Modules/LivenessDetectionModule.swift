@@ -165,10 +165,23 @@ class LivenessDetectionModule: RCTEventEmitter {
     private func setupCamera() throws {
         // Request camera permission
         let authStatus = AVCaptureDevice.authorizationStatus(for: .video)
-        guard authStatus == .authorized else {
-            if authStatus == .notDetermined {
-                // Permission will be requested by the system
+        
+        if authStatus == .notDetermined {
+            // Request permission synchronously
+            let semaphore = DispatchSemaphore(value: 0)
+            var granted = false
+            
+            AVCaptureDevice.requestAccess(for: .video) { success in
+                granted = success
+                semaphore.signal()
             }
+            
+            semaphore.wait()
+            
+            if !granted {
+                throw LivenessError.cameraPermissionDenied
+            }
+        } else if authStatus != .authorized {
             throw LivenessError.cameraPermissionDenied
         }
         
@@ -194,6 +207,7 @@ class LivenessDetectionModule: RCTEventEmitter {
         output.videoSettings = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
         ]
+        output.alwaysDiscardsLateVideoFrames = true
         
         guard session.canAddOutput(output) else {
             throw LivenessError.cameraSetupFailed
@@ -446,6 +460,18 @@ class LivenessDetectionModule: RCTEventEmitter {
     private func handleFaceDetected(_ faceObservation: VNFaceObservation) {
         let faceBounds = faceObservation.boundingBox
         
+        // Track depth changes (face size variations indicate 3D movement)
+        if let previousBounds = previousFaceBounds {
+            let previousArea = previousBounds.width * previousBounds.height
+            let currentArea = faceBounds.width * faceBounds.height
+            let depthChange = abs(currentArea - previousArea) / previousArea
+            
+            depthHistory.append(depthChange)
+            if depthHistory.count > 30 {
+                depthHistory.removeFirst()
+            }
+        }
+        
         // Send face detected event
         sendEvent(
             withName: "FACE_DETECTED",
@@ -508,10 +534,36 @@ class LivenessDetectionModule: RCTEventEmitter {
         
         // Calculate average edge intensity
         let extent = outputImage.extent
-        guard let cgImage = context.createCGImage(outputImage, from: extent) else { return 0.0 }
+        let sampleRect = CGRect(
+            x: extent.midX - extent.width / 4,
+            y: extent.midY - extent.height / 4,
+            width: extent.width / 2,
+            height: extent.height / 2
+        )
         
-        // Simple texture metric (would need more sophisticated analysis in production)
-        return 0.7 // Placeholder
+        guard let cgImage = context.createCGImage(outputImage, from: sampleRect) else { return 0.0 }
+        guard let dataProvider = cgImage.dataProvider,
+              let data = dataProvider.data,
+              let bytes = CFDataGetBytePtr(data) else { return 0.0 }
+        
+        let bytesPerPixel = cgImage.bitsPerPixel / 8
+        let bytesPerRow = cgImage.bytesPerRow
+        let totalPixels = cgImage.width * cgImage.height
+        
+        var edgeIntensitySum = 0.0
+        
+        for y in 0..<cgImage.height {
+            for x in 0..<cgImage.width {
+                let offset = y * bytesPerRow + x * bytesPerPixel
+                edgeIntensitySum += Double(bytes[offset])
+            }
+        }
+        
+        let averageEdgeIntensity = edgeIntensitySum / Double(totalPixels)
+        let normalizedTexture = averageEdgeIntensity / 255.0
+        
+        // Higher edge intensity = more texture = more likely real face
+        return normalizedTexture
     }
     
     // MARK: - Helper Methods

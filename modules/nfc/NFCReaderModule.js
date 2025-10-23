@@ -22,10 +22,9 @@ import NfcManager, {
   NfcTech, 
   NfcEvents,
   Ndef,
-  IsoDep,
-  NfcA,
-  MifareClassic
+  NfcAdapter 
 } from 'react-native-nfc-manager';
+import { NFCFallbackModal } from '../../components/NFCFallbackModal';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 
 // NFC Command constants for Turkish ID cards
@@ -34,6 +33,19 @@ const NFC_COMMANDS = {
   READ_PERSONAL: [0x00, 0xB0, 0x01, 0x00, 0x00],
   READ_ID: [0x00, 0xB0, 0x02, 0x00, 0x00],
   READ_BIRTH: [0x00, 0xB0, 0x03, 0x00, 0x00],
+};
+
+// NFC Error Codes
+const NFC_ERROR_CODES = {
+  PACE_REQUIRED: 'PACE_REQUIRED',
+  BAC_REQUIRED: 'BAC_REQUIRED',
+  SECURITY_NOT_SATISFIED: 'SECURITY_NOT_SATISFIED',
+  AUTHENTICATION_FAILED: 'AUTHENTICATION_FAILED',
+  CARD_NOT_SUPPORTED: 'CARD_NOT_SUPPORTED',
+  TIMEOUT: 'TIMEOUT',
+  PERMISSION_DENIED: 'PERMISSION_DENIED',
+  NFC_DISABLED: 'NFC_DISABLED',
+  TAG_LOST: 'TAG_LOST',
 };
 
 class NFCReaderModule {
@@ -338,15 +350,79 @@ class NFCReaderModule {
     if (!response || response.length < 2) return false;
     const sw1 = response[response.length - 2];
     const sw2 = response[response.length - 1];
+    
+    // Check for PACE/BAC requirement (CRITICAL for modern Turkish ID cards)
+    if (sw1 === 0x69 && sw2 === 0x82) {
+      throw new Error(NFC_ERROR_CODES.SECURITY_NOT_SATISFIED);
+    }
+    
+    // Check for BAC requirement
+    if (sw1 === 0x63 && sw2 === 0x00) {
+      throw new Error(NFC_ERROR_CODES.BAC_REQUIRED);
+    }
+    
+    // Check for authentication failure
+    if (sw1 === 0x69 && sw2 === 0x88) {
+      throw new Error(NFC_ERROR_CODES.AUTHENTICATION_FAILED);
+    }
+    
+    // Check for file not found (unsupported card)
+    if (sw1 === 0x6A && sw2 === 0x82) {
+      throw new Error(NFC_ERROR_CODES.CARD_NOT_SUPPORTED);
+    }
+    
     return sw1 === 0x90 && sw2 === 0x00;
   };
 
   handleError = (error) => {
+    let errorMessage = error.message || 'NFC okuma hatası';
+    let errorCode = 'NFC_READ_ERROR';
+    let fallbackOption = null;
+    
+    // Detect PACE requirement and provide user-friendly messages
+    if (error.message === NFC_ERROR_CODES.SECURITY_NOT_SATISFIED ||
+        error.message === NFC_ERROR_CODES.PACE_REQUIRED) {
+      errorCode = NFC_ERROR_CODES.PACE_REQUIRED;
+      errorMessage = 'Bu kimlik kartı gelişmiş güvenlik protokolü (PACE) gerektiriyor.';
+      fallbackOption = {
+        type: 'MANUAL_MRZ_ENTRY',
+        title: 'Manuel Veri Girişi',
+        message: 'Kimlik kartınızın arka yüzündeki MRZ kodunu manuel olarak girebilirsiniz.',
+        action: 'MRZ Girişi Yap',
+      };
+    } else if (error.message === NFC_ERROR_CODES.BAC_REQUIRED) {
+      errorCode = NFC_ERROR_CODES.BAC_REQUIRED;
+      errorMessage = 'Bu kart temel erişim kontrolü (BAC) gerektiriyor.';
+      fallbackOption = {
+        type: 'MANUAL_MRZ_ENTRY',
+        title: 'Manuel Veri Girişi',
+        message: 'MRZ kodunu manuel olarak girebilirsiniz.',
+        action: 'MRZ Girişi Yap',
+      };
+    } else if (error.message === NFC_ERROR_CODES.AUTHENTICATION_FAILED) {
+      errorCode = NFC_ERROR_CODES.AUTHENTICATION_FAILED;
+      errorMessage = 'Kart kimlik doğrulaması başarısız. Lütfen kartı tekrar okutun.';
+    } else if (error.message === NFC_ERROR_CODES.CARD_NOT_SUPPORTED) {
+      errorCode = NFC_ERROR_CODES.CARD_NOT_SUPPORTED;
+      errorMessage = 'Bu kart tipi desteklenmiyor veya kart bozuk olabilir.';
+    } else if (error.message && error.message.includes('timeout')) {
+      errorCode = NFC_ERROR_CODES.TIMEOUT;
+      errorMessage = 'Okuma zaman aşımına uğradı. Kartı cihazın arkasında sabit tutun.';
+    } else if (error.message && error.message.includes('Tag was lost')) {
+      errorCode = NFC_ERROR_CODES.TAG_LOST;
+      errorMessage = 'Kart okuma sırasında hareket etti. Lütfen tekrar deneyin.';
+    }
+    
     const errorResponse = {
       success: false,
-      error: error.message || 'NFC okuma hatası',
-      code: 'NFC_READ_ERROR',
+      error: errorMessage,
+      code: errorCode,
+      technicalError: error.message, // For debugging
+      fallback: fallbackOption,
+      timestamp: new Date().toISOString(),
     };
+
+    console.error('[NFC Error]', errorResponse);
 
     if (this.callbacks.onError) {
       this.callbacks.onError(errorResponse);
@@ -359,6 +435,8 @@ export const NFCReaderScreen = ({ navigation, route }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [nfcResult, setNfcResult] = useState(null);
   const [error, setError] = useState(null);
+  const [showFallbackModal, setShowFallbackModal] = useState(false);
+  const [fallbackErrorInfo, setFallbackErrorInfo] = useState({});
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const nfcModule = useRef(new NFCReaderModule()).current;
 
@@ -370,10 +448,34 @@ export const NFCReaderScreen = ({ navigation, route }) => {
       Vibration.vibrate([100, 200, 100]);
     });
 
-    nfcModule.onNFCError((error) => {
-      setError(error.error);
+    nfcModule.onNFCError((errorResponse) => {
+      setError(errorResponse.error);
       setIsScanning(false);
-      Alert.alert('NFC Hatası', error.error);
+      
+      // Check if PACE/BAC fallback is available
+      if (errorResponse.fallback && errorResponse.fallback.type === 'MANUAL_MRZ_ENTRY') {
+        setFallbackErrorInfo({
+          title: errorResponse.fallback.title,
+          message: errorResponse.error,
+          action: errorResponse.fallback.action,
+        });
+        
+        // Show fallback option in alert
+        Alert.alert(
+          'NFC Okuma Başarısız',
+          errorResponse.error,
+          [
+            { text: 'İptal', style: 'cancel' },
+            {
+              text: errorResponse.fallback.action || 'Manuel Giriş',
+              onPress: () => setShowFallbackModal(true),
+            },
+          ]
+        );
+      } else {
+        // Regular error alert
+        Alert.alert('NFC Hatası', errorResponse.error);
+      }
     });
 
     nfcModule.onNFCStarted(() => {
@@ -444,6 +546,38 @@ export const NFCReaderScreen = ({ navigation, route }) => {
   const stopScanning = async () => {
     await nfcModule.stopNFC();
     setIsScanning(false);
+  };
+
+  const handleMRZEntered = (parsedData) => {
+    console.log('[NFC Fallback] MRZ data entered:', parsedData);
+    
+    // Close modal
+    setShowFallbackModal(false);
+    
+    // Set result as if it came from NFC
+    const fallbackResult = {
+      success: true,
+      parsedFields: parsedData,
+      source: 'MANUAL_MRZ',
+      timestamp: new Date().toISOString(),
+    };
+    
+    setNfcResult(fallbackResult);
+    setError(null);
+    
+    // Vibrate to indicate success
+    Vibration.vibrate([100, 200, 100]);
+    
+    // Show success message
+    Alert.alert(
+      'İşlem Başarılı',
+      'MRZ verileri başarıyla işlendi.',
+      [{ text: 'Tamam' }]
+    );
+  };
+
+  const handleFallbackCancel = () => {
+    setShowFallbackModal(false);
   };
 
   const startPulseAnimation = () => {
@@ -575,6 +709,14 @@ export const NFCReaderScreen = ({ navigation, route }) => {
       
       {isScanning && renderScanning()}
       {nfcResult && renderResult()}
+      
+      {/* PACE Fallback Modal */}
+      <NFCFallbackModal
+        visible={showFallbackModal}
+        onMRZEntered={handleMRZEntered}
+        onCancel={handleFallbackCancel}
+        errorInfo={fallbackErrorInfo}
+      />
     </View>
   );
 };
@@ -742,4 +884,5 @@ const styles = StyleSheet.create({
   },
 });
 
-export default NFCReaderModule;
+export { NFC_ERROR_CODES, NFCReaderModule };
+export default NFCReaderScreen;

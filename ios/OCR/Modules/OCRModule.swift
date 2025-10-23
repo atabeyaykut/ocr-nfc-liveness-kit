@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import React
 import Vision
 
@@ -226,34 +227,161 @@ class OCRModule: RCTEventEmitter {
     }
     
     private func performOCR(image: UIImage) throws -> OCRResult {
-        // TODO: Replace with actual OCR engine (e.g., Vision framework, ML Kit)
-        // This is a mock implementation
-        
         let startTime = Date()
         
-        // Simulate OCR processing
-        Thread.sleep(forTimeInterval: 1.0)
+        // Initialize frame processor
+        let frameProcessor = FrameProcessor()
+        
+        // Step 1: Analyze image quality
+        let quality = frameProcessor.analyzeQuality(image)
+        
+        // Check if image quality is acceptable
+        guard quality.overallScore > 0.5 else {
+            throw OCRError.poorImageQuality
+        }
+        
+        // Step 2: Preprocess image
+        guard let preprocessedImage = frameProcessor.preprocessForOCR(image) else {
+            throw OCRError.preprocessingFailed
+        }
+        
+        // Step 3: Perform OCR using Vision framework
+        guard let cgImage = preprocessedImage.cgImage else {
+            throw OCRError.invalidImage
+        }
+        
+        var extractedText = ""
+        var recognitionConfidence: Float = 0.0
+        
+        let semaphore = DispatchSemaphore(value: 0)
+        var ocrError: Error?
+        
+        // Create Vision request
+        let request = VNRecognizeTextRequest { request, error in
+            if let error = error {
+                ocrError = error
+                semaphore.signal()
+                return
+            }
+            
+            guard let observations = request.results as? [VNRecognizedTextObservation] else {
+                semaphore.signal()
+                return
+            }
+            
+            // Extract text from observations
+            var allText: [String] = []
+            var confidenceSum: Float = 0.0
+            
+            for observation in observations {
+                guard let topCandidate = observation.topCandidates(1).first else { continue }
+                allText.append(topCandidate.string)
+                confidenceSum += topCandidate.confidence
+            }
+            
+            extractedText = allText.joined(separator: "\n")
+            recognitionConfidence = observations.isEmpty ? 0.0 : confidenceSum / Float(observations.count)
+            
+            semaphore.signal()
+        }
+        
+        // Configure request
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        request.recognitionLanguages = ["tr-TR", "en-US"] // Turkish and English
+        
+        // Perform request
+        let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        
+        do {
+            try requestHandler.perform([request])
+        } catch {
+            throw OCRError.visionRequestFailed
+        }
+        
+        // Wait for completion
+        semaphore.wait()
+        
+        if let error = ocrError {
+            throw error
+        }
+        
+        // Step 4: Parse extracted fields from text
+        let fields = parseFields(from: extractedText, confidence: recognitionConfidence)
         
         let processingTime = Int(Date().timeIntervalSince(startTime) * 1000)
         
-        // Mock extracted fields
-        let fields = OCRFields(
-            tcNo: FieldData(value: "12345678901", confidence: 0.95),
-            name: FieldData(value: "AHMET", confidence: 0.92),
-            surname: FieldData(value: "YILMAZ", confidence: 0.93),
-            birthDate: FieldData(value: "01.01.1990", confidence: 0.91),
-            documentNo: FieldData(value: "A12345678", confidence: 0.94)
-        )
+        // Calculate overall confidence
+        let overallConfidence = (recognitionConfidence + Float(quality.overallScore)) / 2.0
+        
+        // Determine lighting condition
+        let lightingCondition: String
+        if quality.brightness < 0.3 {
+            lightingCondition = "DARK"
+        } else if quality.brightness > 0.8 {
+            lightingCondition = "BRIGHT"
+        } else {
+            lightingCondition = "GOOD"
+        }
         
         return OCRResult(
             status: "SUCCESS",
-            confidence: 0.93,
+            confidence: overallConfidence,
             fields: fields,
             processingTime: processingTime,
-            imageQuality: 0.88,
-            hasGlare: false,
-            isBlurry: false,
-            lightingCondition: "GOOD"
+            imageQuality: Float(quality.overallScore),
+            hasGlare: quality.hasGlare,
+            isBlurry: quality.isBlurry,
+            lightingCondition: lightingCondition
+        )
+    }
+    
+    /**
+     * Parse OCR fields from extracted text
+     * This uses regex patterns to identify Turkish ID card fields
+     */
+    private func parseFields(from text: String, confidence: Float) -> OCRFields {
+        var tcNo = ""
+        var name = ""
+        var surname = ""
+        var birthDate = ""
+        var documentNo = ""
+        
+        // Parse TC No (11 digits)
+        if let tcMatch = text.range(of: "\\b\\d{11}\\b", options: .regularExpression) {
+            tcNo = String(text[tcMatch])
+        }
+        
+        // Parse Name (after "ADI" or "NAME" keyword)
+        if let nameMatch = text.range(of: "(?:ADI|NAME)[:\\s]+([A-ZÇĞİÖŞÜ]+)", options: .regularExpression) {
+            name = String(text[nameMatch]).replacingOccurrences(of: "ADI", with: "")
+                .replacingOccurrences(of: "NAME", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        // Parse Surname (after "SOYADI" or "SURNAME" keyword)
+        if let surnameMatch = text.range(of: "(?:SOYADI|SURNAME)[:\\s]+([A-ZÇĞİÖŞÜ]+)", options: .regularExpression) {
+            surname = String(text[surnameMatch]).replacingOccurrences(of: "SOYADI", with: "")
+                .replacingOccurrences(of: "SURNAME", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        // Parse Birth Date (DD.MM.YYYY format)
+        if let dateMatch = text.range(of: "\\b\\d{2}\\.\\d{2}\\.\\d{4}\\b", options: .regularExpression) {
+            birthDate = String(text[dateMatch])
+        }
+        
+        // Parse Document No (letter + digits)
+        if let docMatch = text.range(of: "\\b[A-Z]\\d{8}\\b", options: .regularExpression) {
+            documentNo = String(text[docMatch])
+        }
+        
+        return OCRFields(
+            tcNo: FieldData(value: tcNo, confidence: confidence),
+            name: FieldData(value: name, confidence: confidence * 0.95),
+            surname: FieldData(value: surname, confidence: confidence * 0.95),
+            birthDate: FieldData(value: birthDate, confidence: confidence * 0.93),
+            documentNo: FieldData(value: documentNo, confidence: confidence * 0.94)
         )
     }
 }
@@ -282,4 +410,29 @@ struct OCRFields: Codable {
 struct FieldData: Codable {
     let value: String
     let confidence: Float
+}
+
+// MARK: - Error Types
+
+enum OCRError: Error {
+    case invalidImage
+    case poorImageQuality
+    case preprocessingFailed
+    case visionRequestFailed
+    case noTextDetected
+    
+    var localizedDescription: String {
+        switch self {
+        case .invalidImage:
+            return "Invalid image format"
+        case .poorImageQuality:
+            return "Image quality too poor for OCR"
+        case .preprocessingFailed:
+            return "Failed to preprocess image"
+        case .visionRequestFailed:
+            return "Vision framework request failed"
+        case .noTextDetected:
+            return "No text detected in image"
+        }
+    }
 }
