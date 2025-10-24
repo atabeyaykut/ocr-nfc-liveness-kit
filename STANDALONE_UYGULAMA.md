@@ -36,6 +36,7 @@ cd ios && pod install && cd ..
 
 ### 3️⃣ Android'de Çalıştırma
 
+#### Linux / macOS:
 ```bash
 # Metro bundler'ı başlatın (ayrı bir terminal penceresi)
 npm start
@@ -46,6 +47,26 @@ npm run android
 # VEYA
 npx react-native run-android
 ```
+
+#### Windows (PowerShell):
+```powershell
+# İki PowerShell penceresi açın
+
+# Terminal 1: Metro bundler
+npm start
+
+# Terminal 2: Android build
+npm run android
+
+# Sorun yaşarsanız:
+cd android
+.\gradlew --stop
+.\BUILD_CLEAN.ps1
+npm run android
+```
+
+**⚠️ Windows'ta Gradle Daemon Crash?**
+Detaylı çözüm için: `android/FIX_WINDOWS_BUILD.md`
 
 **Android Gereksinimleri:**
 - Android 11 (API Level 30) veya üzeri
@@ -121,12 +142,35 @@ npm start -- --reset-cache
 ```
 
 ### Android Build Hataları
+
+#### Linux / macOS:
 ```bash
 # Gradle cache'i temizle
 cd android && ./gradlew clean && cd ..
 
 # Node modules'u yeniden yükle
 rm -rf node_modules && npm install
+```
+
+#### Windows (PowerShell):
+```powershell
+# Gradle daemon crash - HIZLI ÇÖZÜM
+cd android
+.\QUICK_FIX.bat
+
+# Manuel temizlik
+.\gradlew --stop
+.\gradlew clean --no-daemon
+Remove-Item -Recurse -Force $env:USERPROFILE\.gradle\caches
+Remove-Item -Recurse -Force $env:USERPROFILE\.gradle\daemon
+
+# Node modules yenile
+cd ..
+Remove-Item -Recurse -Force node_modules
+npm install
+
+# Detaylı çözüm kılavuzu
+# android/FIX_WINDOWS_BUILD.md dosyasına bakın
 ```
 
 ### iOS Build Hataları

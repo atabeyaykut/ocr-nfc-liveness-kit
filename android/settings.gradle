@@ -20,10 +20,12 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-  repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+  // Use PREFER_PROJECT to allow react-native-reanimated's own repositories
+  repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
   repositories {
     google()
     mavenCentral()
+    mavenLocal()
     maven { url "https://repo1.maven.org/maven2/" }
     maven { url "https://www.jitpack.io" }
     // React Native and JSC artifacts - made optional for CI/CD
