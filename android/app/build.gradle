@@ -23,9 +23,6 @@ android {
     buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false"
     buildConfigField "boolean", "IS_HERMES_ENABLED", "true"
     
-    // react-native-camera variant selection (use general variant)
-    missingDimensionStrategy 'react-native-camera', 'general'
-    
     // Only build for ARM architectures (skip x86 emulators)
     ndk {
       abiFilters "armeabi-v7a", "arm64-v8a"
