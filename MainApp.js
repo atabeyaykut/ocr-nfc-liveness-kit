@@ -27,6 +27,7 @@ import { OCRReaderScreen } from './modules/ocr/OCRReaderModule';
 import { NFCReaderScreen } from './modules/nfc/NFCReaderModule';
 import { LivenessDetectionScreen } from './modules/liveness/LivenessDetectionModule';
 import DualSideOCRDemo from './examples/DualSideOCRDemo';
+import SecureOCRExample from './examples/SecureOCRExample';
 
 const Stack = createStackNavigator();
 
@@ -63,7 +64,7 @@ const MainMenuScreen = ({ navigation }) => {
   };
 
   const navigateToModule = async (moduleName) => {
-    if (moduleName === 'OCR' || moduleName === 'DualSideOCR' || moduleName === 'Liveness') {
+    if (moduleName === 'OCR' || moduleName === 'DualSideOCR' || moduleName === 'Liveness' || moduleName === 'SecureOCR') {
       if (!permissions.camera) {
         const granted = await requestCameraPermission();
         if (!granted) {
@@ -195,6 +196,29 @@ const MainMenuScreen = ({ navigation }) => {
               </Text>
             </View>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.moduleCard, { backgroundColor: '#FFF9E6' }]}
+            onPress={() => navigateToModule('SecureOCR')}
+            activeOpacity={0.8}
+          >
+            <Image 
+              source={{ uri: 'https://img.icons8.com/color/80/000000/security-checked.png' }}
+              style={styles.moduleIcon}
+            />
+            <Text style={styles.moduleTitle}>🔒 Güvenli OCR</Text>
+            <Text style={styles.moduleDescription}>
+              Token-based güvenli okuma (PII verisi bridge'den geçmez)
+            </Text>
+            <View style={[
+              styles.permissionBadge,
+              { backgroundColor: permissions.camera ? '#4CAF50' : '#FF9800' }
+            ]}>
+              <Text style={styles.permissionText}>
+                {permissions.camera ? '✓ Hazır' : '⚠ İzin Gerekli'}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.infoSection}>
@@ -312,6 +336,7 @@ export default function MainApp() {
         <Stack.Screen name="DualSideOCR" component={DualSideOCRDemo} />
         <Stack.Screen name="NFC" component={NFCReaderScreen} />
         <Stack.Screen name="Liveness" component={LivenessDetectionScreen} />
+        <Stack.Screen name="SecureOCR" component={SecureOCRExample} />
         <Stack.Screen name="TestResult" component={TestResultScreen} />
       </Stack.Navigator>
     </NavigationContainer>

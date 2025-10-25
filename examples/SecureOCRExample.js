@@ -3,9 +3,15 @@
  * 
  * Demonstrates how to use the token-based secure OCR implementation
  * that fixes SEC-001: PII leakage through React Native bridge
+ * 
+ * GÜVENLIK ÖZELLİKLERİ:
+ * - PII verisi asla React Native bridge'den geçmez
+ * - Token-based veri alışverişi (güvenli)
+ * - 5 dakika TTL (otomatik token silme)
+ * - One-time token kullanımı
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,52 +20,60 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  SafeAreaView,
+  StatusBar,
+  ScrollView,
 } from 'react-native';
-import { launchCamera } from 'react-native-image-picker';
+import ImageCropPicker from 'react-native-image-crop-picker';
 import SecureOCRReader from '../modules/ocr/SecureOCRReader';
 
-const SecureOCRExample = () => {
+const SecureOCRExample = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [imageUri, setImageUri] = useState(null);
   const [tokenResponse, setTokenResponse] = useState(null);
   const [ocrResult, setOcrResult] = useState(null);
+  const [ocrReader, setOcrReader] = useState(null);
   
-  // Initialize OCR reader
-  const ocrReader = new SecureOCRReader({
-    onSuccess: (event) => {
-      console.log('OCR Success Event:', event);
-    },
-    onError: (error) => {
-      console.error('OCR Error Event:', error);
-    },
-  });
+  // Initialize OCR reader on mount
+  useEffect(() => {
+    const reader = new SecureOCRReader({
+      onSuccess: (event) => {
+        console.log('[SecureOCR] Success Event:', event);
+      },
+      onError: (error) => {
+        console.error('[SecureOCR] Error Event:', error);
+        Alert.alert('OCR Hatası', error.message);
+      },
+    });
+    setOcrReader(reader);
+    
+    // Cleanup on unmount
+    return () => {
+      reader.destroy();
+    };
+  }, []);
   
   /**
    * Step 1: Capture image
    */
-  const handleCaptureImage = () => {
-    launchCamera(
-      {
+  const handleCaptureImage = async () => {
+    try {
+      const image = await ImageCropPicker.openCamera({
+        width: 1920,
+        height: 1080,
+        cropping: false,
+        includeBase64: false,
         mediaType: 'photo',
-        quality: 1,
-        saveToPhotos: false,
-      },
-      (response) => {
-        if (response.didCancel) {
-          return;
-        }
-        
-        if (response.errorCode) {
-          Alert.alert('Error', response.errorMessage);
-          return;
-        }
-        
-        const uri = response.assets[0].uri;
-        setImageUri(uri);
-        setTokenResponse(null);
-        setOcrResult(null);
+      });
+      
+      setImageUri(image.path);
+      setTokenResponse(null);
+      setOcrResult(null);
+    } catch (error) {
+      if (error.code !== 'E_PICKER_CANCELLED') {
+        Alert.alert('Error', error.message || 'Failed to capture image');
       }
-    );
+    }
   };
   
   /**
@@ -67,7 +81,12 @@ const SecureOCRExample = () => {
    */
   const handleScan = async () => {
     if (!imageUri) {
-      Alert.alert('Error', 'Please capture an image first');
+      Alert.alert('Hata', 'Önce fotoğraf çekin');
+      return;
+    }
+    
+    if (!ocrReader) {
+      Alert.alert('Hata', 'OCR modülü yükleniyor, lütfen bekleyin');
       return;
     }
     
@@ -86,26 +105,26 @@ const SecureOCRExample = () => {
       setTokenResponse(response);
       
       Alert.alert(
-        'Scan Successful',
-        `Confidence: ${(response.confidence * 100).toFixed(1)}%\n\n` +
+        'Tarama Başarılı',
+        `Güven: ${(response.confidence * 100).toFixed(1)}%\n\n` +
         `Session Token: ${response.sessionToken.substring(0, 8)}...\n\n` +
-        `⚠️ Note: No PII data was transmitted through the bridge!`,
+        `🔒 PII verisi bridge'den geçmedi (güvenli)`,
         [
           {
-            text: 'Retrieve Data',
+            text: 'Veriyi Al',
             onPress: () => handleGetResult(response.sessionToken),
           },
-          { text: 'Cancel', style: 'cancel' },
+          { text: 'İptal', style: 'cancel' },
         ]
       );
     } catch (error) {
       console.error('Scan Error:', error);
       
       Alert.alert(
-        'Scan Failed',
-        `Error: ${error.message}\n` +
-        `Code: ${error.code}\n` +
-        `Retryable: ${error.retryable ? 'Yes' : 'No'}`
+        'Tarama Başarısız',
+        `Hata: ${error.message}\n` +
+        `Kod: ${error.code}\n` +
+        `Tekrar Denenebilir: ${error.retryable ? 'Evet' : 'Hayır'}`
       );
     } finally {
       setLoading(false);
@@ -116,6 +135,10 @@ const SecureOCRExample = () => {
    * Step 3: Retrieve full result using token (contains PII)
    */
   const handleGetResult = async (sessionToken) => {
+    if (!ocrReader) {
+      Alert.alert('Hata', 'OCR modülü hazır değil');
+      return;
+    }
     setLoading(true);
     
     try {
@@ -131,21 +154,21 @@ const SecureOCRExample = () => {
       setOcrResult(result);
       
       Alert.alert(
-        'Data Retrieved',
+        'Veri Alındı',
         `TC No: ${result.fields.tcNo.value}\n` +
-        `Name: ${result.fields.name.value}\n` +
-        `Surname: ${result.fields.surname.value}\n` +
-        `Birth Date: ${result.fields.birthDate.value}\n\n` +
-        `⚠️ Token has been deleted (one-time use)`
+        `Ad: ${result.fields.name.value}\n` +
+        `Soyad: ${result.fields.surname.value}\n` +
+        `Doğum Tarihi: ${result.fields.birthDate.value}\n\n` +
+        `🔒 Token silindi (tek kullanımlık)`
       );
     } catch (error) {
       console.error('Get Result Error:', error);
       
       Alert.alert(
-        'Retrieval Failed',
+        'Veri Alınamadı',
         error.code === 'OCR_TOKEN_EXPIRED'
-          ? 'Session token has expired (5 minute TTL)'
-          : `Error: ${error.message}`
+          ? 'Token süresi doldu (5 dakika TTL)'
+          : `Hata: ${error.message}`
       );
     } finally {
       setLoading(false);
@@ -157,7 +180,12 @@ const SecureOCRExample = () => {
    */
   const handleScanAndGetResult = async () => {
     if (!imageUri) {
-      Alert.alert('Error', 'Please capture an image first');
+      Alert.alert('Hata', 'Önce fotoğraf çekin');
+      return;
+    }
+    
+    if (!ocrReader) {
+      Alert.alert('Hata', 'OCR modülü hazır değil');
       return;
     }
     
@@ -170,14 +198,14 @@ const SecureOCRExample = () => {
       setOcrResult(result);
       
       Alert.alert(
-        'OCR Complete',
+        'OCR Tamamlandı',
         `TC No: ${result.fields.tcNo.value}\n` +
-        `Name: ${result.fields.name.value}\n` +
-        `Surname: ${result.fields.surname.value}`
+        `Ad: ${result.fields.name.value}\n` +
+        `Soyad: ${result.fields.surname.value}`
       );
     } catch (error) {
       console.error('Scan and Get Result Error:', error);
-      Alert.alert('Error', error.message);
+      Alert.alert('Hata', error.message);
     } finally {
       setLoading(false);
     }
@@ -188,38 +216,63 @@ const SecureOCRExample = () => {
    */
   const handleCheckToken = async () => {
     if (!tokenResponse) {
-      Alert.alert('Error', 'No token available');
+      Alert.alert('Hata', 'Token bulunamadı');
+      return;
+    }
+    
+    if (!ocrReader) {
+      Alert.alert('Hata', 'OCR modülü hazır değil');
       return;
     }
     
     const isValid = await ocrReader.isTokenValid(tokenResponse.sessionToken);
     
     Alert.alert(
-      'Token Status',
-      isValid ? 'Token is still valid' : 'Token has expired or been used'
+      'Token Durumu',
+      isValid ? 'Token hala geçerli' : 'Token süresi doldu veya kullanıldı'
     );
   };
   
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Secure OCR Example</Text>
-      <Text style={styles.subtitle}>
-        Token-based data exchange (SEC-001 fix)
-      </Text>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
       
-      {/* Image Preview */}
-      {imageUri && (
-        <Image source={{ uri: imageUri }} style={styles.image} />
-      )}
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>←</Text>
+        </TouchableOpacity>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>🔒 Güvenli OCR</Text>
+          <Text style={styles.headerSubtitle}>Token-based Secure Reading</Text>
+        </View>
+        <View style={styles.headerSpacer} />
+      </View>
       
-      {/* Action Buttons */}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.infoCard}>
+          <Text style={styles.infoCardTitle}>ℹ️ Güvenlik Özellikleri</Text>
+          <Text style={styles.infoCardText}>
+            • PII verisi bridge'den geçmez{'\n'}
+            • Token-based veri alışverişi{'\n'}
+            • 5 dakika TTL (otomatik silme){'\n'}
+            • Tek kullanımlık token sistemi
+          </Text>
+        </View>
+        
+        {/* Image Preview */}
+        {imageUri && (
+          <Image source={{ uri: imageUri }} style={styles.image} />
+        )}
+        
+        {/* Action Buttons */}
       <TouchableOpacity
         style={styles.button}
         onPress={handleCaptureImage}
         disabled={loading}
       >
         <Text style={styles.buttonText}>
-          📷 Capture Document
+          📷 Belge Fotoğrafı Çek
         </Text>
       </TouchableOpacity>
       
@@ -229,7 +282,7 @@ const SecureOCRExample = () => {
         disabled={loading || !imageUri}
       >
         <Text style={styles.buttonText}>
-          🔍 Scan (Get Token)
+          🔍 Tara (Token Al)
         </Text>
       </TouchableOpacity>
       
@@ -241,7 +294,7 @@ const SecureOCRExample = () => {
             disabled={loading}
           >
             <Text style={styles.buttonText}>
-              🔓 Retrieve Data (Use Token)
+              🔓 Veriyi Al (Token Kullan)
             </Text>
           </TouchableOpacity>
           
@@ -251,7 +304,7 @@ const SecureOCRExample = () => {
             disabled={loading}
           >
             <Text style={styles.buttonText}>
-              ✓ Check Token Status
+              ✓ Token Durumunu Kontrol Et
             </Text>
           </TouchableOpacity>
         </>
@@ -265,7 +318,7 @@ const SecureOCRExample = () => {
         disabled={loading || !imageUri}
       >
         <Text style={styles.buttonText}>
-          ⚡ Scan & Get Result (One Call)
+          ⚡ Tara ve Al (Tek Çağrı)
         </Text>
       </TouchableOpacity>
       
@@ -277,7 +330,7 @@ const SecureOCRExample = () => {
       {/* Token Info */}
       {tokenResponse && (
         <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>Token Response:</Text>
+          <Text style={styles.infoTitle}>Token Yanıtı:</Text>
           <Text style={styles.infoText}>
             Token: {tokenResponse.sessionToken.substring(0, 16)}...
           </Text>
@@ -288,7 +341,7 @@ const SecureOCRExample = () => {
             Status: {tokenResponse.status}
           </Text>
           <Text style={styles.infoWarning}>
-            ⚠️ No PII data in this response
+            ⚠️ Bu yanıtta PII verisi YOK
           </Text>
         </View>
       )}
@@ -296,7 +349,7 @@ const SecureOCRExample = () => {
       {/* OCR Result */}
       {ocrResult && (
         <View style={[styles.infoBox, styles.resultBox]}>
-          <Text style={styles.infoTitle}>OCR Result (PII Data):</Text>
+          <Text style={styles.infoTitle}>OCR Sonucu (PII Verisi):</Text>
           <Text style={styles.infoText}>
             TC No: {ocrResult.fields.tcNo.value} ({(ocrResult.fields.tcNo.confidence * 100).toFixed(1)}%)
           </Text>
@@ -310,31 +363,78 @@ const SecureOCRExample = () => {
             Birth Date: {ocrResult.fields.birthDate.value}
           </Text>
           <Text style={styles.infoWarning}>
-            🔒 Token has been deleted (one-time use)
+            🔒 Token silindi (tek kullanımlık)
           </Text>
         </View>
       )}
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#f5f5f5',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 5,
-    textAlign: 'center',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
   },
-  subtitle: {
-    fontSize: 14,
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backButtonText: {
+    fontSize: 28,
+    color: '#007AFF',
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  headerSubtitle: {
+    fontSize: 11,
     color: '#666',
+    marginTop: 2,
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  scrollContent: {
+    padding: 20,
+  },
+  infoCard: {
+    backgroundColor: '#E8F5E9',
+    padding: 15,
+    borderRadius: 12,
     marginBottom: 20,
-    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  infoCardTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2E7D32',
+    marginBottom: 8,
+  },
+  infoCardText: {
+    fontSize: 13,
+    color: '#1B5E20',
+    lineHeight: 20,
   },
   image: {
     width: '100%',

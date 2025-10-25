@@ -7,6 +7,7 @@ import com.facebook.react.uimanager.ViewManager;
 
 import com.ocr.modules.SecureStorageModule;
 import com.ocr.modules.SDKCapabilitiesModule;
+import com.ocr.modules.OCRModule;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -18,6 +19,7 @@ import java.util.List;
  * Registers all native modules for the OCR SDK
  * 
  * Modules:
+ * - OCRModule - Secure token-based OCR (SEC-001 fix)
  * - SecureStorageModule - Secure storage with cleanup
  * - SDKCapabilitiesModule - Device capability detection
  * 
@@ -29,6 +31,9 @@ public class OCRSDKPackage implements ReactPackage {
     @Override
     public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
         List<NativeModule> modules = new ArrayList<>();
+        
+        // Add OCRModule (SecureOCRReader için gerekli)
+        modules.add(new OCRModule(reactContext));
         
         // Add SecureStorageModule
         modules.add(new SecureStorageModule(reactContext));

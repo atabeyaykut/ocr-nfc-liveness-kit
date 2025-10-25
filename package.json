@@ -1,8 +1,9 @@
 {
-  "name": "ocr-mobile-app",
+  "name": "@turkiye/kimlik-sdk",
   "version": "1.0.0",
-  "description": "Stand-alone React Native application for Turkish ID card verification with OCR, NFC, and Liveness Detection",
-  "private": true,
+  "description": "React Native SDK for Turkish ID card verification with OCR, NFC, and Liveness Detection - Entegre edilebilir modüller",
+  "main": "sdk.js",
+  "private": false,
   "scripts": {
     "android": "react-native run-android",
     "ios": "react-native run-ios",
