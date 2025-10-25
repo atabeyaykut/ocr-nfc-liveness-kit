@@ -56,7 +56,7 @@ if (Test-Path $textRecognitionBuildGradle) {
     
     $content = Get-Content $textRecognitionBuildGradle -Raw
     if ($content -notmatch 'namespace\s+"com\.rnmlkit\.textrecognition"') {
-        $content = $content -replace '(android\s*\{)', "`$1`n    namespace `"com.rnmlkit.textrecognition`""
+        $content = $content -replace '(android\s*\{)', ('$1' + "`n    namespace \"com.rnmlkit.textrecognition\"")
         Set-Content $textRecognitionBuildGradle -Value $content -NoNewline
         Write-Host "   ✓ Text Recognition namespace eklendi" -ForegroundColor Green
     } else {
@@ -81,7 +81,7 @@ if (Test-Path $faceDetectionBuildGradle) {
     
     $content = Get-Content $faceDetectionBuildGradle -Raw
     if ($content -notmatch 'namespace\s+"com\.rnmlkit\.facedetection"') {
-        $content = $content -replace '(android\s*\{)', "`$1`n    namespace `"com.rnmlkit.facedetection`""
+        $content = $content -replace '(android\s*\{)', ('$1' + "`n    namespace \"com.rnmlkit.facedetection\"")
         Set-Content $faceDetectionBuildGradle -Value $content -NoNewline
         Write-Host "   ✓ Face Detection namespace eklendi" -ForegroundColor Green
     } else {
@@ -106,7 +106,7 @@ if (Test-Path $nfcBuildGradle) {
     
     $content = Get-Content $nfcBuildGradle -Raw
     if ($content -notmatch 'namespace\s+"community\.revteltech\.nfc"') {
-        $content = $content -replace '(android\s*\{)', "`$1`n    namespace `"community.revteltech.nfc`""
+        $content = $content -replace '(android\s*\{)', ('$1' + "`n    namespace \"community.revteltech.nfc\"")
         Set-Content $nfcBuildGradle -Value $content -NoNewline
         Write-Host "   ✓ NFC Manager namespace eklendi" -ForegroundColor Green
     } else {
@@ -121,7 +121,7 @@ if (Test-Path $visionCameraBuildGradle) {
     
     $content = Get-Content $visionCameraBuildGradle -Raw
     if ($content -notmatch 'namespace\s+"com\.mrousavy\.camera"') {
-        $content = $content -replace '(android\s*\{)', "`$1`n    namespace `"com.mrousavy.camera`""
+        $content = $content -replace '(android\s*\{)', ('$1' + "`n    namespace \"com.mrousavy.camera\"")
         Set-Content $visionCameraBuildGradle -Value $content -NoNewline
         Write-Host "   ✓ Vision Camera namespace eklendi" -ForegroundColor Green
     } else {
@@ -136,11 +136,34 @@ if (Test-Path $imageCropPickerBuildGradle) {
     
     $content = Get-Content $imageCropPickerBuildGradle -Raw
     if ($content -notmatch 'namespace\s+"com\.reactnative\.ivpusic\.imagepicker"') {
-        $content = $content -replace '(android\s*\{)', "`$1`n    namespace `"com.reactnative.ivpusic.imagepicker`""
+        $content = $content -replace '(android\s*\{)', ('$1' + "`n    namespace \"com.reactnative.ivpusic.imagepicker\"")
         Set-Content $imageCropPickerBuildGradle -Value $content -NoNewline
         Write-Host "   ✓ Image Crop Picker namespace eklendi" -ForegroundColor Green
     } else {
         Write-Host "   ℹ Image Crop Picker namespace zaten mevcut" -ForegroundColor Gray
+    }
+}
+
+# React Native Worklets Core
+$workletsBuildGradle = "node_modules\react-native-worklets-core\android\build.gradle"
+if (Test-Path $workletsBuildGradle) {
+    Write-Host "   → Worklets Core namespace kontrol ediliyor..." -ForegroundColor Gray
+    
+    $content = Get-Content $workletsBuildGradle -Raw
+    if ($content -notmatch 'namespace\s+"com\.worklets"') {
+        $content = $content -replace '(android\s*\{)', ('$1' + "`n    namespace \"com.worklets\"")
+        Set-Content $workletsBuildGradle -Value $content -NoNewline
+        Write-Host "   ✓ Worklets Core namespace eklendi" -ForegroundColor Green
+    } else {
+        Write-Host "   ℹ Worklets Core namespace zaten mevcut" -ForegroundColor Gray
+    }
+    
+    # AndroidManifest.xml'den package attribute'u kaldır
+    $workletsManifest = "node_modules\react-native-worklets-core\android\src\main\AndroidManifest.xml"
+    if (Test-Path $workletsManifest) {
+        $manifestContent = Get-Content $workletsManifest -Raw
+        $manifestContent = $manifestContent -replace '\s*package="[^"]*"', ''
+        Set-Content $workletsManifest -Value $manifestContent -NoNewline
     }
 }
 
@@ -152,6 +175,7 @@ if (Test-Path "node_modules\.bin\patch-package.cmd") {
     Write-Host "   → Değişiklikler patch olarak kaydediliyor..." -ForegroundColor Gray
     & "node_modules\.bin\patch-package.cmd" "@react-native-ml-kit/text-recognition" 2>$null
     & "node_modules\.bin\patch-package.cmd" "@react-native-ml-kit/face-detection" 2>$null
+    & "node_modules\.bin\patch-package.cmd" "react-native-worklets-core" 2>$null
     Write-Host "   ✓ Patch dosyaları oluşturuldu (patches/ klasöründe)" -ForegroundColor Green
 } else {
     Write-Host "   ⚠ patch-package bulunamadı, manuel düzeltmeler kalıcı değil" -ForegroundColor Yellow

@@ -3,7 +3,7 @@ const { OCR_STATUS, OCR_ERROR_CODES, OCR_CONFIG } = require("./types");
 const Logger = require("../../utils/logger");
 const PermissionManager = require("../../utils/permissions");
 const { ImageProcessor } = require("../../utils/imageProcessor");
-const TextRecognition = require("react-native-text-recognition");
+const TextRecognition = require("@react-native-ml-kit/text-recognition").default;
 
 class OCRReader {
   constructor(options = {}) {

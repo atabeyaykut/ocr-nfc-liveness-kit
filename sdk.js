@@ -15,10 +15,10 @@
 // OCR MODÜLÜ - Kimlik Kartı Okuma
 // =============================================================================
 const OCRReader = require('./modules/ocr/OCRReader');
-const SecureOCRReader = require('./modules/ocr/SecureOCRReader').default;
-const { OCR_STATUS, OCR_ERROR_CODES } = require('./modules/ocr/SecureOCRReader');
-const OCRCamera = require('./modules/ocr/OCRCamera').default;
-const OCRCameraCapture = require('./modules/ocr/OCRCameraCapture').default;
+const SecureOCRReader = require('./modules/ocr/SecureOCRReader').default || require('./modules/ocr/SecureOCRReader');
+const { OCR_STATUS, OCR_ERROR_CODES } = require('./modules/ocr/types');
+const OCRCamera = require('./modules/ocr/OCRCamera').default || require('./modules/ocr/OCRCamera');
+const OCRCameraCapture = require('./modules/ocr/OCRCameraCapture').default || require('./modules/ocr/OCRCameraCapture');
 const OCRTypes = require('./modules/ocr/types');
 
 // =============================================================================
@@ -47,15 +47,23 @@ const { ImageProcessor } = require('./utils/imageProcessor');
 // KOMPLEKSİYA MODÜLLER (React Component'leri - Opsiyonel)
 // =============================================================================
 // UI Component'leri isteğe bağlı olarak kullanılabilir
-const { OCRReaderScreen } = require('./modules/ocr/OCRReaderModule');
-const { NFCReaderScreen } = require('./modules/nfc/NFCReaderModule');
-const { LivenessDetectionScreen } = require('./modules/liveness/LivenessDetectionModule');
+const OCRReaderModule = require('./modules/ocr/OCRReaderModule');
+const OCRReaderScreen = OCRReaderModule.default || OCRReaderModule;
+
+const NFCReaderModuleImport = require('./modules/nfc/NFCReaderModule');
+const NFCReaderScreen = NFCReaderModuleImport.default || NFCReaderModuleImport;
+
+const LivenessDetectionModuleImport = require('./modules/liveness/LivenessDetectionModule');
+const LivenessDetectionScreen = LivenessDetectionModuleImport.default || LivenessDetectionModuleImport;
 
 // =============================================================================
 // DEMO SCREENS (Referans Implementasyonlar)
 // =============================================================================
-const DualSideOCRDemo = require('./examples/DualSideOCRDemo').default;
-const SecureOCRExample = require('./examples/SecureOCRExample').default;
+const DualSideOCRDemoImport = require('./examples/DualSideOCRDemo');
+const DualSideOCRDemo = DualSideOCRDemoImport.default || DualSideOCRDemoImport;
+
+const SecureOCRExampleImport = require('./examples/SecureOCRExample');
+const SecureOCRExample = SecureOCRExampleImport.default || SecureOCRExampleImport;
 
 // =============================================================================
 // CONSTANTS & CONFIGURATION

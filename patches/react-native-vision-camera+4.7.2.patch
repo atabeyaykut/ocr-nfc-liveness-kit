@@ -6,22 +6,22 @@ index 0000000..1111111 100644
    }
  
    fun sendAvailableDevicesChangedEvent() {
--    val eventEmitter = reactContext.getJSModule(RCTDeviceEventEmitter::class.java)
--    val devices = getDevicesJson()
--    eventEmitter.emit("CameraDevicesChanged", devices)
-+    // Safety check: Only send events if React context is fully initialized
-+    if (!reactContext.hasActiveReactInstance()) {
-+      Log.d(TAG, "Skipping CameraDevicesChanged event - React context not ready yet")
-+      return
-+    }
-+    
-+    try {
-+      val eventEmitter = reactContext.getJSModule(RCTDeviceEventEmitter::class.java)
-+      val devices = getDevicesJson()
-+      eventEmitter.emit("CameraDevicesChanged", devices)
-+    } catch (e: Exception) {
-+      Log.e(TAG, "Failed to send CameraDevicesChanged event: ${e.message}", e)
-+    }
+     // Safety check: Only send events if React context is fully initialized
+     val reactCtx = reactContext
+     if (!reactCtx.hasActiveCatalystInstance()) {
+       Log.d(TAG, "Skipping CameraDevicesChanged event - React context not ready yet")
+       return
+     }
+ 
+     try {
+       val eventEmitter = reactCtx.getJSModule(RCTDeviceEventEmitter::class.java)
+       val devices = getDevicesJson()
+       eventEmitter.emit("CameraDevicesChanged", devices)
+     } catch (e: IllegalStateException) {
+       Log.w(TAG, "Bridge not ready to send CameraDevicesChanged. Skipping.", e)
+     } catch (e: Throwable) {
+       Log.e(TAG, "Failed to send CameraDevicesChanged event: ${e.message}", e)
+     }
    }
  
    override fun getConstants(): MutableMap<String, Any?> {
