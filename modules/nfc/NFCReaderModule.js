@@ -98,13 +98,19 @@ class NFCReaderModule {
     try {
       this.isReading = false;
       await NfcManager.unregisterTagEvent();
-      await NfcManager.stopTechnology();
+      // cancelTechnologyRequest stops NFC technology
+      try {
+        await NfcManager.cancelTechnologyRequest();
+      } catch (cancelError) {
+        // Ignore if no technology is active
+        console.log('[NFC] No active technology to cancel');
+      }
       
       if (this.callbacks.onStopped) {
         this.callbacks.onStopped();
       }
     } catch (error) {
-      console.warn('NFC stop error:', error);
+      console.warn('[NFC] Stop error:', error.message);
     }
   };
 

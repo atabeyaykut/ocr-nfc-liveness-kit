@@ -544,8 +544,21 @@ class OCRReaderModule {
 
   checkImageQuality = async (imagePath) => {
     try {
+      // Normalize path - remove file:// prefix if exists
+      let normalizedPath = imagePath;
+      if (normalizedPath.startsWith('file://')) {
+        normalizedPath = normalizedPath.replace('file://', '');
+      }
+      
+      // For Android, ensure path starts with /
+      if (Platform.OS === 'android' && !normalizedPath.startsWith('/')) {
+        normalizedPath = '/' + normalizedPath;
+      }
+
+      console.log('[OCR] Checking quality for path:', normalizedPath);
+
       // Check file size as a basic quality indicator
-      const stats = await RNFS.stat(imagePath.replace('file://', ''));
+      const stats = await RNFS.stat(normalizedPath);
       const fileSizeKB = stats.size / 1024;
 
       console.log('[OCR] Image size:', fileSizeKB, 'KB');
@@ -567,6 +580,7 @@ class OCRReaderModule {
       return { isGood: true };
     } catch (error) {
       console.warn('[OCR] Quality check failed:', error.message);
+      console.warn('[OCR] Original path was:', imagePath);
       return { isGood: true }; // Continue anyway
     }
   };
