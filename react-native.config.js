@@ -4,6 +4,11 @@
  */
 
 module.exports = {
+  project: {
+    ios: {
+      sourceDir: './ios',
+    },
+  },
   dependencies: {
     // Temporarily exclude RNReanimated from iOS autolinking
     // due to FBReactNativeSpec dependency issue with RN 0.74.7

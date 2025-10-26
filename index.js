@@ -57,5 +57,6 @@ if (PromiseRejectionTracking && PromiseRejectionTracking.enable) {
 }
 
 // Register the React Native root component for Android/iOS launcher
-// Must match MainActivity#getMainComponentName()
-AppRegistry.registerComponent('mobile-sdk-ocr-nfc-liveness', () => App);
+// Must match MainActivity#getMainComponentName() for Android
+// Must match iOS project name for iOS
+AppRegistry.registerComponent('OCRMobileSDK', () => App);
