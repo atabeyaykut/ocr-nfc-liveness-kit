@@ -31,7 +31,8 @@ variables:
     value: $[startsWith(variables['Build.SourceBranch'], 'refs/tags/v')]
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: 'Default'  # Self-hosted agent pool (use until grant approved)
+  # vmImage: 'ubuntu-latest'  # Will switch back after grant approval
 
 stages:
   # Stage 1: Build and Test
