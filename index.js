@@ -4,8 +4,15 @@
  * Features: OCR, NFC, and Liveness Detection
  */
 
-import { AppRegistry } from 'react-native';
+import { AppRegistry, LogBox } from 'react-native';
 import App from './App';
+
+// Suppress specific warnings
+LogBox.ignoreLogs([
+  'new NativeEventEmitter',
+  'EventEmitter.removeListener',
+  'Sending `onAnimatedValueUpdate`',
+]);
 
 // 🔧 FIX: Global unhandled promise rejection handler
 // Catches TTS and other library errors that don't bubble up properly

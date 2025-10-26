@@ -702,9 +702,26 @@ class OCRReaderModule {
           // Pre-process with current strategy
           const strategy = strategies[i];
 
-          // Remove file:// prefix for ImageResizer (needs native path)
-          const nativePath = preprocessedPath.replace('file://', '');
-          console.log(`[OCR] Native path for ImageResizer:`, nativePath);
+          // Normalize path for ImageResizer
+          let nativePath = preprocessedPath;
+          
+          // Remove file:// prefix
+          if (nativePath.startsWith('file://')) {
+            nativePath = nativePath.replace('file://', '');
+          }
+          
+          // For Android, ensure path is absolute
+          if (Platform.OS === 'android') {
+            // If path doesn't start with /, add it
+            if (!nativePath.startsWith('/')) {
+              nativePath = '/' + nativePath;
+            }
+            // Normalize double slashes
+            nativePath = nativePath.replace(/\/\//g, '/');
+          }
+          
+          console.log(`[OCR] Original path:`, preprocessedPath);
+          console.log(`[OCR] Normalized native path for ImageResizer:`, nativePath);
 
           console.log(`[OCR] Calling ImageResizer with strategy:`, strategy);
           const processedImage = await ImageResizer.createResizedImage(
@@ -719,30 +736,60 @@ class OCRReaderModule {
             { mode: 'contain', onlyScaleDown: true }
           );
           console.log(`[OCR] ImageResizer completed:`, processedImage.uri);
+          console.log(`[OCR] ImageResizer output size:`, processedImage.size);
 
-          // Text recognition - ML Kit accepts file:// URI
-          console.log(`[OCR] Calling ML Kit TextRecognition with:`, processedImage.uri);
+          // Text recognition - Prepare path for ML Kit
+          let mlKitPath = processedImage.uri;
+          
+          // Ensure ML Kit gets correct path format
+          // ML Kit on Android needs file:// prefix
+          if (Platform.OS === 'android' && !mlKitPath.startsWith('file://')) {
+            mlKitPath = 'file://' + mlKitPath;
+          }
+          
+          console.log(`[OCR] Calling ML Kit TextRecognition with:`, mlKitPath);
 
           let result;
           try {
             // ML Kit Text Recognition returns { text, blocks }
-            const mlKitResult = await TextRecognition.recognize(processedImage.uri);
+            const mlKitResult = await TextRecognition.recognize(mlKitPath);
             result = mlKitResult.text; // Extract text string
             console.log(`[OCR] ML Kit TextRecognition completed, text length:`, result?.length || 0);
           } catch (textRecError) {
             console.error(`[OCR] ML Kit TextRecognition FAILED:`, textRecError.message);
             console.error(`[OCR] Error stack:`, textRecError.stack);
+            console.error(`[OCR] Failed path:`, mlKitPath);
 
-            // Try with native path as fallback
+            // Try alternate path formats
             try {
-              const nativeTextPath = processedImage.uri.replace('file://', '');
-              console.log(`[OCR] Retry with native path:`, nativeTextPath);
-              const mlKitResult = await TextRecognition.recognize(nativeTextPath);
+              let altPath = processedImage.uri;
+              
+              // If we tried with file://, try without
+              if (mlKitPath.startsWith('file://')) {
+                altPath = mlKitPath.replace('file://', '');
+                console.log(`[OCR] Retry without file:// prefix:`, altPath);
+              } else {
+                // If we tried without, try with
+                altPath = 'file://' + mlKitPath;
+                console.log(`[OCR] Retry with file:// prefix:`, altPath);
+              }
+              
+              const mlKitResult = await TextRecognition.recognize(altPath);
               result = mlKitResult.text;
-              console.log(`[OCR] ML Kit TextRecognition (native path) completed`);
+              console.log(`[OCR] ML Kit TextRecognition (alternate path) completed`);
             } catch (fallbackError) {
               console.error(`[OCR] Fallback also failed:`, fallbackError.message);
-              throw new Error('Text recognition failed');
+              
+              // Final attempt: use original processedImage.uri as-is
+              try {
+                console.log(`[OCR] Final attempt with original URI:`, processedImage.uri);
+                const mlKitResult = await TextRecognition.recognize(processedImage.uri);
+                result = mlKitResult.text;
+                console.log(`[OCR] ML Kit TextRecognition (original URI) completed`);
+              } catch (finalError) {
+                console.error(`[OCR] All attempts failed:`, finalError.message);
+                throw new Error('Text recognition failed after all attempts');
+              }
             }
           }
 
