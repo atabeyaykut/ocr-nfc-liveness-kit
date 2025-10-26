@@ -1,13 +1,10 @@
 require_relative '../node_modules/react-native/scripts/react_native_pods'
-require_relative '../node_modules/@react-native-community/cli-platform-ios/native_modules'
 
 platform :ios, '14.0'
 
 target 'OCRMobileSDK' do
-  config = use_native_modules!
-
   use_react_native!(
-    :path => config[:reactNativePath],
+    :path => "../node_modules/react-native",
     :hermes_enabled => true,
     :fabric_enabled => false,
     :app_path => "#{Pod::Config.instance.installation_root}/.."
@@ -23,6 +20,21 @@ target 'OCRMobileSDK' do
       target.build_configurations.each do |config|
         config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
         config.build_settings['ENABLE_BITCODE'] = 'NO'
+      end
+      
+      # RNPermissions Privacy Info dosyası eksikse oluştur
+      if target.name == 'RNPermissions-RNPermissionsPrivacyInfo'
+        privacy_file_path = File.join(installer.sandbox.root, '../node_modules/react-native-permissions/ios/PrivacyInfo.xcprivacy')
+        unless File.exist?(privacy_file_path)
+          File.open(privacy_file_path, 'w') do |f|
+            f.write('<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+</dict>
+</plist>')
+          end
+        end
       end
     end
   end

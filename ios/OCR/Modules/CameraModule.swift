@@ -59,26 +59,56 @@ class CameraModule: RCTEventEmitter {
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
+        // Support both "position" and "cameraPosition" keys
+        let cameraPosition = (config["position"] as? String) ?? (config["cameraPosition"] as? String) ?? "back"
+        let quality = config["quality"] as? String ?? "high"
+        
+        // Check and request permission first
+        let authStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        
+        if authStatus == .notDetermined {
+            // Request permission asynchronously
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                guard let self = self else { return }
+                
+                if granted {
+                    self.setupCameraAsync(position: cameraPosition, quality: quality, resolve: resolve, reject: reject)
+                } else {
+                    reject("CAMERA_PERMISSION_DENIED", "Camera permission denied", nil)
+                }
+            }
+        } else if authStatus == .authorized {
+            // Permission already granted
+            self.setupCameraAsync(position: cameraPosition, quality: quality, resolve: resolve, reject: reject)
+        } else {
+            // Permission denied
+            reject("CAMERA_PERMISSION_DENIED", "Camera permission denied", nil)
+        }
+    }
+    
+    private func setupCameraAsync(
+        position: String,
+        quality: String,
+        resolve: @escaping RCTPromiseResolveBlock,
+        reject: @escaping RCTPromiseRejectBlock
+    ) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
             do {
-                let cameraPosition = config["cameraPosition"] as? String ?? "back"
-                let quality = config["quality"] as? String ?? "high"
-                
-                try self.setupCamera(position: cameraPosition, quality: quality)
+                try self.setupCameraSession(position: position, quality: quality)
                 
                 self.sendEvent(
                     withName: "CAMERA_READY",
                     body: [
-                        "cameraPosition": cameraPosition,
+                        "cameraPosition": position,
                         "quality": quality
                     ]
                 )
                 
                 resolve([
                     "status": "INITIALIZED",
-                    "cameraPosition": cameraPosition,
+                    "cameraPosition": position,
                     "quality": quality
                 ])
                 
@@ -350,28 +380,8 @@ class CameraModule: RCTEventEmitter {
     
     // MARK: - Camera Setup
     
-    private func setupCamera(position: String, quality: String) throws {
-        // Check permissions
-        let authStatus = AVCaptureDevice.authorizationStatus(for: .video)
-        
-        if authStatus == .notDetermined {
-            // Request permission synchronously
-            let semaphore = DispatchSemaphore(value: 0)
-            var granted = false
-            
-            AVCaptureDevice.requestAccess(for: .video) { success in
-                granted = success
-                semaphore.signal()
-            }
-            
-            semaphore.wait()
-            
-            if !granted {
-                throw CameraError.permissionDenied
-            }
-        } else if authStatus != .authorized {
-            throw CameraError.permissionDenied
-        }
+    private func setupCameraSession(position: String, quality: String) throws {
+        // Permission already checked in initializeCamera
         
         // Create capture session
         let session = AVCaptureSession()
