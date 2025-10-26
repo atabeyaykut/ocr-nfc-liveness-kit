@@ -1,7 +1,8 @@
-# Source files (only include compiled lib)
-modules/
+# Source files - KEEP modules, utils, components (needed for SDK)
+# modules/ - REQUIRED
+# utils/ - REQUIRED
+# components/ - REQUIRED
 src/
-components/
 
 # Development files
 __tests__/

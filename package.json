@@ -18,9 +18,11 @@
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "start": "react-native start",
+    "build": "echo 'No build step required for JavaScript SDK'",
     "test": "jest",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{js,jsx,json,md}\"",
+    "prepublishOnly": "npm run lint && echo 'Ready to publish'",
     "postinstall": "node scripts/fix-dependencies.js && patch-package"
   },
   "keywords": [
