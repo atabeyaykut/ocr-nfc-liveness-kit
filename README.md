@@ -1,1540 +1,643 @@
-# Mobile SDK - OCR, NFC & Liveness Detection
+# 🇹🇷 Turkish ID Card SDK
 
-A comprehensive React Native SDK for Optical Character Recognition (OCR), Near Field Communication (NFC), and Liveness Detection functionality with advanced biometric security features.
+[![npm version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://www.npmjs.com/package/@turkiye/kimlik-sdk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![React Native](https://img.shields.io/badge/React%20Native-0.74.7-61DAFB.svg)](https://reactnative.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-3178C6.svg)](https://www.typescriptlang.org/)
 
-## 🚀 Features
+**React Native SDK for Turkish ID card verification with OCR, NFC, and Liveness Detection.**
 
-### OCR Module ✅ PRODUCTION READY
-- ✅ Camera integration for text capture
-- ✅ Image preprocessing and enhancement
-- ✅ Multi-language text recognition
-- ✅ Real-time text extraction
-- ✅ Confidence scoring and validation
-- ✅ Turkish ID card field extraction
-- ✅ **3-line MRZ reading** (ICAO compliant)
-- ✅ **Dual-side scanning** (front + back with cross-validation)
-- ✅ **Check digit validation** (7-3-1 algorithm)
-- ✅ **Smart data merging** (conflict detection & resolution)
-- ✅ Performance optimization (1-3s per side)
+Complete solution for identity verification in Turkey with support for:
+- 📸 **OCR** - Document scanning and text recognition
+- 📡 **NFC** - Turkish ID card chip reading  
+- 🤳 **Liveness Detection** - Anti-spoofing face verification
 
-### NFC Module ✅ PRODUCTION READY
-- ✅ Real NFC hardware integration
-- ✅ Turkish ID card reading (NDEF + ISO-DEP)
-- ✅ Secure data extraction with validation
-- ✅ Multiple card format support
-- ✅ 10-second timeout with error recovery
-- ✅ Real vs Mock data differentiation
+---
 
-### Liveness Detection ✅ PRODUCTION READY
-- ✅ Real-time face motion detection
-- ✅ Advanced anti-spoofing (3D depth, texture analysis)
-- ✅ Sequential command execution
-- ✅ Progress tracking with UI feedback
-- ✅ Performance optimization (30-60 FPS)
-- ✅ Multi-layer security validation
+## 📋 Table of Contents
+
+- [Features](#-features)
+- [Installation](#-installation)
+- [Quick Start](#-quick-start)
+- [Modules](#-modules)
+  - [OCR Reader](#ocr-reader)
+  - [NFC Reader](#nfc-reader)
+  - [Liveness Detection](#liveness-detection)
+- [Advanced Features](#-advanced-features)
+- [TypeScript Support](#-typescript-support)
+- [Platform Requirements](#-platform-requirements)
+- [Examples](#-examples)
+- [API Reference](#-api-reference)
+- [License](#-license)
+
+---
+
+## ✨ Features
+
+### Core Modules
+- ✅ **OCR Reader** - ML Kit powered text recognition
+  - Turkish ID card support (front & back)
+  - Automatic field extraction (TC No, Name, Surname, Birth Date)
+  - MRZ (Machine Readable Zone) support
+  - Image quality checks (blur, glare, lighting)
+  
+- ✅ **NFC Reader** - Real chip reading
+  - Turkish ID card APDU commands
+  - DG1 (MRZ) data extraction
+  - ISO-DEP tag support
+  - Secure data transmission
+
+- ✅ **Liveness Detection** - Anti-spoofing
+  - Real-time face detection
+  - Gesture recognition (blink, smile, turn, nod)
+  - Voice & text commands (Turkish TTS)
+  - Depth & texture analysis
+
+### Enhancement Utilities
+- 📊 **Analytics** - Optional event tracking
+- 🛡️ **Error Handling** - 26 standardized error codes
+- ⚡ **Performance Monitoring** - Metrics and statistics
+- 🔐 **Secure Storage** - Keychain/SharedPreferences encryption
+
+### Platform Support
+- ✅ **iOS** 14.0+ (Swift native modules)
+- ✅ **Android** SDK 26+ (Java/Kotlin native modules)
+- ✅ **TypeScript** Full type definitions
+
+---
 
 ## 📦 Installation
 
 ```bash
-npm install mobile-sdk-ocr-nfc-liveness
+npm install @turkiye/kimlik-sdk
+# or
+yarn add @turkiye/kimlik-sdk
 ```
-
-## 🔄 Recent Updates (v2.0.0-final)
-
-### Day 11: Final Stabilization & Production Readiness
-- ✅ **Final Demo Implementation**: Complete sequential command flow with progress tracking
-- ✅ **Performance Optimization**: 30-60 FPS real-time processing with memory management
-- ✅ **Enhanced Testing**: 100+ comprehensive test scenarios covering all edge cases
-- ✅ **Code Refactoring**: Modular architecture with shared utilities and clean separation
-- ✅ **Production UI**: Professional demo screens with error handling and user feedback
-
-### Liveness Detection Enhancements
-- ✅ **Sequential Commands**: 3-7 command sequences with configurable difficulty
-- ✅ **Progress Tracking**: Real-time progress bars and completion feedback
-- ✅ **Anti-Spoofing**: Multi-layer detection (3D depth, texture, temporal analysis)
-- ✅ **Performance**: Frame skipping, throttling, and memory optimization
-- ✅ **Error Recovery**: Comprehensive error handling with retry mechanisms
-
-### Test Infrastructure
-- ✅ Complete Jest configuration for React Native 0.72.17
-- ✅ TypeScript support in test environment
-- ✅ 100+ test cases covering OCR, NFC, and Liveness modules
-- ✅ Performance and integration testing
-- ✅ Zero security vulnerabilities
-
-### Architecture Improvements
-- ✅ Modular utilities in `/modules/liveness/utils.js`
-- ✅ Performance optimizer with frame analysis
-- ✅ Enhanced error handling and logging
-- ✅ Memory management and cleanup systems
-
-## 🎯 Quick Start Guide
-
-### Dual-Side ID Card Scanning (NEW!)
-
-```javascript
-import OCRReaderModule from './modules/ocr/OCRReaderModule';
-
-// Scan both sides of ID card with cross-validation
-const scanBothSides = async (frontImagePath, backImagePath) => {
-  const ocrReader = new OCRReaderModule();
-  
-  // Process both sides and merge data
-  const result = await ocrReader.processBothSides(
-    frontImagePath,  // Front side photo
-    backImagePath    // Back side photo (with MRZ)
-  );
-  
-  console.log('Merged Data:', result.data);
-  console.log('Confidence:', result.data.confidence + '%');
-  console.log('Completeness:', result.data.completeness + '%');
-  console.log('Conflicts:', result.data.conflicts);
-  
-  // Access all 14 fields
-  const {
-    tcNo, name, surname, birthDate, gender,
-    documentNo, validUntil, motherName, fatherName, 
-    issuedBy, serialNo, nationality
-  } = result.data;
-  
-  return result;
-};
-```
-
-### Complete Biometric Workflow Integration
-
-```javascript
-import { OCRReader } from './modules/ocr/OCRReader';
-import { NFCReader } from './modules/nfc/NFCReader';
-import { LivenessDetector } from './modules/liveness/LivenessDetector';
-
-// Complete biometric verification workflow
-const performBiometricVerification = async () => {
-  try {
-    // Step 1: OCR - Extract ID information
-    const ocrReader = new OCRReader({
-      onSuccess: (result) => console.log('OCR Success:', result),
-      onError: (error) => console.log('OCR Error:', error),
-    });
-    
-    const ocrResult = await ocrReader.startCompleteOCRWorkflow();
-    
-    // Step 2: NFC - Verify with chip data
-    const nfcReader = new NFCReader({
-      onSuccess: (result) => console.log('NFC Success:', result),
-      onError: (error) => console.log('NFC Error:', error),
-    });
-    
-    const nfcResult = await nfcReader.readNFCData();
-    
-    // Step 3: Liveness - Verify person is real
-    const livenessDetector = new LivenessDetector({
-      onSuccess: (result) => console.log('Liveness Success:', result),
-      onError: (error) => console.log('Liveness Error:', error),
-      onProgress: (progress) => console.log('Progress:', progress),
-    });
-    
-    const livenessResult = await livenessDetector.startSequentialTest({
-      commandCount: 5,
-      difficulty: 'medium',
-      enableAntiSpoofing: true,
-    });
-    
-    // Combine results for final verification
-    return {
-      success: true,
-      ocr: ocrResult,
-      nfc: nfcResult,
-      liveness: livenessResult,
-      confidence: calculateOverallConfidence(ocrResult, nfcResult, livenessResult),
-    };
-    
-  } catch (error) {
-    console.error('Biometric verification failed:', error);
-    return { success: false, error };
-  }
-};
-```
-
-### Sequential Liveness Detection
-
-```javascript
-import { LivenessDetector } from './modules/liveness/LivenessDetector';
-
-const livenessDetector = new LivenessDetector({
-  onStatusChange: (newStatus, oldStatus) => {
-    console.log(`Status: ${oldStatus} → ${newStatus}`);
-  },
-  onProgress: (progress) => {
-    console.log(`Progress: ${progress.percentage}% - ${progress.message}`);
-  },
-  onCommandComplete: (command, result) => {
-    console.log(`Command "${command.instruction}" completed:`, result);
-  },
-  onSuccess: (finalResult) => {
-    console.log('All commands completed successfully:', finalResult);
-  },
-  onError: (error) => {
-    console.error('Liveness detection failed:', error);
-  },
-});
-
-// Start sequential test with 5 commands
-await livenessDetector.startSequentialTest({
-  commandCount: 5,
-  difficulty: 'medium', // easy, medium, hard
-  enableAntiSpoofing: true,
-  timeout: 30000, // 30 seconds total
-});
-```
-
-## 📱 Platform Setup
 
 ### iOS Setup
-Add permissions to `Info.plist`:
+```bash
+cd ios && pod install
+```
+
+Add to `Info.plist`:
 ```xml
 <key>NSCameraUsageDescription</key>
-<string>Kimlik doğrulama için kamera erişimi gerekli</string>
-<key>NSPhotoLibraryUsageDescription</key>
-<string>Fotoğraf seçimi için galeri erişimi gerekli</string>
-<key>NSMicrophoneUsageDescription</key>
-<string>Canlılık testi için mikrofon erişimi gerekli</string>
+<string>Kimlik tarama için kamera erişimi gerekli</string>
 <key>NFCReaderUsageDescription</key>
 <string>Kimlik kartı okuma için NFC erişimi gerekli</string>
 ```
 
 ### Android Setup
-Add permissions to `android/app/src/main/AndroidManifest.xml`:
+
+Add to `AndroidManifest.xml`:
 ```xml
 <uses-permission android:name="android.permission.CAMERA" />
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 <uses-permission android:name="android.permission.NFC" />
-<uses-permission android:name="android.permission.RECORD_AUDIO" />
-
-<application>
-  <activity
-    android:name=".MainActivity"
-    android:exported="true"
-    android:launchMode="singleTop"
-    android:theme="@style/LaunchTheme">
-    <intent-filter android:autoVerify="true">
-      <action android:name="android.nfc.action.NDEF_DISCOVERED" />
-      <category android:name="android.intent.category.DEFAULT" />
-    </intent-filter>
-  </activity>
-</application>
 ```
 
-## 🎮 Demo Applications
+---
 
-### Liveness Detection Demo
-```bash
-# Run the final demo with sequential commands
-import LivenessDemoScreen from './examples/LivenessDemoScreen.final.js';
+## 🚀 Quick Start
 
-// Features:
-// - 3-7 sequential commands with configurable difficulty
-// - Real-time progress tracking with animated progress bars
-// - Success/failure feedback with detailed results
-// - Error recovery with retry mechanisms
-// - Performance optimization with frame skipping
-```
+### Basic OCR Scanning
 
-### Complete Biometric Demo
 ```javascript
-// Complete workflow integration
-const BiometricVerificationScreen = () => {
-  const [results, setResults] = useState({});
-  
-  const runCompleteVerification = async () => {
-    // Step 1: OCR
-    const ocrResult = await performOCR();
-    
-    // Step 2: NFC (if OCR successful)
-    const nfcResult = ocrResult.success ? await performNFC() : null;
-    
-    // Step 3: Liveness (if both successful)
-    const livenessResult = (ocrResult.success && nfcResult?.success) 
-      ? await performLiveness() : null;
-    
-    setResults({ ocr: ocrResult, nfc: nfcResult, liveness: livenessResult });
-  };
-};
-```
+import { OCRReader } from '@turkiye/kimlik-sdk';
 
-## 📊 Performance Metrics
-
-### Liveness Detection Performance
-- **Frame Rate**: 30-60 FPS real-time processing
-- **Processing Time**: 50-150ms per frame analysis
-- **Memory Usage**: <50MB during extended sessions
-- **Accuracy**: >90% face detection, >85% spoofing detection
-- **False Positive Rate**: <10% with calibrated thresholds
-
-### Anti-Spoofing Capabilities
-- **3D Depth Analysis**: Detects flat surfaces (photos/screens)
-- **Texture Analysis**: Identifies pixelation and print artifacts
-- **Temporal Consistency**: Validates natural movement patterns
-- **Eye Movement**: Analyzes blink patterns and synchronization
-- **Multi-layer Validation**: Combines multiple detection methods
-
-### System Requirements
-- **iOS**: iPhone 7+ with iOS 12+, Core NFC support
-- **Android**: API 21+ with NFC hardware, Camera2 API
-- **RAM**: Minimum 3GB for optimal performance
-- **Storage**: 50MB for SDK + dependencies
-
-## 🔧 Advanced Configuration
-
-### Performance Optimization
-```javascript
-import { PerformanceOptimizer } from './modules/liveness/performance';
-
-const optimizer = new PerformanceOptimizer({
-  maxFramesPerSecond: 30,
-  enableThrottling: true,
-  skipLowQualityFrames: true,
-  maxMemoryUsage: 50 * 1024 * 1024, // 50MB
+const reader = new OCRReader({
+  cardSide: 'front',
+  onSuccess: (data) => {
+    console.log('TC No:', data.extractedFields.tcNo);
+    console.log('Name:', data.extractedFields.name);
+    console.log('Surname:', data.extractedFields.surname);
+  },
+  onError: (error) => {
+    console.error('Error:', error.message);
+  }
 });
 
-// Optimize frame processing
-const result = await optimizer.optimizeFrameProcessing(frameData, processFunction);
+// Start scanning
+await reader.startOCR();
 ```
 
-### Anti-Spoofing Configuration
+### Basic NFC Reading
+
 ```javascript
-const livenessDetector = new LivenessDetector({
-  antiSpoofing: {
-    enabled: true,
-    depthVarianceThreshold: 0.15,
-    textureThreshold: 0.8,
-    eyeSyncThreshold: 0.2,
-    temporalConsistency: true,
-  },
-  performance: {
-    frameSkipping: true,
-    memoryOptimization: true,
-    adaptiveQuality: true,
-  },
+import { NFCReader } from '@turkiye/kimlik-sdk';
+
+const nfcReader = new NFCReader({
+  alertMessage: 'Kimliğinizi telefonun arkasına yaklaştırın',
+  onSuccess: (data) => {
+    console.log('TC No:', data.idNumber);
+    console.log('Name:', data.name);
+    console.log('Birth Date:', data.birthDate);
+  }
 });
+
+await nfcReader.startNFC();
+await nfcReader.readNFCData();
 ```
 
-## 🧪 Testing
-
-### Run All Tests
-```bash
-npm test
-```
-
-### Test Coverage
-- **OCR Module**: 37/37 tests passing (100%)
-- **NFC Module**: 10/10 tests passing (100%)
-- **Liveness Module**: 25+ tests covering all scenarios
-- **Integration Tests**: End-to-end workflow validation
-- **Performance Tests**: Memory and timing validation
-
-### Test Categories
-- Unit tests for individual components
-- Integration tests for module interactions
-- Performance tests for optimization validation
-- Anti-spoofing tests for security validation
-- Error handling and edge case testing
-
-## 🔒 Security Features
-
-### Multi-Layer Validation
-1. **OCR Verification**: Text extraction with confidence scoring
-2. **NFC Chip Validation**: Hardware-level data verification
-3. **Liveness Detection**: Real-time face motion analysis
-4. **Anti-Spoofing**: Multi-algorithm spoofing detection
-5. **Temporal Analysis**: Movement pattern validation
-
-### Data Protection
-- No sensitive data stored locally
-- Encrypted communication channels
-- Secure memory management
-- Automatic cleanup of biometric data
-- GDPR compliant data handling
-
-## 📈 Production Readiness
-
-### Deployment Checklist
-- ✅ All modules production-tested
-- ✅ Performance optimized for mobile devices
-- ✅ Comprehensive error handling
-- ✅ Memory leak prevention
-- ✅ Security validation complete
-- ✅ Platform permissions configured
-- ✅ Demo applications ready
-- ✅ Documentation complete
-
-### Next Steps
-1. **Integration Testing**: Test in production environment
-2. **User Acceptance**: Validate with real users
-3. **Performance Monitoring**: Track metrics in production
-4. **Continuous Improvement**: Iterate based on feedback
-5. **Security Auditing**: Regular security reviews
-
-## 🔧 Usage
-
-### Basic OCR Implementation
+### Basic Liveness Test
 
 ```javascript
-import React, { useState } from 'react';
-import { View, Alert } from 'react-native';
-import { OCRReader, OCRCamera } from 'mobile-sdk-ocr-nfc-liveness';
+import { LivenessDetector } from '@turkiye/kimlik-sdk';
 
-const App = () => {
-  const [ocrReader] = useState(() => new OCRReader({
-    onSuccess: (result) => {
-      console.log('OCR Success:', result.text);
-      Alert.alert('Başarılı', `Metin çıkarıldı: ${result.text}`);
-    },
-    onError: (error) => {
-      console.error('OCR Error:', error.message);
-      Alert.alert('Hata', error.message);
-    },
-    onStatusChange: (newStatus, oldStatus) => {
-      console.log(`Status changed: ${oldStatus} → ${newStatus}`);
-    }
-  }));
+const detector = new LivenessDetector({
+  commands: ['blink', 'smile', 'turn_left'],
+  enableVoice: true, // Turkish TTS
+  onProgress: (message) => {
+    console.log('Progress:', message);
+  },
+  onSuccess: (result) => {
+    console.log('Liveness verified!');
+    console.log('Confidence:', result.confidence);
+  }
+});
 
-  const handleStartOCR = async () => {
-    try {
-      await ocrReader.startOCR();
-      console.log('OCR initialized successfully');
-    } catch (error) {
-      console.error('OCR initialization failed:', error);
-    }
-  };
-
-  const handleImageCaptured = async (photo) => {
-    try {
-      const result = await ocrReader.extractText(photo.uri, {
-        language: 'tr',
-        confidence: 0.7,
-        enhanceImage: true
-      });
-      console.log('Extracted text:', result.text);
-    } catch (error) {
-      console.error('Text extraction failed:', error);
-    }
-  };
-
-  return (
-    <View style={{ flex: 1 }}>
-      <OCRCamera 
-        onImageCaptured={handleImageCaptured}
-        onError={(error) => Alert.alert('Kamera Hatası', error.message)}
-        guidanceText="Kimlik kartınızı çerçeve içine yerleştirin"
-      />
-    </View>
-  );
-};
+await detector.startLivenessTest();
 ```
 
-### Advanced OCR with Field Extraction
+---
+
+## 📚 Modules
+
+### OCR Reader
+
+**Full Workflow Example:**
 
 ```javascript
-import { OCRReader, ImageProcessor } from 'mobile-sdk-ocr-nfc-liveness';
+import { OCRReader } from '@turkiye/kimlik-sdk';
 
-const processIDCard = async (imageUri) => {
-  const ocrReader = new OCRReader({
-    onSuccess: (result) => {
-      // Extract specific fields from ID card
-      const fields = {
-        tcNo: ocrReader.extractField(result.text, 'tc_no'),
-        name: ocrReader.extractField(result.text, 'name'),
-        surname: ocrReader.extractField(result.text, 'surname')
-      };
-      console.log('Extracted fields:', fields);
-    },
-    onError: (error) => {
-      console.error('OCR failed:', error.message);
-    }
-  });
-  
-  // Initialize OCR
-  await ocrReader.startOCR();
-  
-  // Enhance image quality for better OCR results
-  const enhancedImage = await ImageProcessor.enhanceImage(imageUri);
-  
-  // Crop to focus area (optional)
-  const croppedImage = await ocrReader.cropImage(enhancedImage, {
-    x: 50, y: 100, width: 300, height: 200
-  });
-  
-  // Extract text with Turkish language support
-  const result = await ocrReader.extractText(croppedImage, {
+const scanDocument = async () => {
+  const reader = new OCRReader({
+    cardSide: 'front',
     language: 'tr',
-    confidence: 0.8,
+    confidence: 0.7,
+    onSuccess: (data) => {
+      console.log('Text:', data.text);
+      console.log('Confidence:', data.confidence);
+      console.log('Fields:', data.extractedFields);
+    }
+  });
+
+  // Initialize
+  await reader.startOCR();
+  
+  // Capture image
+  const imageUri = await reader.captureImage({
+    quality: 0.8,
+    flash: 'auto',
+    cameraPosition: 'back'
+  });
+  
+  // Extract text
+  const result = await reader.extractText(imageUri, {
     enhanceImage: true
   });
   
   return result;
 };
+```
 
-// Usage example
-processIDCard('file:///path/to/id-card.jpg')
-  .then(result => {
-    console.log('Full text:', result.text);
-    console.log('Confidence:', result.confidence);
-    console.log('Processing time:', result.processingTime, 'ms');
-  })
-  .catch(error => {
-    console.error('Processing failed:', error);
+**Extracted Fields:**
+- `tcNo` - Turkish ID number (11 digits)
+- `name` - First name
+- `surname` - Last name
+- `birthDate` - Date of birth
+- `documentNo` - Document number
+
+---
+
+### NFC Reader
+
+**Full Example:**
+
+```javascript
+import { NFCReader } from '@turkiye/kimlik-sdk';
+
+const readCard = async () => {
+  const reader = new NFCReader({
+    timeout: 10000,
+    alertMessage: 'Lütfen kartınızı yaklaştırın',
+    useRealNFC: true,
+    onProgress: (message) => {
+      console.log(message);
+    }
   });
-```
 
-## 🧪 Testing
-
-Run unit tests:
-```bash
-npm test
-```
-
-Run tests with coverage:
-```bash
-npm run test:coverage
-```
-
-Watch mode for development:
-```bash
-npm run test:watch
-```
-
-## 📁 Project Structure
-
-```
-├── modules/
-│   ├── ocr/                 # OCR functionality
-│   │   ├── OCRReader.js     # Core OCR logic
-│   │   ├── OCRCamera.js     # Camera component
-│   │   ├── types.js         # Type definitions
-│   │   └── index.js         # Module exports
-│   ├── nfc/                 # NFC functionality (planned)
-│   └── liveness/            # Liveness detection (planned)
-├── utils/
-│   ├── logger.js            # Logging utility
-│   ├── permissions.js       # Permission management
-│   └── imageProcessor.js    # Image processing
-├── examples/
-│   └── OCRExample.js        # Usage examples
-├── __tests__/               # Unit tests
-└── docs/                    # Documentation
-```
-
-## 🔧 Configuration
-
-### OCR Configuration
-```javascript
-const ocrReader = new OCRReader({
-  // Callback functions
-  onSuccess: (result) => { /* Handle success */ },
-  onError: (error) => { /* Handle error */ },
-  onStatusChange: (newStatus, oldStatus) => { /* Handle status change */ },
+  // Check NFC support
+  await reader.startNFC();
   
-  // OCR settings (optional)
-  DEFAULT_LANGUAGE: 'tr',
-  SUPPORTED_LANGUAGES: ['en', 'tr', 'de', 'fr', 'es'],
-  IMAGE_QUALITY: 0.8,
-  MAX_IMAGE_SIZE: 1920
-});
+  // Read data
+  const data = await reader.readNFCData();
+  
+  console.log('Personal Info:', {
+    tcNo: data.idNumber,
+    name: data.firstName,
+    surname: data.lastName,
+    birthDate: data.birthDate,
+    gender: data.gender
+  });
+  
+  console.log('Document Info:', {
+    documentNo: data.documentNumber,
+    expiryDate: data.expiryDate,
+    nationality: data.nationality
+  });
+  
+  return data;
+};
 ```
 
-### OCR Methods
-
-#### `startOCR()`
-Initializes the OCR system and requests necessary permissions.
-
-```javascript
-try {
-  await ocrReader.startOCR();
-  console.log('OCR ready');
-} catch (error) {
-  console.error('OCR initialization failed:', error.message);
+**NFC Data Structure:**
+```typescript
+{
+  cardType: string;
+  firstName: string;
+  lastName: string;
+  idNumber: string;      // TC Kimlik No
+  birthDate: string;     // DD.MM.YYYY
+  birthPlace?: string;
+  nationality: string;
+  gender: string;        // M/F
+  documentNumber: string;
+  expiryDate?: string;
+  nfcData: {
+    uid: string;
+    technology: string;
+    readTime: string;
+  };
+  verification: {
+    isValid: boolean;
+    readMethod: 'NFC_REAL' | 'NFC_MOCK';
+  };
 }
 ```
 
-#### `captureImage(options)`
-Captures image from camera with optional parameters.
+---
+
+### Liveness Detection
+
+**Full Example:**
 
 ```javascript
-const options = {
-  quality: 0.8,        // Image quality (0-1)
-  maxWidth: 1920,      // Maximum width
-  maxHeight: 1080      // Maximum height
-};
+import { LivenessDetector } from '@turkiye/kimlik-sdk';
 
-const imageUri = await ocrReader.captureImage(options);
-```
-
-#### `cropImage(imageUri, cropData)`
-Crops image to specified area.
-
-```javascript
-const cropData = {
-  x: 50,      // X coordinate
-  y: 100,     // Y coordinate  
-  width: 300, // Crop width
-  height: 200 // Crop height
-};
-
-const croppedUri = await ocrReader.cropImage(imageUri, cropData);
-```
-
-#### `extractText(imageUri, options)`
-Extracts text from image using OCR.
-
-```javascript
-const options = {
-  language: 'tr',        // OCR language
-  confidence: 0.7,       // Minimum confidence threshold
-  enhanceImage: true     // Auto-enhance image quality
-};
-
-const result = await ocrReader.extractText(imageUri, options);
-console.log('Text:', result.text);
-console.log('Confidence:', result.confidence);
-console.log('Blocks:', result.blocks);
-```
-
-#### `extractField(text, fieldType)`
-Extracts specific fields from OCR text.
-
-```javascript
-const text = 'T.C. KİMLİK NO: 12345678901 AD: MEHMET SOYAD: YILMAZ';
-
-const tcNo = ocrReader.extractField(text, 'tc_no');     // '12345678901'
-const name = ocrReader.extractField(text, 'name');      // 'MEHMET'
-const surname = ocrReader.extractField(text, 'surname'); // 'YILMAZ'
-```
-
-### OCR Camera Component
-
-```javascript
-<OCRCamera
-  onImageCaptured={(photo) => {
-    // Handle captured image
-    console.log('Image captured:', photo.uri);
-  }}
-  onError={(error) => {
-    // Handle camera errors
-    console.error('Camera error:', error.message);
-  }}
-  onCropAreaSelected={(cropArea) => {
-    // Handle crop area selection
-    console.log('Crop area:', cropArea);
-  }}
-  guidanceText="Kimlik kartınızı çerçeve içine yerleştirin"
-  style={{ flex: 1 }}
-/>
-```
-
-### Error Handling
-
-```javascript
-const ocrReader = new OCRReader({
-  onError: (error) => {
-    switch (error.message) {
-      case 'CAMERA_PERMISSION_DENIED':
-        Alert.alert('İzin Gerekli', 'Kamera izni verilmedi');
-        break;
-      case 'TEXT_EXTRACTION_FAILED':
-        Alert.alert('OCR Hatası', 'Metin çıkarılamadı, tekrar deneyin');
-        break;
-      default:
-        Alert.alert('Hata', error.message);
+const performLivenessTest = async () => {
+  const detector = new LivenessDetector({
+    cameraType: 'front',
+    captureQuality: 0.8,
+    timeoutDuration: 30000,
+    enableFaceDetection: true,
+    enableMotionDetection: true,
+    commands: ['blink', 'smile', 'turn_left', 'turn_right'],
+    enableVoice: true, // Sesli komutlar (TTS)
+    
+    onInstructionGiven: (event) => {
+      console.log('Command:', event.instruction);
+      console.log('Message:', event.message);
+    },
+    
+    onProgress: (message) => {
+      console.log('Progress:', message);
+    },
+    
+    onSuccess: (result) => {
+      console.log('Status:', result.status);
+      console.log('Duration:', result.duration);
+      console.log('Commands completed:', result.instructions);
+      console.log('Confidence:', result.confidence);
+    },
+    
+    onError: (error) => {
+      console.error('Liveness failed:', error.message);
     }
-  }
-});
+  });
+
+  await detector.startLivenessTest();
+};
 ```
 
-## 📋 Development Roadmap
+**Available Commands:**
+- `look_straight` - Düz bakın
+- `blink` - Göz kırpın
+- `smile` - Gülümseyin
+- `turn_left` - Sola dönün
+- `turn_right` - Sağa dönün
+- `nod` - Baş sallayın
 
-### Day 1 (Completed) ✅
-- [x] Project structure setup
-- [x] OCR module skeleton
-- [x] Camera integration component
-- [x] Basic text extraction
-- [x] Unit tests implementation
-- [x] Logging and utilities
+---
 
-### Day 2 (Completed) ✅
-- [x] Real OCR library integration (`react-native-text-recognition`)
-- [x] Advanced image processing with `react-native-image-resizer`
-- [x] User guidance overlays and crop selection
-- [x] Comprehensive error handling with callbacks
-- [x] Field extraction for Turkish ID cards
-- [x] Enhanced unit tests with real OCR mocking
-- [x] Runnable demo application
-- [x] Turkish localization and UI improvements
+## 🔧 Advanced Features
 
-### Day 3 (Planned)
-- [ ] NFC module implementation
-- [ ] NFC card reading functionality
-- [ ] Security measures and data encryption
+### 1. Analytics (Optional)
 
-### Day 3 (Planned)
-- [ ] NFC module implementation
-- [ ] NFC card reading functionality
-- [ ] Security measures
+```javascript
+import { Analytics } from '@turkiye/kimlik-sdk';
 
-### Day 4 (Planned)
-- [ ] Liveness detection module
-- [ ] Face detection integration
-- [ ] Anti-spoofing algorithms
-- [ ] Biometric validation
+// Initialize (opt-in)
+Analytics.initialize({
+  enabled: true,
+  provider: 'firebase', // or 'amplitude', 'console'
+  providerInstance: firebaseAnalytics()
+});
 
-### Day 5 (Planned)
-- [ ] Integration testing across all modules
-- [ ] Performance benchmarks and optimization
-- [ ] Complete SDK documentation
-- [ ] TestFlight/Play Store preparation
-- [ ] Production deployment guides
+// Track events
+Analytics.trackEvent('OCR', 'scan_success', 'front_side', 0.95);
+Analytics.trackPerformance('ocr_processing', 1250);
+Analytics.trackError(error, { module: 'OCR' });
+```
 
-## 🚀 Deployment
+### 2. Enhanced Error Handling
 
-### TestFlight (iOS)
-1. Build release version
-2. Archive and upload to App Store Connect
-3. Configure TestFlight testing
-4. Invite beta testers
+```javascript
+import { ErrorHandler, ERROR_CODES, SDKError } from '@turkiye/kimlik-sdk';
 
-### Google Play Console (Android)
-1. Generate signed APK/AAB
-2. Upload to Play Console
-3. Configure internal testing
-4. Distribute to test users
+try {
+  await reader.extractText(imageUri);
+} catch (error) {
+  const sdkError = ErrorHandler.createError(
+    ERROR_CODES.OCR_IMAGE_TOO_BLURRY,
+    error.message
+  );
+  
+  console.log(sdkError.getUserMessage());     // Türkçe mesaj
+  console.log(sdkError.getSuggestedAction()); // Çözüm önerisi
+  console.log(sdkError.canRetry());           // Retry yapılabilir mi?
+}
 
-## 🤝 Contributing
+// Auto retry with backoff
+const result = await ErrorHandler.retryOperation(
+  () => reader.extractText(imageUri),
+  {
+    maxRetries: 3,
+    delayMs: 1000,
+    backoffMultiplier: 2
+  }
+);
+```
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+**Error Codes:**
+- `OCR001` - Camera permission denied
+- `OCR002` - Image too blurry
+- `OCR003` - Image too dark
+- `NFC001` - NFC not supported
+- `NFC003` - NFC timeout
+- `LIV002` - Face not detected
+- ...and 20 more
+
+### 3. Performance Monitoring
+
+```javascript
+import { PerformanceMonitor } from '@turkiye/kimlik-sdk';
+
+// Measure async operations
+const result = await PerformanceMonitor.measure(
+  'ocr_workflow',
+  async () => {
+    return await reader.startCompleteOCRWorkflow();
+  }
+);
+
+// Get statistics
+const stats = PerformanceMonitor.getStatistics('ocr_workflow');
+console.log({
+  average: stats.avg,    // 1250ms
+  median: stats.p50,     // 1100ms
+  p95: stats.p95,        // 2000ms
+  count: stats.count     // 50 scans
+});
+
+// Memory usage
+const memory = PerformanceMonitor.getMemoryUsage();
+console.log(`Memory: ${memory.usedPercent}%`);
+```
+
+---
+
+## 🎯 TypeScript Support
+
+Full TypeScript definitions included:
+
+```typescript
+import { 
+  OCRReader, 
+  OCRResult, 
+  OCROptions,
+  NFCReader,
+  NFCData,
+  LivenessDetector,
+  LivenessResult 
+} from '@turkiye/kimlik-sdk';
+
+// Type-safe configuration
+const options: OCROptions = {
+  cardSide: 'front',
+  language: 'tr',
+  onSuccess: (data: OCRResult) => {
+    console.log(data.text);
+    console.log(data.confidence);
+  }
+};
+
+const reader = new OCRReader(options);
+```
+
+---
+
+## 📱 Platform Requirements
+
+### iOS
+- **Minimum:** iOS 14.0+
+- **Xcode:** 14.0+
+- **Swift:** 5.0+
+- **Frameworks:** Vision, CoreNFC, AVFoundation, Security
+- **Physical device required** for NFC testing
+
+### Android
+- **Minimum SDK:** 26 (Android 8.0)
+- **Target SDK:** 34
+- **NDK:** Latest
+- **NFC:** Hardware support required
+
+### React Native
+- **Version:** 0.74.7
+- **Node:** 16.0+
+- **npm:** 8.0+
+
+---
+
+## 📖 Examples
+
+### Complete Identity Verification Flow
+
+```javascript
+import { OCRReader, NFCReader, LivenessDetector } from '@turkiye/kimlik-sdk';
+
+const verifyIdentity = async () => {
+  try {
+    // Step 1: OCR - Scan front of ID card
+    console.log('Step 1: Scanning ID card...');
+    const ocrReader = new OCRReader({ cardSide: 'front' });
+    await ocrReader.startOCR();
+    const ocrData = await ocrReader.extractText(imageUri);
+    
+    console.log('OCR Data:', {
+      tcNo: ocrData.extractedFields.tcNo,
+      name: ocrData.extractedFields.name
+    });
+
+    // Step 2: NFC - Read chip data
+    console.log('Step 2: Reading NFC chip...');
+    const nfcReader = new NFCReader();
+    await nfcReader.startNFC();
+    const nfcData = await nfcReader.readNFCData();
+    
+    console.log('NFC Data:', {
+      tcNo: nfcData.idNumber,
+      birthDate: nfcData.birthDate
+    });
+
+    // Step 3: Liveness - Verify person
+    console.log('Step 3: Liveness detection...');
+    const detector = new LivenessDetector({
+      commands: ['blink', 'smile'],
+      enableVoice: true
+    });
+    const livenessResult = await detector.startLivenessTest();
+    
+    console.log('Liveness:', livenessResult.status);
+
+    // Verify data consistency
+    if (ocrData.extractedFields.tcNo === nfcData.idNumber) {
+      console.log('✅ Identity verified successfully!');
+      return {
+        verified: true,
+        tcNo: nfcData.idNumber,
+        name: nfcData.firstName,
+        surname: nfcData.lastName
+      };
+    } else {
+      throw new Error('Data mismatch');
+    }
+
+  } catch (error) {
+    console.error('Verification failed:', error);
+    return { verified: false, error: error.message };
+  }
+};
+```
+
+---
+
+## 📚 API Reference
+
+### OCRReader
+
+```typescript
+class OCRReader {
+  constructor(options?: OCROptions);
+  
+  startOCR(options?: OCROptions): Promise<boolean>;
+  captureImage(options?: CameraOptions): Promise<string>;
+  cropImage(imageUri: string, cropData: CropData): Promise<string>;
+  extractText(imageUri: string, options?: OCROptions): Promise<OCRResult>;
+  extractField(text: string, fieldType: 'tc_no' | 'name' | 'surname'): string | null;
+  
+  getStatus(): OCRStatus;
+  getLastExtractedText(): OCRResult | null;
+  getPerformanceMetrics(): PerformanceMetrics;
+  reset(): void;
+}
+```
+
+### NFCReader
+
+```typescript
+class NFCReader {
+  constructor(options?: NFCOptions);
+  
+  startNFC(): Promise<boolean>;
+  readNFCData(options?: NFCOptions): Promise<NFCData>;
+  stopNFC(): Promise<void>;
+  
+  getStatus(): NFCStatus;
+  getLastReadData(): NFCData | null;
+}
+```
+
+### LivenessDetector
+
+```typescript
+class LivenessDetector {
+  constructor(config?: LivenessConfig);
+  
+  startLivenessTest(options?: LivenessOptions): Promise<boolean>;
+  stopLivenessTest(): Promise<void>;
+  
+  getStatus(): LivenessStatus;
+  getCapturedImagesCount(): number;
+  reset(): void;
+}
+```
+
+---
+
+## 🔒 Security
+
+- ✅ **Keychain/SharedPreferences** encryption for sensitive data
+- ✅ **Token-based** PII protection (no personal data in bridge)
+- ✅ **5-minute TTL** for cached sensitive information
+- ✅ **One-time token** usage for secure data retrieval
+- ✅ **Anti-spoofing** depth and texture analysis
+
+---
+
+## 🐛 Error Handling
+
+All errors include:
+- **Code**: Standardized error code (e.g., `OCR002`)
+- **Message**: Turkish user-friendly message
+- **Suggestion**: Actionable solution
+- **Retryable**: Boolean flag indicating if operation can be retried
+
+```javascript
+catch (error) {
+  if (error instanceof SDKError) {
+    console.log('Code:', error.code);
+    console.log('Message:', error.getUserMessage());
+    console.log('Solution:', error.getSuggestedAction());
+    console.log('Can retry:', error.canRetry());
+  }
+}
+```
+
+---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🆘 Support
-
-For support and questions:
-- Create an issue on GitHub
-- Email: support@mobile-sdk.com
-- Documentation: [docs.mobile-sdk.com](https://docs.mobile-sdk.com)
-
-## 📊 Performance Metrics
-
-- OCR Processing Time: ~2-5 seconds
-- Text Recognition Accuracy: 95%+ (Turkish ID cards)
-- Supported Image Formats: JPG, PNG, HEIC
-- Maximum Image Size: 1920x1920px
-- Memory Usage: <50MB during processing
-- Supported Languages: Turkish, English, German, French, Spanish
-
-## Day 2 Completed Features
-
-### Enhanced OCR Reader Module
-- **Real OCR Integration**: Integrated `react-native-text-recognition` library
-- **Image Enhancement**: Automatic image optimization for better OCR results
-- **Field Extraction**: Extract specific fields (TC No, Name, Surname) from ID cards
-- **Confidence Filtering**: Filter OCR results by confidence threshold
-- **Callback System**: Success, error, and status change callbacks
-
-### Advanced Camera Component
-- **User Guidance**: Visual overlay with animated frame for document alignment
-- **Crop Selection**: Interactive crop area selection after photo capture
-- **Turkish UI**: Localized user interface in Turkish
-- **Error Handling**: Comprehensive error messages and recovery options
-- **Permission Management**: Automatic camera permission requests
-
-### Image Processing Utilities
-- **Real Image Cropping**: Actual image cropping using react-native-image-resizer
-- **Image Enhancement**: Quality optimization for OCR processing
-- **Dimension Management**: Automatic image resizing for optimal OCR performance
-- **Base64 Conversion**: Image format conversion utilities
-
-### Comprehensive Testing
-- **Enhanced Unit Tests**: Tests for real OCR integration and field extraction
-- **Mock Integration**: Proper mocking of OCR libraries and image processing
-- **Callback Testing**: Tests for success/error callback functionality
-- **Field Extraction Tests**: Validation of Turkish ID card field parsing
-
-### Runnable Demo Application
-- **Complete OCR Workflow**: Full demonstration of OCR process
-- **Interactive UI**: Buttons for starting OCR, opening camera, testing with mock data
-- **Real-time Logs**: Live logging of OCR operations and status changes
-- **Field Display**: Extracted fields shown in organized format
-- **Error Recovery**: Retry mechanisms and error handling demonstrations
-
-## Quick Start Demo
-
-To test the OCR functionality immediately:
-
-```javascript
-import OCRDemoScreen from './examples/OCRDemoScreen';
-
-// Use the demo screen in your app
-const App = () => {
-  return <OCRDemoScreen />;
-};
-```
-
-The demo screen provides:
-- **OCR Başlat**: Initialize OCR system
-- **Kamera Aç**: Open camera for document capture
-- **Mock Test**: Test with sample data
-- **Sıfırla**: Reset OCR state
-- **Live Logs**: Real-time operation logging
-- **Field Extraction**: Automatic parsing of ID card fields
-
-## Platform Integration
-
-### iOS Setup
-
-1. **Info.plist Permissions** (already configured in `ios/Info.plist`):
-```xml
-<!-- Camera access for OCR -->
-<key>NSCameraUsageDescription</key>
-<string>Bu uygulama kimlik belgelerini okumak için kameraya erişim gerektirir.</string>
-
-<!-- Photo library access -->
-<key>NSPhotoLibraryUsageDescription</key>
-<string>İşlenmiş belge görüntülerini kaydetmek için fotoğraf kütüphanesine erişim gerekebilir.</string>
-
-<!-- Microphone (required by react-native-vision-camera) -->
-<key>NSMicrophoneUsageDescription</key>
-<string>Kamera işlevselliği için mikrofon erişimi gereklidir.</string>
-
-<!-- NFC access for card reading -->
-<key>NFCReaderUsageDescription</key>
-<string>Bu uygulama kimlik kartlarını okumak için NFC erişimi gerektirir.</string>
-```
-
-2. **Required Device Capabilities**:
-```xml
-<key>UIRequiredDeviceCapabilities</key>
-<array>
-    <string>camera-flash</string>
-    <string>auto-focus-camera</string>
-</array>
-```
-
-3. **TestFlight Build Requirements**:
-   - Ensure camera permissions are properly described
-   - Test on physical devices (camera required)
-   - Verify OCR accuracy with real ID cards
-
-### Android Setup
-
-1. **AndroidManifest.xml Permissions** (already configured):
-```xml
-<!-- Camera and storage permissions -->
-<uses-permission android:name="android.permission.CAMERA" />
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-
-<!-- NFC permissions -->
-<uses-permission android:name="android.permission.NFC" />
-
-<!-- Required camera features -->
-<uses-feature android:name="android.hardware.camera" android:required="true" />
-<uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
-
-<!-- Required NFC features -->
-<uses-feature android:name="android.hardware.nfc" android:required="false" />
-```
-
-2. **File Provider Setup** (configured in `android/app/src/main/res/xml/file_paths.xml`):
-   - Internal and external file access for image processing
-   - Cache directories for temporary OCR files
-
-3. **Google Play Internal Testing**:
-   - Upload APK with camera permissions
-   - Test on various Android devices and API levels
-   - Verify OCR performance across different screen sizes
-
-### Installation Steps
-
-1. **Install Dependencies**:
-```bash
-npm install
-# or
-yarn install
-
-# iOS specific
-cd ios && pod install && cd ..
-```
-
-2. **Platform-specific Setup**:
-```bash
-# iOS
-npx react-native run-ios
-
-# Android
-npx react-native run-android
-```
-
-3. **Test SDK Functionality**:
-```javascript
-import { OCRTestScreen } from './examples/OCRTestScreen';
-import { NFCDemoScreen } from './examples/NFCDemoScreen';
-
-// Add to your app navigation
-<OCRTestScreen />  // Test OCR functionality
-<NFCDemoScreen />  // Test NFC functionality
-```
-
-## NFC Module Usage
-
-### Basic NFC Reader Usage
-
-```javascript
-import { NFCReader } from './modules/nfc/NFCReader';
-
-// Initialize NFC Reader with callbacks
-const nfcReader = new NFCReader({
-  onSuccess: (data) => {
-    console.log('NFC Data:', data);
-    console.log('Name:', data.name, data.surname);
-    console.log('ID Number:', data.idNumber);
-  },
-  onError: (error) => {
-    console.error('NFC Error:', error.message);
-  },
-  onStatusChange: (newStatus, oldStatus) => {
-    console.log('Status changed:', oldStatus, '->', newStatus);
-  },
-  onProgress: (message) => {
-    console.log('Progress:', message);
-  }
-});
-
-// Start NFC operations
-const startNFC = async () => {
-  try {
-    const isReady = await nfcReader.startNFC();
-    if (isReady) {
-      const data = await nfcReader.readNFCData();
-      console.log('Read data:', data);
-    }
-  } catch (error) {
-    console.error('NFC operation failed:', error);
-  }
-};
-
-// Stop NFC operations
-await nfcReader.stopNFC();
-```
-
-### NFC Reader Methods
-
-#### `startNFC()`
-Initializes NFC system and checks device support:
-- Verifies NFC hardware support
-- Checks if NFC is enabled
-- Requests necessary permissions
-- Returns `Promise<boolean>` indicating success
-
-#### `readNFCData(options)`
-Starts NFC data reading process:
-- `options.timeout`: Reading timeout in milliseconds (default: 30000)
-- `options.alertMessage`: Custom user guidance message
-- Returns `Promise<object>` with card data
-
-#### `stopNFC()`
-Stops NFC operations and cleanup:
-- Cancels ongoing NFC operations
-- Releases NFC resources
-- Resets reader state
-
-#### `getStatus()`
-Returns current NFC status:
-- `idle`: Not initialized
-- `initializing`: Starting up
-- `ready`: Ready to read
-- `scanning`: Looking for NFC card
-- `reading`: Reading card data
-- `processing`: Processing read data
-- `success`: Operation completed
-- `error`: Error occurred
-
-#### `getLastReadData()`
-Returns the last successfully read NFC data.
-
-#### `reset()`
-Resets NFC reader to initial state.
-
-### NFC Data Structure
-
-The NFC reader returns mock Turkish ID card data with the following structure:
-
-```javascript
-{
-  // Personal Information
-  cardType: "Turkish ID Card",
-  name: "MEHMET",
-  surname: "YILMAZ", 
-  idNumber: "12345678901",
-  birthDate: "15.06.1985",
-  birthPlace: "İSTANBUL",
-  nationality: "T.C.",
-  gender: "E",
-  motherName: "AYŞE",
-  fatherName: "ALİ",
-  
-  // Document Information
-  serialNumber: "A01B02345",
-  documentNumber: "ABC123456",
-  issueDate: "01.01.2020",
-  expiryDate: "01.01.2030",
-  issuingAuthority: "ANKARA NÜFUS MÜDÜRLÜĞÜ",
-  
-  // NFC Technical Data
-  nfcData: {
-    uid: "04:A1:B2:C3:D4:E5:F6",
-    technology: "IsoDep",
-    readTime: "2025-09-10T09:05:30.123Z",
-    signalStrength: 85
-  },
-  
-  // Verification Status
-  verification: {
-    isValid: true,
-    checksum: "VALID",
-    digitalSignature: "VERIFIED"
-  }
-}
-```
-
-### Error Handling
-
-Common NFC errors and their handling:
-
-```javascript
-const nfcReader = new NFCReader({
-  onError: (error) => {
-    switch (error.message) {
-      case 'NFC not supported on this device':
-        // Show user that device doesn't support NFC
-        break;
-      case 'NFC is disabled. Please enable NFC in device settings.':
-        // Guide user to enable NFC in settings
-        break;
-      case 'NFC permissions denied':
-        // Request permissions again
-        break;
-      default:
-        // Handle other errors
-        console.error('NFC Error:', error.message);
-    }
-  }
-});
-```
-
-### Platform Requirements
-
-#### iOS NFC Requirements
-- iOS 11.0 or later for Core NFC
-- Physical device (NFC not available in simulator)
-- NFC-enabled iPhone (iPhone 7 and later)
-- Info.plist permission: `NFCReaderUsageDescription`
-
-#### Android NFC Requirements  
-- Android 4.0 (API level 14) or later
-- NFC hardware support
-- AndroidManifest.xml permissions: `android.permission.NFC`
-- Feature declaration: `android.hardware.nfc`
-
-## Day 3 Completion Summary
-
-### ✅ Completed Features
-- **Complete End-to-End Workflow**: Camera → guidance → capture → crop → OCR → callback system
-- **Advanced Performance Optimization**: Image resizing, metadata removal, processing time tracking
-- **Comprehensive Integration Tests**: Mock ID card data, accuracy testing, error handling
-- **Platform Build Preparation**: iOS Info.plist and Android AndroidManifest.xml configurations
-- **Enhanced Demo Application**: OCRTestScreen with JSON result display and real-time logging
-- **Production-Ready Error Handling**: Graceful failures, user feedback, retry mechanisms
-
-### 🧪 Testing Coverage
-- **Unit Tests**: OCR Reader methods, image processing, field extraction
-- **Integration Tests**: Complete workflow testing with mock data
-- **Accuracy Tests**: Turkish ID card field extraction validation
-- **Performance Tests**: Processing time limits and optimization verification
-- **Error Handling Tests**: Network failures, permission denials, invalid inputs
-
-### 📱 Platform Readiness
-- **iOS TestFlight**: Info.plist configured with proper permissions and descriptions
-- **Android Internal Testing**: AndroidManifest.xml with camera and storage permissions
-- **File Provider Setup**: Secure file sharing for processed images
-- **Device Requirements**: Camera, autofocus, and storage capabilities defined
-
-### 🎯 Performance Metrics
-- **Processing Time**: ~1-3 seconds for typical ID cards
-- **Accuracy Rate**: 85-95% for clear images with confidence filtering
-- **Image Optimization**: Auto-resize to 1600px width for optimal OCR performance
-- **Memory Management**: Efficient image processing with cleanup
-- **Supported Languages**: Turkish (tr) with extensibility framework
-
-### 🚀 Next Steps (Day 4+)
-- **NFC Module Implementation**: Card reading and data extraction
-- **Liveness Detection**: Anti-spoofing and real person verification
-- **Security Enhancements**: Data encryption, secure storage, biometric authentication
-- **Cross-Module Integration**: OCR + NFC + Liveness combined workflows
-- **Performance Optimization**: Offline OCR, background processing, caching
-- **Production Deployment**: App Store and Google Play release preparation
+MIT License - see LICENSE file for details
 
 ---
 
-## Day 4 Completion Summary
+## 👥 Support
 
-### ✅ NFC Module Development
-- **NFC Reader Module**: Complete skeleton with startNFC(), readNFCData(), stopNFC() methods
-- **Device Support Detection**: Automatic NFC hardware and enablement checking
-- **Mock Data Implementation**: Turkish ID card data simulation for testing
-- **User Guidance System**: Turkish language prompts and status updates
-- **Comprehensive Error Handling**: Device compatibility, permission, and operation errors
-- **Callback Architecture**: onSuccess, onError, onStatusChange, onProgress callbacks
-
-### 🧪 NFC Testing Suite
-- **Unit Tests**: 25+ comprehensive tests covering all NFC functionality
-- **Mock Integration**: Proper react-native-nfc-manager mocking
-- **Error Scenarios**: Device support, permissions, initialization failures
-- **Data Validation**: Turkish ID card structure and field verification
-- **Status Management**: State transitions and callback testing
-
-### 📱 NFC Demo Application
-- **NFCDemoScreen**: Complete demo with "NFC Oku" button and JSON display
-- **Support Detection**: Real-time NFC capability checking
-   - ✅ Core skeleton methods implementation
-   - ✅ Demo application (`LivenessDemoScreen.js`)
-   - ✅ Test suite (`liveness.test.js`)
-   - ✅ Platform permissions (iOS/Android)
-
-### 📈 Technical Achievements
-
-- **NFC Module**: Production-ready with 75+ tests and comprehensive error handling
-- **Liveness Module**: Complete skeleton with 25+ tests and demo application
-- **Platform Integration**: Camera permissions configured for both iOS and Android
-- **Documentation**: Complete usage guides and API documentation
-
-### 🚀 Ready for Day 8
-
-- **NFC Reader**: Stable and production-ready
-- **Liveness Detection**: Skeleton ready for full implementation
-- **Integration**: Ready for OCR + NFC + Liveness workflows
-
-**Timeout Management:**
-- 10-second timeout as per Day 5 requirements
-- Automatic session cleanup on timeout
-- User guidance for better positioning
-
-**Connection Recovery:**
-- Connection lost detection
-- Retry mechanisms with exponential backoff
-- Stable positioning guidance
-
-**User Experience:**
-- Turkish error messages with actionable suggestions
-- Visual error indicators and recovery options
-- Mode switching between Real and Mock NFC
-
-### Integration Test Coverage
-
-- ✅ Real NFC tag reading scenarios
-- ✅ Timeout and connection error handling
-- ✅ Device support and permission validation
-- ✅ Turkish ID data structure validation
-- ✅ TC number checksum algorithm verification
-- ✅ NDEF message parsing
-- ✅ Performance and timing validation
-- ✅ Mock vs Real data consistency
+For issues and questions:
+- GitHub Issues: [github.com/atabeyaykut/ocr/issues](https://github.com/atabeyaykut/ocr/issues)
+- Email: support@example.com
 
 ---
 
-## 🎯 Day 9: Real-time Face Motion Detection
+## 🙏 Acknowledgments
 
-### Overview
-
-Day 9 introduces **real-time face motion detection** capabilities to the Liveness Detection module, enabling live camera-based biometric verification with ML Kit face tracking technology.
-
-### Key Features
-
-**Real-time Face Detection:**
-- Integration with `react-native-vision-camera` for high-performance camera access
-- Google ML Kit face detection with landmark analysis
-- Live motion tracking: blink, head turns, smile, nod detection
-- Confidence scoring and threshold-based validation
-
-**Enhanced Command System:**
-- Real-time motion detection callbacks
-- Automatic command validation with live camera feed
-- Fallback to mock validation when camera unavailable
-- Turkish localized feedback and error messages
-
-**Advanced UI Components:**
-- Live camera preview with face detection overlay
-- Real-time motion feedback display
-- Mode switching between Real-time and Mock validation
-- Camera permission handling and status indicators
-
-### Implementation Architecture
-
-```javascript
-// Real-time face detection workflow
-const detector = new LivenessDetector({ realTimeMode: true });
-
-// Motion detection callbacks
-detector.onMotionDetected = (motionData) => {
-  console.log(`Motion detected: ${motionData.motionType}`);
-  console.log(`Confidence: ${motionData.confidence.overall}`);
-};
-
-// Start real-time liveness test
-await detector.startLivenessTest({
-  difficulty: 'medium',
-  commandCount: 3,
-  realTimeMode: true
-});
-```
-
-### Face Detection Capabilities
-
-**Supported Motions:**
-- **Blink Detection**: Eye open/close probability analysis
-- **Head Turns**: Left/right head rotation tracking (±20° threshold)
-- **Smile Detection**: Facial expression probability analysis
-- **Nod Detection**: Vertical head movement tracking
-- **Look Straight**: Forward-facing position validation
-
-**Detection Thresholds:**
-- Eye open probability: < 0.3 for blink detection
-- Head turn angles: ±20° for left/right detection
-- Smile probability: > 0.7 for smile detection
-- Confidence threshold: 0.6 minimum for validation
-
-### Real-time Validation System
-
-**Enhanced Validator:**
-```javascript
-// Real-time validation with face detection data
-const result = await validateRealTimeResponse('blink', {
-  realTimeDetection: true,
-  detectionData: {
-    faceDetected: true,
-    motions: { blink: true },
-    confidence: { overall: 0.85, blink: 0.9 },
-    landmarks: { leftEye: {}, rightEye: {}, nose: {}, mouth: {} }
-  }
-});
-
-// Quality assessment
-const quality = validateDetectionQuality(detectionData);
-console.log(`Quality Score: ${quality.score}`);
-console.log(`Recommendations: ${quality.recommendations}`);
-```
-
-### Dependencies Added
-
-```json
-{
-  "react-native-vision-camera": "^3.6.17",
-  "vision-camera-face-detector": "^0.2.2",
-  "@react-native-ml-kit/face-detection": "^0.7.0",
-  "react-native-reanimated": "^3.6.0",
-  "react-native-worklets-core": "^0.4.0"
-}
-```
-
-### Camera Integration
-
-**Permission Handling:**
-- Automatic camera permission request
-- Permission status monitoring
-- Fallback to mock mode when camera unavailable
-
-**Frame Processing:**
-- Real-time frame analysis with ML Kit
-- Motion state tracking and history
-- Callback-based motion detection system
-
-### Testing Coverage
-
-**Real-time Detection Tests:**
-- ✅ Face detector initialization and readiness
-- ✅ Camera frame processing and face detection
-- ✅ Blink motion detection with eye probability analysis
-- ✅ Head turn detection (left/right) with angle thresholds
-- ✅ Smile detection with facial expression analysis
-- ✅ Real-time validation with confidence scoring
-- ✅ Detection quality assessment and recommendations
-- ✅ Integration with LivenessDetector real-time mode
-
-**Validation Tests:**
-- ✅ Real-time response validation with face data
-- ✅ Low confidence detection failure handling
-- ✅ No face detected error scenarios
-- ✅ Quality assessment for various conditions
-- ✅ Mock validation fallback compatibility
-
-### Demo Application Features
-
-**Enhanced UI:**
-- Real-time/Mock mode toggle switch
-- Live camera feed with face detection overlay
-- Motion detection status indicators
-- Camera permission status display
-- Real-time feedback and confidence scores
-
-**User Experience:**
-- Turkish localized instructions and feedback
-- Visual motion detection indicators
-- Error handling with actionable suggestions
-- Seamless fallback between real-time and mock modes
-
-### Performance Characteristics
-
-**Real-time Processing:**
-- Frame processing: ~16-33ms (30-60 FPS)
-- Face detection latency: ~50-100ms
-- Motion detection response: ~100-200ms
-- Memory usage: Optimized for mobile devices
-
-**Accuracy Metrics:**
-- Face detection accuracy: >95% in good lighting
-- Motion detection precision: >90% for clear movements
-- False positive rate: <5% with proper thresholds
-- Confidence scoring: 0.6-0.99 range with calibrated thresholds
-
-### Error Handling
-
-**Real-time Specific Errors:**
-- Camera initialization failures
-- ML Kit detection errors
-- Frame processing timeouts
-- Motion detection confidence issues
-
-**Recovery Mechanisms:**
-- Automatic fallback to mock validation
-- Camera permission re-request
-- Detection quality recommendations
-- User guidance for better positioning
+Built with:
+- [@react-native-ml-kit/text-recognition](https://www.npmjs.com/package/@react-native-ml-kit/text-recognition)
+- [@react-native-ml-kit/face-detection](https://www.npmjs.com/package/@react-native-ml-kit/face-detection)
+- [react-native-nfc-manager](https://www.npmjs.com/package/react-native-nfc-manager)
+- [react-native-vision-camera](https://www.npmjs.com/package/react-native-vision-camera)
+- [react-native-tts](https://www.npmjs.com/package/react-native-tts)
 
 ---
 
-## 🛡️ Day 10: Advanced Anti-Spoofing Implementation
-
-### Overview
-
-Day 10 introduces **advanced anti-spoofing capabilities** to the Liveness Detection module, providing comprehensive protection against fake photos, screen displays, and other spoofing attempts through multi-layered detection algorithms.
-
-### Key Anti-Spoofing Features
-
-**Multi-Layer Detection System:**
-- **3D Depth Analysis**: Face contour complexity and landmark depth relationships
-- **Eye Movement Validation**: Natural blink patterns and synchronization analysis
-- **Mouth Movement Analysis**: Speech consistency and natural expression detection
-- **Texture Analysis**: Screen reflection, pixelation, and print artifact detection
-- **Temporal Consistency**: Movement smoothness and natural variation tracking
-
-**Advanced Algorithms:**
-- Face contour 3D characteristic analysis with depth variance calculation
-- Natural eye movement pattern recognition with blink duration validation
-- Texture variance analysis for screen/print detection
-- Temporal frame consistency analysis with movement smoothness scoring
-- Multi-factor confidence scoring with weighted analysis combination
-
-### Implementation Architecture
-
-```javascript
-// Anti-spoofing integration with liveness detection
-import { checkSpoof, AntiSpoofingDetector } from '../modules/liveness/antiSpoofing';
-
-// Real-time anti-spoofing check
-const antiSpoofingResult = await checkSpoof(frameData);
-
-if (!antiSpoofingResult.isReal) {
-  console.log(`Spoofing detected: ${antiSpoofingResult.reason}`);
-  console.log(`Confidence: ${antiSpoofingResult.confidence}`);
-  return { isValid: false, error: 'Sahte tespit edildi' };
-}
-
-// Advanced detector with custom configuration
-const detector = new AntiSpoofingDetector({
-  minConfidenceForReal: 0.75,
-  depthVarianceThreshold: 0.15,
-  textureVarianceThreshold: 0.25
-});
-```
-
-### Detection Capabilities
-
-**3D Depth Analysis:**
-- Face contour complexity measurement (threshold: 0.7)
-- Landmark depth relationship validation
-- Z-coordinate variation analysis for 3D characteristics
-- Depth variance threshold: 0.15 for real face detection
-
-**Eye Movement Patterns:**
-- Natural blink duration: 100-400ms
-- Eye synchronization analysis (variance threshold: 0.2)
-- Asymmetric blink detection for unnatural patterns
-- Eye movement consistency across frames
-
-**Texture and Surface Analysis:**
-- Screen pixelation detection (threshold: 0.8)
-- Reflection pattern analysis (threshold: 0.7)
-- Print artifact identification
-- Texture variance measurement (threshold: 0.25)
-
-**Temporal Consistency:**
-- Frame-to-frame movement smoothness (threshold: 0.8)
-- Natural micro-movement detection
-- Static image identification
-- Movement history analysis (5-frame window)
-
-### Validation Integration
-
-**Enhanced Real-time Validation:**
-```javascript
-// Integrated anti-spoofing validation
-const result = await validateRealTimeResponse('blink', captureData, {
-  enableAntiSpoofing: true
-});
-
-// Result includes anti-spoofing analysis
-console.log('Motion Valid:', result.isValid);
-console.log('Anti-spoofing Result:', result.antiSpoofingResult);
-console.log('Combined Confidence:', result.confidence);
-```
-
-**Validation Priority System:**
-1. **Anti-spoofing Check** - Primary security layer
-2. **Face Detection** - Basic face presence validation
-3. **Motion Detection** - Specific command validation
-4. **Confidence Scoring** - Overall quality assessment
-
-### Configuration Options
-
-**Detection Thresholds:**
-```javascript
-const ANTI_SPOOFING_CONFIG = {
-  // 3D depth analysis
-  depthVarianceThreshold: 0.15,
-  faceContourComplexity: 0.7,
-  
-  // Eye movement consistency
-  blinkDurationMin: 100, // ms
-  blinkDurationMax: 400, // ms
-  eyeMovementVariance: 0.2,
-  
-  // Texture analysis
-  textureVarianceThreshold: 0.25,
-  pixelationDetectionThreshold: 0.8,
-  screenReflectionThreshold: 0.7,
-  
-  // Confidence thresholds
-  minConfidenceForReal: 0.75,
-  maxConfidenceForFake: 0.35
-};
-```
-
-### Demo Application Features
-
-**Enhanced UI Controls:**
-- 🛡️ **Anti-Spoofing Toggle**: Enable/disable spoofing detection
-- 🧪 **Spoofing Test Mode**: Simulate fake detection scenarios
-- ❌ **Spoofing Alerts**: Real-time spoofing detection warnings
-- 📊 **Confidence Display**: Live confidence scoring and analysis details
-
-**User Experience:**
-- Visual spoofing detection indicators
-- Turkish localized spoofing error messages
-- Detailed spoofing analysis results
-- Test simulation for demonstration purposes
-
-### Testing Coverage
-
-**Comprehensive Test Suite:**
-- ✅ Real face detection with natural characteristics
-- ✅ Fake photo detection with flat surface analysis
-- ✅ Screen display detection with reflection patterns
-- ✅ Natural eye blink pattern validation
-- ✅ Head movement consistency analysis
-- ✅ Static image detection and temporal analysis
-- ✅ Integration with real-time validation system
-- ✅ Error handling and edge case management
-- ✅ Custom configuration and threshold testing
-- ✅ Performance and memory optimization validation
-
-**Test Scenarios:**
-- Natural blink + head turn combinations
-- Unnatural eye movement patterns
-- Screen reflection and pixelation detection
-- Static image without movement detection
-- Malformed data handling
-- Configuration customization validation
-
-### Performance Characteristics
-
-**Detection Performance:**
-- Anti-spoofing analysis: ~50-150ms per frame
-- 3D depth calculation: ~20-40ms
-- Texture analysis: ~30-60ms
-- Temporal consistency: ~10-20ms
-- Memory usage: Optimized with frame history limits
-
-**Accuracy Metrics:**
-- Real face detection accuracy: >90% in good conditions
-- Fake photo detection rate: >85% for common spoofing attempts
-- Screen display detection: >80% with reflection patterns
-- False positive rate: <10% with calibrated thresholds
-- Overall spoofing detection confidence: 0.75+ for real faces
-
-### Error Handling and Recovery
-
-**Spoofing Detection Errors:**
-- "Ekran/fotoğraf tespit edildi" - Screen/photo detected
-- "Doğal göz hareketi algılanamadı" - Unnatural eye movement
-- "3D yüz derinliği yetersiz" - Insufficient 3D depth
-- "Hareket tutarsızlığı tespit edildi" - Movement inconsistency
-
-**Recovery Mechanisms:**
-- Automatic fallback to motion-only validation
-- User guidance for better positioning
-- Retry mechanisms with spoofing analysis
-- Detailed error reporting with recommendations
-
-### Security Enhancements
-
-**Multi-Factor Authentication:**
-- Motion detection + anti-spoofing validation
-- Confidence score weighting system
-- Temporal consistency requirements
-- 3D depth validation mandatory for high security
-
-**Spoofing Attack Prevention:**
-- Photo/printout detection through texture analysis
-- Screen display detection via reflection patterns
-- Video replay detection through temporal inconsistency
-- Static image detection through movement analysis
-
-### Next Steps (Day 11+)
-
-1. **Complete Biometric Workflow**: OCR + NFC + Liveness + Anti-spoofing integration
-2. **Advanced 3D Analysis**: Depth camera integration and enhanced depth detection
-3. **Machine Learning Enhancement**: Custom ML models for improved spoofing detection
-4. **Performance Optimization**: GPU acceleration and real-time processing optimization
-5. **Production Security**: Encrypted anti-spoofing data and secure validation protocols
-6. **Analytics and Monitoring**: Spoofing attempt tracking and security analytics
-
----
-
-**Day 10 Status**: ✅ **COMPLETED SUCCESSFULLY**  
-**Anti-Spoofing Module**: Production-ready with multi-layer spoofing detection  
-**Liveness Detection**: Enhanced with comprehensive security features  
-**Ready for**: Day 11 complete biometric workflow integration and advanced ML-based detection.
+**Made with ❤️ for Turkish Identity Verification**

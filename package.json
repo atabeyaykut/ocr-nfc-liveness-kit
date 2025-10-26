@@ -12,9 +12,7 @@
     "utils/",
     "examples/",
     "components/",
-    "README.md",
-    "IMPROVEMENTS_APPLIED.md",
-    "QUICK_START_IMPROVEMENTS.md"
+    "README.md"
   ],
   "scripts": {
     "android": "react-native run-android",
