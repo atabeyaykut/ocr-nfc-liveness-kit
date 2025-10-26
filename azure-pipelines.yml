@@ -239,33 +239,35 @@ stages:
             displayName: 'Publish to Azure Artifacts'
 
           # Create GitHub Release
-          - task: GitHubRelease@1
-            displayName: 'Create GitHub Release'
-            condition: eq(variables.isTagBuild, true)
-            inputs:
-              gitHubConnection: 'github-connection'
-              repositoryName: '$(Build.Repository.Name)'
-              action: 'create'
-              target: '$(Build.SourceVersion)'
-              tagSource: 'gitTag'
-              releaseNotesSource: 'inline'
-              releaseNotesInline: |
-                ## OCR NFC Liveness Kit $(Build.SourceBranchName)
-                
-                ### Features
-                - OCR ile kimlik okuma
-                - NFC ile kimlik okuma
-                - Canlılık testi
-                
-                ### Installation
-                ```bash
-                npm install ocr-nfc-liveness-kit@$(Build.SourceBranchName)
-                ```
-              assets: |
-                $(System.DefaultWorkingDirectory)/npm-package/*.tgz
-                $(System.DefaultWorkingDirectory)/android-apk/**/*.apk
-              changeLogCompareToRelease: 'lastFullRelease'
-              changeLogType: 'commitBased'
+          # Temporarily disabled - requires GitHub service connection
+          # Uncomment after creating 'github-connection' in Service Connections
+          # - task: GitHubRelease@1
+          #   displayName: 'Create GitHub Release'
+          #   condition: eq(variables.isTagBuild, true)
+          #   inputs:
+          #     gitHubConnection: 'github-connection'
+          #     repositoryName: '$(Build.Repository.Name)'
+          #     action: 'create'
+          #     target: '$(Build.SourceVersion)'
+          #     tagSource: 'gitTag'
+          #     releaseNotesSource: 'inline'
+          #     releaseNotesInline: |
+          #       ## OCR NFC Liveness Kit $(Build.SourceBranchName)
+          #       
+          #       ### Features
+          #       - OCR ile kimlik okuma
+          #       - NFC ile kimlik okuma
+          #       - Canlılık testi
+          #       
+          #       ### Installation
+          #       ```bash
+          #       npm install ocr-nfc-liveness-kit@$(Build.SourceBranchName)
+          #       ```
+          #     assets: |
+          #       $(System.DefaultWorkingDirectory)/npm-package/*.tgz
+          #       $(System.DefaultWorkingDirectory)/android-apk/**/*.apk
+          #     changeLogCompareToRelease: 'lastFullRelease'
+          #     changeLogType: 'commitBased'
 
   # Stage 6: Deploy Documentation
   - stage: Documentation
