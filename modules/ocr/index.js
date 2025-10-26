@@ -5,4 +5,6 @@ export { default as OCRReader } from './OCRReader';
 export { default as SecureOCRReader } from './SecureOCRReader';
 export { default as OCRCamera } from './OCRCamera';
 export { default as OCRCameraCapture } from './OCRCameraCapture';
+export { default as OCRReaderModule, OCRReaderScreen } from './OCRReaderModule';
+export { initializeOCR } from './initOCR';
 export * from './types';
