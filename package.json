@@ -1,5 +1,5 @@
 {
-  "name": "@turkiye/kimlik-sdk",
+  "name": "ocr-nfc-liveness-kit",
   "version": "1.0.0",
   "description": "React Native SDK for Turkish ID card verification with OCR, NFC, and Liveness Detection - Entegre edilebilir modüller",
   "main": "sdk.js",

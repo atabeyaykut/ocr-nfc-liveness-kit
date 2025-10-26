@@ -1,6 +1,6 @@
 # 🇹🇷 Turkish ID Card SDK
 
-[![npm version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://www.npmjs.com/package/@turkiye/kimlik-sdk)
+[![npm version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://dev.azure.com/kantlori/ocr-nfc-liveness-kit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![React Native](https://img.shields.io/badge/React%20Native-0.74.7-61DAFB.svg)](https://reactnative.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-3178C6.svg)](https://www.typescriptlang.org/)
@@ -68,11 +68,45 @@ Complete solution for identity verification in Turkey with support for:
 
 ## 📦 Installation
 
+### Prerequisites
+
+This package is hosted on **Azure Artifacts** (private registry). You need:
+1. Azure DevOps organization access: `kantlori`
+2. Personal Access Token (PAT) with **Packaging (Read)** scope
+
+**Get your PAT Token:**
+1. Visit: https://dev.azure.com/kantlori
+2. User Settings (top right) → Personal Access Tokens
+3. New Token → Scope: `Packaging (Read)` → Create
+4. Copy and save the token
+
+### Quick Setup
+
+#### Option 1: Automated Setup (Recommended)
 ```bash
-npm install @turkiye/kimlik-sdk
-# or
-yarn add @turkiye/kimlik-sdk
+# Run setup script
+./scripts/setup-azure-auth.sh
 ```
+
+#### Option 2: Manual Setup
+
+**Step 1:** Create `.npmrc` in your project root:
+```bash
+registry=https://pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/
+always-auth=true
+//pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/:_authToken=YOUR_PAT_TOKEN
+```
+
+⚠️ **Important:** Add `.npmrc` to `.gitignore` (contains sensitive token!)
+
+**Step 2:** Install the package:
+```bash
+npm install ocr-nfc-liveness-kit
+# or
+yarn add ocr-nfc-liveness-kit
+```
+
+📖 **Full installation guide:** See [`docs/INSTALLATION.md`](docs/INSTALLATION.md)
 
 ### iOS Setup
 ```bash
@@ -102,7 +136,7 @@ Add to `AndroidManifest.xml`:
 ### Basic OCR Scanning
 
 ```javascript
-import { OCRReader } from '@turkiye/kimlik-sdk';
+import { OCRReader } from 'ocr-nfc-liveness-kit';
 
 const reader = new OCRReader({
   cardSide: 'front',
@@ -123,7 +157,7 @@ await reader.startOCR();
 ### Basic NFC Reading
 
 ```javascript
-import { NFCReader } from '@turkiye/kimlik-sdk';
+import { NFCReader } from 'ocr-nfc-liveness-kit';
 
 const nfcReader = new NFCReader({
   alertMessage: 'Kimliğinizi telefonun arkasına yaklaştırın',
@@ -141,7 +175,7 @@ await nfcReader.readNFCData();
 ### Basic Liveness Test
 
 ```javascript
-import { LivenessDetector } from '@turkiye/kimlik-sdk';
+import { LivenessDetector } from 'ocr-nfc-liveness-kit';
 
 const detector = new LivenessDetector({
   commands: ['blink', 'smile', 'turn_left'],
@@ -167,7 +201,7 @@ await detector.startLivenessTest();
 **Full Workflow Example:**
 
 ```javascript
-import { OCRReader } from '@turkiye/kimlik-sdk';
+import { OCRReader } from 'ocr-nfc-liveness-kit';
 
 const scanDocument = async () => {
   const reader = new OCRReader({
@@ -214,7 +248,7 @@ const scanDocument = async () => {
 **Full Example:**
 
 ```javascript
-import { NFCReader } from '@turkiye/kimlik-sdk';
+import { NFCReader } from 'ocr-nfc-liveness-kit';
 
 const readCard = async () => {
   const reader = new NFCReader({
@@ -282,7 +316,7 @@ const readCard = async () => {
 **Full Example:**
 
 ```javascript
-import { LivenessDetector } from '@turkiye/kimlik-sdk';
+import { LivenessDetector } from 'ocr-nfc-liveness-kit';
 
 const performLivenessTest = async () => {
   const detector = new LivenessDetector({
@@ -334,7 +368,7 @@ const performLivenessTest = async () => {
 ### 1. Analytics (Optional)
 
 ```javascript
-import { Analytics } from '@turkiye/kimlik-sdk';
+import { Analytics } from 'ocr-nfc-liveness-kit';
 
 // Initialize (opt-in)
 Analytics.initialize({
@@ -352,7 +386,7 @@ Analytics.trackError(error, { module: 'OCR' });
 ### 2. Enhanced Error Handling
 
 ```javascript
-import { ErrorHandler, ERROR_CODES, SDKError } from '@turkiye/kimlik-sdk';
+import { ErrorHandler, ERROR_CODES, SDKError } from 'ocr-nfc-liveness-kit';
 
 try {
   await reader.extractText(imageUri);
@@ -390,7 +424,7 @@ const result = await ErrorHandler.retryOperation(
 ### 3. Performance Monitoring
 
 ```javascript
-import { PerformanceMonitor } from '@turkiye/kimlik-sdk';
+import { PerformanceMonitor } from 'ocr-nfc-liveness-kit';
 
 // Measure async operations
 const result = await PerformanceMonitor.measure(
@@ -429,7 +463,7 @@ import {
   NFCData,
   LivenessDetector,
   LivenessResult 
-} from '@turkiye/kimlik-sdk';
+} from 'ocr-nfc-liveness-kit';
 
 // Type-safe configuration
 const options: OCROptions = {
@@ -473,7 +507,7 @@ const reader = new OCRReader(options);
 ### Complete Identity Verification Flow
 
 ```javascript
-import { OCRReader, NFCReader, LivenessDetector } from '@turkiye/kimlik-sdk';
+import { OCRReader, NFCReader, LivenessDetector } from 'ocr-nfc-liveness-kit';
 
 const verifyIdentity = async () => {
   try {

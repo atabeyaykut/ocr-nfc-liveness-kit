@@ -2,7 +2,7 @@
 
 ## 📦 Paket Bilgileri
 
-- **Paket Adı:** `@turkiye/kimlik-sdk`
+- **Paket Adı:** `@kantlori/ocr-nfc-liveness-kit`
 - **Versiyon:** 1.0.0
 - **Boyut:** ~147KB
 - **Registry:** Azure Artifacts
@@ -63,12 +63,12 @@ Azure Artifacts'a manuel publish için:
    export AZURE_ARTIFACTS_PAT="your-token-here"
    
    # .npmrc dosyasını güncelle (otomatik)
-   npm config set //pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/:_authToken ${AZURE_ARTIFACTS_PAT}
+   npm config set //pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/:_authToken ${AZURE_ARTIFACTS_PAT}
    ```
 
 3. **Kimlik Doğrulama**
    ```bash
-   npm config set @turkiye:registry https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/
+   npm config set @kantlori:registry https://pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/
    npm config set always-auth true
    ```
 
@@ -83,13 +83,13 @@ npm test
 npm pack
 
 # 3. Paket içeriğini kontrol et
-tar -tzf turkiye-kimlik-sdk-1.0.0.tgz
+tar -tzf kantlori-ocr-nfc-liveness-kit-1.0.0.tgz
 
 # 4. Azure Artifacts'a publish
-npm publish --registry https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/
+npm publish --registry https://pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/
 
 # 5. Doğrulama
-npm view @turkiye/kimlik-sdk --registry https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/
+npm view @kantlori/ocr-nfc-liveness-kit --registry https://pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/
 ```
 
 ---
@@ -120,10 +120,10 @@ npm pack
 
 # Başka bir projede test et
 cd /path/to/test-project
-npm install /path/to/ocr/turkiye-kimlik-sdk-1.0.0.tgz
+npm install /path/to/ocr/kantlori-ocr-nfc-liveness-kit-1.0.0.tgz
 
 # Import test
-node -e "const sdk = require('@turkiye/kimlik-sdk'); console.log(Object.keys(sdk));"
+node -e "const sdk = require('@kantlori/ocr-nfc-liveness-kit'); console.log(Object.keys(sdk));"
 ```
 
 ### İçerik Listesi
@@ -131,7 +131,7 @@ node -e "const sdk = require('@turkiye/kimlik-sdk'); console.log(Object.keys(sdk
 Paket aşağıdaki dosyaları içermelidir:
 
 ```
-turkiye-kimlik-sdk-1.0.0.tgz
+kantlori-ocr-nfc-liveness-kit-1.0.0.tgz
 ├── sdk.js                      (Ana entry point)
 ├── index.d.ts                  (TypeScript definitions)
 ├── package.json
@@ -169,14 +169,14 @@ turkiye-kimlik-sdk-1.0.0.tgz
 
 ### Registry URL
 ```
-https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/
+https://pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/
 ```
 
 ### Feed Ayarları
 
 **Azure DevOps Portal:**
 1. Azure DevOps > Artifacts
-2. kimlik-sdk feed'i seç
+2. ocr-nfc-liveness-kit feed'i seç
 3. Connect to feed > npm
 4. Talimatları takip et
 
@@ -229,7 +229,7 @@ npm publish --tag beta
 npm pack --dry-run
 
 # Dosya listesini gör
-tar -tzf turkiye-kimlik-sdk-1.0.0.tgz | head -20
+tar -tzf kantlori-ocr-nfc-liveness-kit-1.0.0.tgz | head -20
 ```
 
 ---
@@ -240,23 +240,23 @@ tar -tzf turkiye-kimlik-sdk-1.0.0.tgz | head -20
 
 ```bash
 # 1. Registry yapılandırması
-npm config set @turkiye:registry https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/
+npm config set @kantlori:registry https://pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/
 
 # 2. Kimlik doğrulama (gerekirse)
-npm login --registry https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/
+npm login --registry https://pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/
 
 # 3. Kurulum
-npm install @turkiye/kimlik-sdk
+npm install @kantlori/ocr-nfc-liveness-kit
 
 # veya belirli versiyon
-npm install @turkiye/kimlik-sdk@1.0.0
+npm install @kantlori/ocr-nfc-liveness-kit@1.0.0
 ```
 
 ### .npmrc Dosyası (Proje)
 
 ```ini
 # .npmrc (proje root)
-@turkiye:registry=https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/
+@kantlori:registry=https://pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/
 always-auth=true
 ```
 
@@ -308,13 +308,13 @@ git push origin v1.0.0
 
 ```bash
 # Paketin yayınlandığını kontrol et
-npm view @turkiye/kimlik-sdk
+npm view @kantlori/ocr-nfc-liveness-kit
 
 # Tüm versiyonları listele
-npm view @turkiye/kimlik-sdk versions
+npm view @kantlori/ocr-nfc-liveness-kit versions
 
 # Son versiyon bilgileri
-npm view @turkiye/kimlik-sdk dist-tags
+npm view @kantlori/ocr-nfc-liveness-kit dist-tags
 ```
 
 ### GitHub Release
@@ -338,10 +338,10 @@ https://github.com/atabeyaykut/ocr/releases/tag/v1.0.0
 
 ```bash
 # Registry'yi kontrol et
-npm config get @turkiye:registry
+npm config get @kantlori:registry
 
 # Yeniden yapılandır
-npm config set @turkiye:registry https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/
+npm config set @kantlori:registry https://pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/
 ```
 
 ### Yetki Hatası (401/403)
@@ -351,7 +351,7 @@ npm config set @turkiye:registry https://pkgs.dev.azure.com/turkiye/_packaging/k
 export AZURE_ARTIFACTS_PAT="new-token"
 
 # Yeniden authenticate
-npm login --registry https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/
+npm login --registry https://pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/
 ```
 
 ### Pipeline Başarısız
@@ -387,10 +387,10 @@ git tag -a v1.0.0 -m "Release v1.0.0"
 git push origin v1.0.0
 
 # 3. Azure DevOps'ta pipeline'ı izle
-# https://dev.azure.com/turkiye/kimlik-sdk/_build
+# https://dev.azure.com/kantlori/ocr-nfc-liveness-kit/_build
 
 # 4. Doğrula
-npm view @turkiye/kimlik-sdk@1.0.0
+npm view @kantlori/ocr-nfc-liveness-kit@1.0.0
 ```
 
 **Tamamlandı!** 🎉

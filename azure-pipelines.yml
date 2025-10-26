@@ -18,11 +18,11 @@ pr:
       - develop
 
 variables:
-  - group: kimlik-sdk-variables
+  - group: ocr-nfc-liveness-kit-variables
   - name: nodeVersion
     value: '18.x'
   - name: npmRegistry
-    value: 'https://pkgs.dev.azure.com/turkiye/_packaging/kimlik-sdk/npm/registry/'
+    value: 'https://pkgs.dev.azure.com/kantlori/ocr-nfc-liveness-kit/_packaging/ocr-nfc-liveness-kit/npm/registry/'
   - name: isMainBranch
     value: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
   - name: isReleaseBranch
@@ -136,7 +136,7 @@ stages:
             displayName: 'WhiteSource scan'
             inputs:
               cwd: '$(System.DefaultWorkingDirectory)'
-              projectName: 'kimlik-sdk'
+              projectName: 'ocr-nfc-liveness-kit'
             continueOnError: true
 
   # Stage 3: Android Build
@@ -226,7 +226,7 @@ stages:
             displayName: 'Authenticate to Azure Artifacts'
             inputs:
               workingFile: '.npmrc'
-              customEndpoint: 'kimlik-sdk-npm-connection'
+              customEndpoint: 'ocr-nfc-liveness-kit-npm-connection'
 
           - script: |
               # Set version for tagged builds
@@ -254,7 +254,7 @@ stages:
               tagSource: 'gitTag'
               releaseNotesSource: 'inline'
               releaseNotesInline: |
-                ## Kimlik SDK $(Build.SourceBranchName)
+                ## OCR NFC Liveness Kit $(Build.SourceBranchName)
                 
                 ### Features
                 - OCR ile kimlik okuma
@@ -263,7 +263,7 @@ stages:
                 
                 ### Installation
                 ```bash
-                npm install @turkiye/kimlik-sdk@$(Build.SourceBranchName)
+                npm install ocr-nfc-liveness-kit@$(Build.SourceBranchName)
                 ```
               assets: |
                 $(System.DefaultWorkingDirectory)/npm-package/*.tgz
