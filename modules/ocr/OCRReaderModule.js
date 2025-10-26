@@ -1609,9 +1609,13 @@ export const OCRReaderScreen = ({ navigation, route }) => {
           enableAutoStabilization: false,
           enableAutoRedEyeReduction: false,
         });
-        const photoUri = `file://${data.path}`;
-        console.log('[OCR] Step 2: Picture taken successfully:', photoUri);
-        setPreviewImage(photoUri);
+        
+        // Camera returns absolute path, no need to add file:// prefix
+        // It will be normalized in processImage
+        const photoPath = data.path;
+        console.log('[OCR] Step 2: Picture taken successfully:', photoPath);
+        console.log('[OCR] Photo data:', data);
+        setPreviewImage(photoPath);
         setIsCameraActive(false);
         setIsProcessing(false);
         setAwaitingConfirmation(true);
