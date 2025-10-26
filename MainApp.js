@@ -22,8 +22,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 
-// Import modules
-import { OCRReaderScreen } from './modules/ocr/OCRReaderModule';
+// Import modules - Camera is lazy loaded inside OCRReaderScreen to prevent early initialization
+import { OCRReaderScreen } from './modules/ocr';
 import { NFCReaderScreen } from './modules/nfc/NFCReaderModule';
 import { LivenessDetectionScreen } from './modules/liveness/LivenessDetectionModule';
 import DualSideOCRDemo from './examples/DualSideOCRDemo';
