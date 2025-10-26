@@ -1510,7 +1510,8 @@ export const OCRReaderScreen = ({ navigation, route }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [flashMode, setFlashMode] = useState('off'); // 'off', 'on', 'auto'
   const [torchEnabled, setTorchEnabled] = useState(false);
-  const [previewImage, setPreviewImage] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null); // For Image component (needs file:// URI)
+  const [previewImagePath, setPreviewImagePath] = useState(null); // For OCR processing (native path)
   const [ocrResult, setOcrResult] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
@@ -1610,12 +1611,19 @@ export const OCRReaderScreen = ({ navigation, route }) => {
           enableAutoRedEyeReduction: false,
         });
         
-        // Camera returns absolute path, no need to add file:// prefix
-        // It will be normalized in processImage
+        // Camera returns absolute path
         const photoPath = data.path;
         console.log('[OCR] Step 2: Picture taken successfully:', photoPath);
         console.log('[OCR] Photo data:', data);
-        setPreviewImage(photoPath);
+        
+        // For Image component: needs file:// URI format
+        const photoUri = photoPath.startsWith('file://') ? photoPath : `file://${photoPath}`;
+        
+        // Store both formats
+        setPreviewImage(photoUri); // For Image component display
+        setPreviewImagePath(photoPath); // For OCR processing
+        console.log('[OCR] Preview URI:', photoUri);
+        console.log('[OCR] Processing path:', photoPath);
         setIsCameraActive(false);
         setIsProcessing(false);
         setAwaitingConfirmation(true);
@@ -1631,7 +1639,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
   };
 
   const confirmAndProcessOCR = async () => {
-    if (!previewImage || isProcessing) return;
+    if (!previewImagePath || isProcessing) return;
 
     setIsProcessing(true);
     setAwaitingConfirmation(false);
@@ -1639,10 +1647,11 @@ export const OCRReaderScreen = ({ navigation, route }) => {
 
     try {
       console.log('[OCR] Step 3: Starting OCR processing...');
+      console.log('[OCR] Using path for processing:', previewImagePath);
       ocrModule.startOCR({ includeImage: true });
 
-      console.log('[OCR] Step 4: Calling processImage...');
-      const result = await ocrModule.processImage(previewImage);
+      console.log('[OCR] Step 4: Calling processImage with native path...');
+      const result = await ocrModule.processImage(previewImagePath);
       console.log('[OCR] Step 5: OCR Complete! Result:', JSON.stringify(result, null, 2));
     } catch (error) {
       console.error('[OCR] ERROR:', error);
@@ -1651,6 +1660,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
       setIsProcessing(false);
       setIsCameraActive(true);
       setPreviewImage(null);
+      setPreviewImagePath(null);
       setAwaitingConfirmation(false);
       setDetectionHint('Kimlik kartını çerçeve içine yerleştirin');
     }
@@ -1658,6 +1668,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
 
   const retakePicture = () => {
     setPreviewImage(null);
+    setPreviewImagePath(null);
     setAwaitingConfirmation(false);
     setIsCameraActive(true);
     setDetectionHint('Kimlik kartını çerçeve içine yerleştirin');
@@ -1694,7 +1705,20 @@ export const OCRReaderScreen = ({ navigation, route }) => {
         cropperCancelText: 'İptal',
       });
 
-      setPreviewImage(image.path);
+      console.log('[OCR] Gallery image selected:', image.path);
+      
+      // ImageCropPicker returns native path
+      const imagePath = image.path;
+      
+      // For Image component: needs file:// URI format
+      const imageUri = imagePath.startsWith('file://') ? imagePath : `file://${imagePath}`;
+      
+      // Store both formats
+      setPreviewImage(imageUri); // For Image component display
+      setPreviewImagePath(imagePath); // For OCR processing
+      console.log('[OCR] Preview URI:', imageUri);
+      console.log('[OCR] Processing path:', imagePath);
+      
       setIsCameraActive(false);
       setAwaitingConfirmation(true);
       setDetectionHint('Fotoğrafı kontrol edin ve "Oku" butonuna basın');
@@ -1709,6 +1733,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
   const retryOCR = () => {
     setOcrResult(null);
     setPreviewImage(null);
+    setPreviewImagePath(null);
     setIsCameraActive(true);
   };
 
