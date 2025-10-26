@@ -43,6 +43,11 @@ const {
 const Logger = require('./utils/logger');
 const { ImageProcessor } = require('./utils/imageProcessor');
 
+// Optional Enhancement Utilities (Production-safe, opt-in)
+const Analytics = require('./utils/analytics');
+const { ErrorHandler, SDKError, ERROR_CODES, ERROR_MESSAGES, SUGGESTED_ACTIONS } = require('./utils/errorHandler');
+const PerformanceMonitor = require('./utils/performanceMonitor');
+
 // =============================================================================
 // KOMPLEKSİYA MODÜLLER (React Component'leri - Opsiyonel)
 // =============================================================================
@@ -114,6 +119,12 @@ module.exports = {
   Logger,
   ImageProcessor,
   
+  // Enhancement Utilities (Opt-in)
+  Analytics,
+  ErrorHandler,
+  SDKError,
+  PerformanceMonitor,
+  
   // Config
   SDKConfig,
   SDK_VERSION,
@@ -127,6 +138,9 @@ module.exports = {
   LIVENESS_STATUS,
   LIVENESS_INSTRUCTIONS,
   LIVENESS_CONFIG,
+  ERROR_CODES,
+  ERROR_MESSAGES,
+  SUGGESTED_ACTIONS,
   
   // OCR Types
   ...OCRTypes,

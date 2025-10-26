@@ -3,7 +3,19 @@
   "version": "1.0.0",
   "description": "React Native SDK for Turkish ID card verification with OCR, NFC, and Liveness Detection - Entegre edilebilir modüller",
   "main": "sdk.js",
+  "types": "index.d.ts",
   "private": false,
+  "files": [
+    "sdk.js",
+    "index.d.ts",
+    "modules/",
+    "utils/",
+    "examples/",
+    "components/",
+    "README.md",
+    "IMPROVEMENTS_APPLIED.md",
+    "QUICK_START_IMPROVEMENTS.md"
+  ],
   "scripts": {
     "android": "react-native run-android",
     "ios": "react-native run-ios",
