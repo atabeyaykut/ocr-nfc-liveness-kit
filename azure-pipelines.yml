@@ -132,12 +132,8 @@ stages:
             displayName: 'NPM Audit'
             continueOnError: true
 
-          - task: WhiteSource@21
-            displayName: 'WhiteSource scan'
-            inputs:
-              cwd: '$(System.DefaultWorkingDirectory)'
-              projectName: 'ocr-nfc-liveness-kit'
-            continueOnError: true
+          # WhiteSource task removed - requires enterprise license
+          # Install from marketplace if needed: https://marketplace.visualstudio.com
 
   # Stage 3: Android Build
   - stage: AndroidBuild
