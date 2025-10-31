@@ -11,8 +11,8 @@ const {
   generateCommandSequence,
 } = require("./commands");
 const {
-  validateResponse: mockValidateResponse,
-  validateCommandSequence,
+  validateLivenessResult,
+  validateRealTimeResponse,
 } = require("./validator");
 const FaceDetector = require("./detector");
 

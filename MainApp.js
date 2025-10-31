@@ -22,11 +22,12 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 
-// Import modules - Camera is lazy loaded inside OCRReaderScreen to prevent early initialization
-import { OCRReaderScreen } from './modules/ocr';
+// Import modules - STANDALONE VERSION without Vision Camera
+// Using Simplified screens with ImagePicker + ML Kit instead of Vision Camera
 import { NFCReaderScreen } from './modules/nfc/NFCReaderModule';
-import { LivenessDetectionScreen } from './modules/liveness/LivenessDetectionModule';
-import DualSideOCRDemo from './examples/DualSideOCRDemo';
+import { SimplifiedOCRScreen } from './modules/ocr/SimplifiedOCRReader';
+import { DualSideOCRScreen } from './modules/ocr/DualSideOCRScreen';
+import { InteractiveLivenessScreen } from './modules/liveness/InteractiveLivenessScreen';
 
 const Stack = createStackNavigator();
 
@@ -182,9 +183,9 @@ const MainMenuScreen = ({ navigation }) => {
               source={{ uri: 'https://img.icons8.com/color/80/000000/face-id.png' }}
               style={styles.moduleIcon}
             />
-            <Text style={styles.moduleTitle}>Canlılık Testi</Text>
+            <Text style={styles.moduleTitle}>Canlılık Testi ⚡</Text>
             <Text style={styles.moduleDescription}>
-              Yüz doğrulama ile gerçek kişi olduğunuzu kanıtlayın
+              6 adımlı interaktif yüz doğrulama (göz kırp, gülümse, sağa/sola bak, başını eğ)
             </Text>
             <View style={[
               styles.permissionBadge,
@@ -256,28 +257,9 @@ const TestResultScreen = ({ route, navigation }) => {
   );
 };
 
-// Main App Component
+// Main App Component - STANDALONE VERSION
 export default function MainApp() {
   useEffect(() => {
-    // 🚀 OPTIMIZATION: Preload ML Kit model for faster first scan
-    const preloadMLKit = async () => {
-      try {
-        console.log('[App] Preloading ML Kit model...');
-        const TextRecognition = require('@react-native-ml-kit/text-recognition').default;
-        // Trigger model load by recognizing an empty string
-        await TextRecognition.recognize('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
-          .catch(() => {
-            // Silent fail - just for preloading
-          });
-        console.log('[App] ML Kit model preloaded ✓');
-      } catch (error) {
-        // Silent fail - preload is optional
-        console.log('[App] ML Kit preload skipped');
-      }
-    };
-    
-    preloadMLKit();
-    
     // Handle back button on Android
     const backAction = () => {
       Alert.alert('Çıkış', 'Uygulamadan çıkmak istiyor musunuz?', [
@@ -308,10 +290,10 @@ export default function MainApp() {
         }}
       >
         <Stack.Screen name="MainMenu" component={MainMenuScreen} />
-        <Stack.Screen name="OCR" component={OCRReaderScreen} />
-        <Stack.Screen name="DualSideOCR" component={DualSideOCRDemo} />
+        <Stack.Screen name="OCR" component={SimplifiedOCRScreen} />
+        <Stack.Screen name="DualSideOCR" component={DualSideOCRScreen} />
         <Stack.Screen name="NFC" component={NFCReaderScreen} />
-        <Stack.Screen name="Liveness" component={LivenessDetectionScreen} />
+        <Stack.Screen name="Liveness" component={InteractiveLivenessScreen} />
         <Stack.Screen name="TestResult" component={TestResultScreen} />
       </Stack.Navigator>
     </NavigationContainer>

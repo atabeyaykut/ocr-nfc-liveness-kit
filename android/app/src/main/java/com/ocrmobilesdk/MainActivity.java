@@ -64,7 +64,8 @@ public class MainActivity extends ReactActivity {
   @Override
   protected String getMainComponentName() {
     // This should match the app name registered from JavaScript (AppRegistry.registerComponent)
-    return "mobile-sdk-ocr-nfc-liveness";
+    // MUST match index.js: AppRegistry.registerComponent('OCRMobileSDK', () => App);
+    return "OCRMobileSDK";
   }
 
   /**
