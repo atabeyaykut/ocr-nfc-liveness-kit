@@ -12,6 +12,18 @@ module.exports = {
         ios: null, // Disable for iOS
       },
     },
+    '@react-native-ml-kit/face-detection': {
+      platforms: {
+        android: null,
+        ios: null,
+      },
+    },
+    '@react-native-ml-kit/text-recognition': {
+      platforms: {
+        android: null,
+        ios: null,
+      },
+    },
   },
   assets: ['./assets/fonts/', './assets/images/'],
 };

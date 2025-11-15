@@ -3,7 +3,6 @@
  * Real-time face tracking and motion detection using ML Kit
  */
 
-const { runOnJS } = require('react-native-reanimated');
 const FaceDetection = require('@react-native-ml-kit/face-detection');
 const Logger = require('../../utils/logger');
 
@@ -32,7 +31,11 @@ export const FACE_LANDMARKS = {
 
 // Motion detection thresholds
 const MOTION_THRESHOLDS = {
-  HEAD_TURN_ANGLE: 15, // degrees
+  HEAD_YAW_TURN: 18, // degrees for left/right
+  HEAD_PITCH_UP: 15, // degrees for look up
+  HEAD_PITCH_DOWN: 15, // degrees for look down
+  HEAD_PITCH_NOD: 12, // degrees for nod detection
+  HEAD_ROLL_TILT: 15, // degrees for tilt (future use)
   EYE_OPEN_PROBABILITY: 0.8,
   EYE_CLOSED_PROBABILITY: 0.3,
   SMILE_PROBABILITY: 0.7,
@@ -52,6 +55,7 @@ class FaceDetector {
     this.detectionCallbacks = {};
     this.isDetecting = false;
     this.frameCount = 0;
+    this.lastProcessedAt = 0;
 
     // Motion state tracking
     this.motionState = {
@@ -97,10 +101,20 @@ class FaceDetector {
     }
 
     try {
+      const now = Date.now();
+      if (this.lastProcessedAt && now - this.lastProcessedAt < 200) {
+        return null;
+      }
+      this.lastProcessedAt = now;
       this.frameCount++;
 
       // Detect faces in frame
-      const faces = await FaceDetection.detect(frame);
+      let detectionInput = frame;
+      if (typeof frame === 'object' && frame !== null && frame.path) {
+        detectionInput = frame.path;
+      }
+
+      const faces = await FaceDetection.detect(detectionInput);
 
       // Update face tracking
       this.previousFaces = [...this.currentFaces];
@@ -142,6 +156,8 @@ class FaceDetector {
         lookLeft: false,
         lookRight: false,
         lookStraight: false,
+        lookUp: false,
+        lookDown: false,
         smile: false,
         nod: false,
       },
@@ -150,6 +166,7 @@ class FaceDetector {
         eyeOpen: 0,
         smile: 0,
         headPose: 0,
+        verticalPose: 0,
       },
       details: {},
     };
@@ -179,7 +196,10 @@ class FaceDetector {
     motionData.motions.lookLeft = headAnalysis.lookLeft;
     motionData.motions.lookRight = headAnalysis.lookRight;
     motionData.motions.lookStraight = headAnalysis.lookStraight;
+    motionData.motions.lookUp = headAnalysis.lookUp;
+    motionData.motions.lookDown = headAnalysis.lookDown;
     motionData.confidence.headPose = headAnalysis.confidence;
+    motionData.confidence.verticalPose = headAnalysis.verticalConfidence;
 
     // Analyze smile
     const smileAnalysis = this.analyzeSmile(primaryFace);
@@ -250,32 +270,43 @@ class FaceDetector {
    * @returns {object} Head pose analysis
    */
   analyzeHeadPose(face) {
-    const headEulerAngleY = face.headEulerAngleY || 0;
-    const headEulerAngleZ = face.headEulerAngleZ || 0;
+    const headEulerAngleY = face.headEulerAngleY ?? face.rotationY ?? 0;
+    const headEulerAngleX = face.headEulerAngleX ?? face.rotationX ?? 0;
+    const headEulerAngleZ = face.headEulerAngleZ ?? face.rotationZ ?? 0;
 
-    // Determine look direction based on head rotation
-    const lookLeft = headEulerAngleY > MOTION_THRESHOLDS.HEAD_TURN_ANGLE;
-    const lookRight = headEulerAngleY < -MOTION_THRESHOLDS.HEAD_TURN_ANGLE;
-    const lookStraight =
-      Math.abs(headEulerAngleY) <= MOTION_THRESHOLDS.HEAD_TURN_ANGLE;
+    const lookLeft = headEulerAngleY <= -MOTION_THRESHOLDS.HEAD_YAW_TURN;
+    const lookRight = headEulerAngleY >= MOTION_THRESHOLDS.HEAD_YAW_TURN;
+    const lookStraight = Math.abs(headEulerAngleY) < MOTION_THRESHOLDS.HEAD_YAW_TURN * 0.6;
+    const lookUp = headEulerAngleX <= -MOTION_THRESHOLDS.HEAD_PITCH_UP;
+    const lookDown = headEulerAngleX >= MOTION_THRESHOLDS.HEAD_PITCH_DOWN;
 
-    // Update motion state
     if (lookLeft) {
       this.motionState.headDirection = 'left';
     } else if (lookRight) {
       this.motionState.headDirection = 'right';
+    } else if (lookUp) {
+      this.motionState.headDirection = 'up';
+    } else if (lookDown) {
+      this.motionState.headDirection = 'down';
     } else {
       this.motionState.headDirection = 'center';
     }
+
+    const yawConfidence = Math.min(1, Math.abs(headEulerAngleY) / 45);
+    const pitchConfidence = Math.min(1, Math.abs(headEulerAngleX) / 45);
 
     return {
       lookLeft,
       lookRight,
       lookStraight,
+      lookUp,
+      lookDown,
+      headEulerAngleX,
       headEulerAngleY,
       headEulerAngleZ,
       direction: this.motionState.headDirection,
-      confidence: Math.min(1.0, Math.abs(headEulerAngleY) / 45), // Normalize to 0-1
+      confidence: yawConfidence,
+      verticalConfidence: pitchConfidence,
     };
   }
 
@@ -302,149 +333,6 @@ class FaceDetector {
    * Analyze nod (vertical head movement)
    * @param {object} face - Face detection result
    * @returns {object} Nod analysis
-   */
-  analyzeNod(face) {
-    const headEulerAngleX = face.headEulerAngleX || 0;
-
-    // Simple nod detection based on X-axis rotation
-    const nod = Math.abs(headEulerAngleX) > 10; // Basic threshold
-
-    return {
-      nod,
-      headEulerAngleX,
-      confidence: Math.min(1.0, Math.abs(headEulerAngleX) / 30),
-    };
-  }
-
-  /**
-   * Get primary face (largest detected face)
-   * @param {array} faces - Detected faces
-   * @returns {object|null} Primary face
-   */
-  getPrimaryFace(faces) {
-    if (faces.length === 0) {
-      return null;
-    }
-
-    // Return face with highest confidence or largest bounds
-    return faces.reduce((primary, face) => {
-      const primarySize = primary.bounds
-        ? primary.bounds.width * primary.bounds.height
-        : 0;
-      const faceSize = face.bounds ? face.bounds.width * face.bounds.height : 0;
-
-      return faceSize > primarySize ? face : primary;
-    });
-  }
-
-  /**
-   * Calculate overall confidence score
-   * @param {object} confidences - Individual confidence scores
-   * @returns {number} Overall confidence (0-1)
-   */
-  calculateOverallConfidence(confidences) {
-    const scores = Object.values(confidences).filter(
-      (score) => typeof score === 'number' && score > 0
-    );
-
-    if (scores.length === 0) {
-      return 0;
-    }
-
-    return scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  }
-
-  /**
-   * Update motion history for pattern analysis
-   * @param {object} motionData - Current motion data
-   */
-  updateMotionHistory(motionData) {
-    this.motionHistory.push({
-      ...motionData,
-      timestamp: Date.now(),
-    });
-
-    // Keep only last 30 frames (1 second at 30fps)
-    if (this.motionHistory.length > 30) {
-      this.motionHistory.shift();
-    }
-  }
-
-  /**
-   * Trigger registered callbacks for detected motions
-   * @param {object} motionData - Motion analysis results
-   */
-  triggerCallbacks(motionData) {
-    Object.keys(motionData.motions).forEach((motionType) => {
-      if (
-        motionData.motions[motionType] &&
-        this.detectionCallbacks[motionType]
-      ) {
-        runOnJS(this.detectionCallbacks[motionType])(motionData);
-      }
-    });
-
-    // Trigger general callback if registered
-    if (this.detectionCallbacks.onMotionDetected) {
-      runOnJS(this.detectionCallbacks.onMotionDetected)(motionData);
-    }
-  }
-
-  /**
-   * Register callback for specific motion type
-   * @param {string} motionType - Type of motion (blink, lookLeft, etc.)
-   * @param {function} callback - Callback function
-   */
-  onMotionDetected(motionType, callback) {
-    this.detectionCallbacks[motionType] = callback;
-  }
-
-  /**
-   * Register general motion detection callback
-   * @param {function} callback - Callback function
-   */
-  onAnyMotionDetected(callback) {
-    this.detectionCallbacks.onMotionDetected = callback;
-  }
-
-  /**
-   * Start face detection
-   */
-  startDetection() {
-    this.isDetecting = true;
-    this.frameCount = 0;
-    Logger.info('Face detection started');
-  }
-
-  /**
-   * Stop face detection
-   */
-  stopDetection() {
-    this.isDetecting = false;
-    Logger.info('Face detection stopped');
-  }
-
-  /**
-   * Reset detector state
-   */
-  reset() {
-    this.currentFaces = [];
-    this.previousFaces = [];
-    this.motionHistory = [];
-    this.frameCount = 0;
-    this.motionState = {
-      isBlinking: false,
-      headDirection: 'center',
-      isSmiling: false,
-      eyesOpen: true,
-      faceDetected: false,
-      faceConfidence: 0,
-    };
-    Logger.info('Face detector reset');
-  }
-
-  /**
-   * Get current motion state
    * @returns {object} Current motion state
    */
   getMotionState() {

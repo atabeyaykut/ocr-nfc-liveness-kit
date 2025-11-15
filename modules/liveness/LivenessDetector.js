@@ -9,6 +9,7 @@ const {
   getRandomCommand,
   getCommandByType,
   generateCommandSequence,
+  getHeadMovementSequence,
 } = require("./commands");
 const {
   validateResponse: mockValidateResponse,
@@ -36,6 +37,8 @@ const LIVENESS_INSTRUCTIONS = {
   TURN_RIGHT: "turn_right",
   SMILE: "smile",
   NOD: "nod",
+  LOOK_UP: "look_up",
+  LOOK_DOWN: "look_down",
 };
 
 // Default Configuration
@@ -78,13 +81,10 @@ class LivenessDetector {
     this.onProgress = null;
     this.onMotionDetected = null; // Day 9: New callback
 
-    Logger.info("LivenessDetector initialized with real-time detection", {
+    Logger.info("LivenessDetector initialized", {
       config: this.config,
       realTimeMode: this.realTimeMode,
     });
-
-    this.realTimeMode = true;
-    Logger.info(`Face detection initialized for real-time mode`);
   }
 
   /**
@@ -123,8 +123,9 @@ class LivenessDetector {
         this._setupFaceDetectionCallbacks();
       }
 
-      // Initialize front camera
-      await this.captureFrontCamera(testOptions);
+      if (this.realTimeMode) {
+        this.faceDetector.startDetection();
+      }
 
       // Start real-time instruction sequence
       await this._startRealTimeInstructionSequence(testOptions);
@@ -154,9 +155,6 @@ class LivenessDetector {
       throw error;
     } finally {
       this.isProcessing = false;
-      if (this.realTimeMode) {
-        this.faceDetector.stopDetection();
-      }
     }
   }
 
@@ -165,39 +163,14 @@ class LivenessDetector {
    * @param {object} options - Camera options
    * @returns {Promise<object>} - Camera initialization result
    */
-  async captureFrontCamera(options = {}) {
-    try {
-      Logger.info("Initializing front camera for liveness detection...");
-
-      this._updateStatus(LIVENESS_STATUS.CAMERA_READY);
-
-      if (this.onProgress) {
-        this.onProgress("Ön kamera başlatılıyor...");
-      }
-
-      // Simulate camera initialization (skeleton implementation)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const cameraResult = {
-        cameraType: "front",
-        resolution: "1280x720",
-        fps: 30,
-        ready: true,
-        timestamp: new Date().toISOString(),
-      };
-
-      Logger.info("Front camera initialized successfully", cameraResult);
-
-      if (this.onProgress) {
-        this.onProgress("Kamera hazır. Lütfen kameraya bakın.");
-      }
-
-      return cameraResult;
-
-    } catch (error) {
-      Logger.error("Front camera initialization failed:", error.message);
-      throw new Error(`Ön kamera başlatılamadı: ${error.message}`);
-    }
+  async captureFrontCamera() {
+    Logger.warn("captureFrontCamera Vision Camera bileşeni tarafından yönetiliyor");
+    this._updateStatus(LIVENESS_STATUS.CAMERA_READY);
+    return {
+      cameraType: "front",
+      ready: true,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**
@@ -355,16 +328,16 @@ class LivenessDetector {
       this.isProcessing = false;
       this.currentInstruction = null;
       this.currentCommand = null;
+      this.currentDetectionResult = null;
+
+      if (this.detectionTimeout) {
+        clearTimeout(this.detectionTimeout);
+        this.detectionTimeout = null;
+      }
 
       // Stop face detection
       if (this.realTimeMode) {
         this.faceDetector.stopDetection();
-      }
-
-      // Clear detection timeout
-      if (this.detectionTimeout) {
-        clearTimeout(this.detectionTimeout);
-        this.detectionTimeout = null;
       }
 
       // Cleanup camera resources
@@ -477,10 +450,20 @@ class LivenessDetector {
     // Generate random command sequence based on difficulty
     const difficulty = options.difficulty || "easy";
     const commandCount = options.commandCount || 3;
-    const commandSequence = generateCommandSequence(commandCount, difficulty);
+    const useHeadSequence = options.requireHeadMovements;
+    const baseSequence = useHeadSequence
+      ? getHeadMovementSequence()
+      : generateCommandSequence(commandCount, difficulty);
+
+    const limit = useHeadSequence
+      ? Math.min(commandCount || baseSequence.length, baseSequence.length)
+      : commandCount;
+    const commandSequence = baseSequence.slice(0, limit);
+
+    const sequenceLength = commandSequence.length;
 
     Logger.info(
-      `Starting real-time command sequence with ${commandCount} commands (${difficulty} difficulty)`
+      `Starting real-time command sequence with ${sequenceLength} commands (${useHeadSequence ? "head_movement" : difficulty} mode)`
     );
 
     this.completedInstructions = [];
@@ -591,6 +574,8 @@ class LivenessDetector {
       [LIVENESS_INSTRUCTIONS.TURN_RIGHT]: "head_right",
       [LIVENESS_INSTRUCTIONS.SMILE]: "smile_detected",
       [LIVENESS_INSTRUCTIONS.NOD]: "head_nod",
+      [LIVENESS_INSTRUCTIONS.LOOK_UP]: "head_up",
+      [LIVENESS_INSTRUCTIONS.LOOK_DOWN]: "head_down",
     };
 
     return {
@@ -614,6 +599,8 @@ class LivenessDetector {
       [LIVENESS_INSTRUCTIONS.TURN_RIGHT]: "lookRight",
       [LIVENESS_INSTRUCTIONS.SMILE]: "smile",
       [LIVENESS_INSTRUCTIONS.NOD]: "nod",
+      [LIVENESS_INSTRUCTIONS.LOOK_UP]: "lookUp",
+      [LIVENESS_INSTRUCTIONS.LOOK_DOWN]: "lookDown",
     };
 
     return instructionMap[instruction] || instruction;
@@ -663,6 +650,14 @@ class LivenessDetector {
       this._handleMotionDetected("nod", motionData);
     });
 
+    this.faceDetector.onMotionDetected("lookUp", (motionData) => {
+      this._handleMotionDetected("lookUp", motionData);
+    });
+
+    this.faceDetector.onMotionDetected("lookDown", (motionData) => {
+      this._handleMotionDetected("lookDown", motionData);
+    });
+
     // General motion callback
     this.faceDetector.onAnyMotionDetected((motionData) => {
       if (this.onMotionDetected) {
@@ -678,7 +673,9 @@ class LivenessDetector {
    * @param {object} motionData - Motion detection data
    */
   _handleMotionDetected(motionType, motionData) {
-    if (!this.currentCommand || !this.isProcessing) {return;}
+    if (!this.currentCommand || !this.isProcessing) {
+      return;
+    }
 
     // Check if detected motion matches current command
     const commandType = this._mapCommandToMotionType(this.currentCommand.type);
@@ -709,6 +706,15 @@ class LivenessDetector {
         timestamp: Date.now(),
         realTimeDetection: true,
       };
+
+      if (this.onMotionDetected) {
+        this.onMotionDetected({
+          motionType,
+          confidence: motionData.confidence,
+          motions: motionData.motions,
+          timestamp: Date.now(),
+        });
+      }
     }
   }
 
@@ -785,9 +791,9 @@ class LivenessDetector {
    * @returns {Promise<object>} - Validation result
    */
   async _validateRealTimeResponse(captureData, commandType) {
-    const detectionData = captureData.detectionData;
+    const motionData = captureData.detectionData;
 
-    if (!detectionData) {
+    if (!motionData) {
       return {
         isValid: false,
         confidence: 0,
@@ -799,8 +805,10 @@ class LivenessDetector {
 
     // Validate based on command type
     const motionType = this._mapCommandToMotionType(commandType);
-    const motionDetected = detectionData.motions[motionType];
-    const confidence = detectionData.confidence.overall;
+    const motionDetected = motionType
+      ? motionData.motions[motionType]
+      : false;
+    const confidence = motionData.confidence.overall;
 
     return {
       isValid: motionDetected && confidence > 0.6,
@@ -835,6 +843,8 @@ class LivenessDetector {
       lookStraight: "lookStraight",
       smile: "smile",
       nod: "nod",
+      lookUp: "lookUp",
+      lookDown: "lookDown",
     };
 
     return mapping[commandType] || commandType;

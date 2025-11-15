@@ -4,7 +4,7 @@
  * Android 11 uyumlu
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -421,6 +421,30 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
   const device = useCameraDevice('front');
   const livenessModule = useRef(new LivenessDetectionModule()).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const returnTo = route?.params?.returnTo;
+  const returnSourceStep = route?.params?.returnParams?.sourceStep;
+
+  const forwardStepResult = useCallback(
+    (payload) => {
+      if (returnTo && returnSourceStep) {
+        navigation.navigate({
+          name: returnTo,
+          params: {
+            returnParams: {
+              sourceStep: returnSourceStep,
+              stepResult: payload,
+            },
+          },
+          merge: true,
+        });
+
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        }
+      }
+    },
+    [navigation, returnTo, returnSourceStep]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -440,6 +464,19 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
         setIsDetecting(false);
         setIsCameraActive(false);
         setCurrentChallenge(null);
+
+        const payload = {
+          success: result?.passed !== false,
+          timestamp: result?.timestamp || new Date().toISOString(),
+          data: result,
+          summary: {
+            score: result?.score ?? null,
+            passed: result?.passed ?? false,
+            successfulChallenges: result?.details?.successfulChallenges ?? null,
+          },
+        };
+
+        forwardStepResult(payload);
       }
     });
 
