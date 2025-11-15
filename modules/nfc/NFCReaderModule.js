@@ -4,7 +4,7 @@
  * Android 11 uyumlu
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -439,6 +439,30 @@ export const NFCReaderScreen = ({ navigation, route }) => {
   const [fallbackErrorInfo, setFallbackErrorInfo] = useState({});
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const nfcModule = useRef(new NFCReaderModule()).current;
+  const returnTo = route?.params?.returnTo;
+  const returnSourceStep = route?.params?.returnParams?.sourceStep;
+
+  const forwardStepResult = useCallback(
+    (payload) => {
+      if (returnTo && returnSourceStep) {
+        navigation.navigate({
+          name: returnTo,
+          params: {
+            returnParams: {
+              sourceStep: returnSourceStep,
+              stepResult: payload,
+            },
+          },
+          merge: true,
+        });
+
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        }
+      }
+    },
+    [navigation, returnTo, returnSourceStep]
+  );
 
   useEffect(() => {
     // Setup callbacks
@@ -495,6 +519,23 @@ export const NFCReaderScreen = ({ navigation, route }) => {
       nfcModule.stopNFC();
     };
   }, []);
+
+  useEffect(() => {
+    if (returnTo && returnSourceStep && nfcResult) {
+      const summary = {
+        tcNo: nfcResult?.parsedFields?.tcNo || null,
+        fullName: nfcResult?.parsedFields?.fullName || null,
+        birthDate: nfcResult?.parsedFields?.birthDate || null,
+      };
+
+      forwardStepResult({
+        success: nfcResult.success !== false,
+        timestamp: nfcResult.timestamp || new Date().toISOString(),
+        data: nfcResult,
+        summary,
+      });
+    }
+  }, [returnTo, returnSourceStep, nfcResult, forwardStepResult]);
 
   // Handle back button
   useEffect(() => {

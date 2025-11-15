@@ -4,7 +4,7 @@
  * Android 11 uyumlu
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,22 +12,20 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Image,
   Dimensions,
   StatusBar,
   Platform,
   ScrollView,
 } from 'react-native';
-import { Camera, useCameraDevice } from 'react-native-vision-camera';
-import ImageCropPicker from 'react-native-image-crop-picker';
-import TextRecognition from '@react-native-ml-kit/text-recognition';
+import { Camera, useCameraDevice, useFrameProcessor, VisionCameraProxy } from 'react-native-vision-camera';
+import { runOnJS } from 'react-native-reanimated';
 import RNFS from 'react-native-fs';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
-import ImageResizer from '@bam.tech/react-native-image-resizer';
 
 const { ImageProcessor } = require('../../utils/imageProcessor');
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const CACHE_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 
 // OCR Field Patterns for Turkish ID Card - Enhanced
 const ID_PATTERNS = {
@@ -446,6 +444,31 @@ class OCRReaderModule {
           onlyScaleDown: true,
         }
       );
+
+  const renderCacheLog = () => (
+    <View style={styles.cacheLogContainer}>
+      <Text style={styles.cacheLogTitle}>📄 OCR Ham Metin Logu (10 dk)</Text>
+      {cacheLog.length === 0 ? (
+        <Text style={styles.cacheLogEmpty}>Henüz kayıt yok</Text>
+      ) : (
+        <ScrollView style={styles.cacheLogList}>
+          {cacheLog.map((entry) => (
+            <View key={entry.id} style={styles.cacheLogItem}>
+              <View style={styles.cacheLogHeader}>
+                <Text style={styles.cacheLogTime}>{formatCacheTime(entry.timestamp)}</Text>
+                {entry.meta?.confidence ? (
+                  <Text style={styles.cacheLogConfidence}>
+                    %{entry.meta.confidence}
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={styles.cacheLogText}>{entry.text}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
       
       console.log('[OCR] Image pre-processed:', processedImage.uri);
       return processedImage.uri;
@@ -1291,19 +1314,375 @@ class OCRReaderModule {
 // React Component for OCR UI
 export const OCRReaderScreen = ({ navigation, route }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [flashMode, setFlashMode] = useState('off'); // 'off', 'on', 'auto'
+  const [flashMode, setFlashMode] = useState('off');
   const [torchEnabled, setTorchEnabled] = useState(false);
-  const [previewImage, setPreviewImage] = useState(null);
   const [ocrResult, setOcrResult] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [cardDetected, setCardDetected] = useState(false);
-  const [autoCapture, setAutoCapture] = useState(false); // Manuel mod - kart algılama yok
-  const [detectionHint, setDetectionHint] = useState('Kimlik kartını çerçeve içine yerleştirin');
+  const [detectionHint, setDetectionHint] = useState('Ön yüz: Kartı çerçeve içine yerleştirin');
+  const [livePreviewResult, setLivePreviewResult] = useState(null);
+  const [currentSide, setCurrentSide] = useState('front');
+  const [cacheLog, setCacheLog] = useState([]);
   const cameraRef = useRef(null);
   const device = useCameraDevice('back');
   const ocrModule = useRef(new OCRReaderModule()).current;
-  const detectionTimeoutRef = useRef(null);
+  const returnTo = route?.params?.returnTo;
+  const returnSourceStep = route?.params?.returnParams?.sourceStep;
+  const hasForwardedRef = useRef(false);
+  const AUTO_ACCEPT_CONFIDENCE = 70;
+  const FRONT_DETECTION_THRESHOLD = 45;
+  const BACK_DETECTION_THRESHOLD = 35;
+  const FRONT_ACCEPTANCE_THRESHOLD = 58;
+  const BACK_ACCEPTANCE_THRESHOLD = 60;
+  const frontResultRef = useRef(null);
+  const backResultRef = useRef(null);
+  const currentSideRef = useRef('front');
+  const cacheRef = useRef([]);
+
+  const checkCameraPermission = useCallback(async () => {
+    try {
+      const permissionType = Platform.OS === 'ios'
+        ? PERMISSIONS.IOS.CAMERA
+        : PERMISSIONS.ANDROID.CAMERA;
+
+      const status = await check(permissionType);
+      if (status === RESULTS.GRANTED) {
+        return true;
+      }
+
+      const newStatus = await request(permissionType);
+      if (newStatus === RESULTS.GRANTED) {
+        return true;
+      }
+
+      Alert.alert(
+        'Kamera İzni Gerekli',
+        'OCR işlemi için kamera izni vermeniz gerekiyor.',
+        [{ text: 'Tamam' }]
+      );
+      return false;
+    } catch (err) {
+      console.error('[OCR] Kamera izni kontrolü başarısız:', err);
+      Alert.alert('Hata', 'Kamera izni kontrol edilirken bir sorun oluştu.');
+      return false;
+    }
+  }, []);
+
+  const saveResultsToFile = useCallback(async (result) => {
+    try {
+      if (!result) {
+        return null;
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const fileName = `OCR_Result_${timestamp}.txt`;
+      const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
+
+      let content = '=== OCR SONUÇLARI ===\n\n';
+      content += `Tarih: ${new Date().toLocaleString('tr-TR')}\n`;
+      content += `Güven Skoru: %${result.confidence ?? 0}\n`;
+      if (result.fields?.source) {
+        content += `Kaynak: ${result.fields.source}\n`;
+      }
+
+      const fields = result.fields || {};
+      const fieldEntries = [
+        ['TC Kimlik No', fields.tcNo],
+        ['Ad', fields.name],
+        ['Soyad', fields.surname],
+        ['Doğum Tarihi', fields.birthDate],
+        ['Cinsiyet', fields.gender],
+        ['Uyruk', fields.nationality],
+        ['Seri No', fields.serialNo],
+        ['Geçerlilik', fields.validUntil],
+      ];
+
+      content += '\n--- BULUNAN ALANLAR ---\n\n';
+      fieldEntries.forEach(([label, value]) => {
+        if (value) {
+          content += `${label}: ${value}\n`;
+        }
+      });
+
+      const validation = fields.validation || {};
+      content += '\n--- DOĞRULAMA DURUMU ---\n\n';
+      Object.keys(validation).forEach((key) => {
+        const status = validation[key] === 'valid' ? '✓ Geçerli' : validation[key] === 'invalid' ? '⚠ Geçersiz' : '–';
+        content += `${key}: ${status}\n`;
+      });
+
+      if (result.text) {
+        content += '\n--- HAM METİN ---\n\n';
+        content += result.text;
+      }
+
+      await RNFS.writeFile(filePath, content, 'utf8');
+      console.log('[OCR] Sonuç dosyası kaydedildi:', filePath);
+      return filePath;
+    } catch (error) {
+      console.error('[OCR] Sonuçlar kaydedilemedi:', error);
+      return null;
+    }
+  }, []);
+
+  const pruneCache = useCallback(() => {
+    const cutoff = Date.now() - CACHE_DURATION_MS;
+    const filtered = cacheRef.current.filter((entry) => entry.timestamp >= cutoff);
+    if (filtered.length !== cacheRef.current.length) {
+      cacheRef.current = filtered;
+      setCacheLog(filtered);
+    }
+  }, []);
+
+  const appendCacheEntry = useCallback((rawText, meta = {}) => {
+    if (!rawText) {
+      return;
+    }
+
+    const timestamp = Date.now();
+    const entry = {
+      id: `${timestamp}-${Math.random().toString(16).slice(2, 8)}`,
+      timestamp,
+      text: rawText,
+      meta,
+    };
+
+    const cutoff = timestamp - CACHE_DURATION_MS;
+    const updated = [entry, ...cacheRef.current].filter((item) => item.timestamp >= cutoff);
+    cacheRef.current = updated;
+    setCacheLog(updated);
+
+    console.log('[OCR][Standalone] Ham metin kaydı', {
+      timestamp: new Date(timestamp).toISOString(),
+      preview: rawText.substring(0, 80),
+      meta,
+    });
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(pruneCache, 30000);
+    return () => clearInterval(interval);
+  }, [pruneCache]);
+
+  const formatCacheTime = useCallback((value) => {
+    const date = new Date(value);
+    return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }, []);
+
+  const finalizeResult = useCallback(
+    (result) => {
+      if (!result || hasForwardedRef.current) {
+        return;
+      }
+
+      hasForwardedRef.current = true;
+      appendCacheEntry(result.text || '', {
+        confidence: result?.confidence ?? null,
+        side: 'combined',
+      });
+
+      const summary = {
+        tcNo: result?.fields?.tcNo || result?.extractedFields?.tcNo || null,
+        name: result?.fields?.name || result?.extractedFields?.name || null,
+        surname: result?.fields?.surname || result?.extractedFields?.surname || null,
+        confidence: result?.confidence ?? null,
+      };
+
+      setOcrResult(result);
+      setDetectionHint('OCR sonucu alındı, devam ediliyor...');
+      setIsProcessing(false);
+
+      forwardStepResult({
+        success: true,
+        timestamp: new Date().toISOString(),
+        data: result,
+        summary,
+      });
+
+      saveResultsToFile(result).catch((err) => {
+        console.error('[OCR] saveResultsToFile error:', err);
+      });
+    },
+    [appendCacheEntry, forwardStepResult]
+  );
+
+  const retryOCR = useCallback(() => {
+    hasForwardedRef.current = false;
+    setOcrResult(null);
+    setDetectionHint('Ön yüz: Kartı çerçeve içine yerleştirin');
+    setCardDetected(false);
+    setLivePreviewResult(null);
+    setIsProcessing(false);
+    setIsCameraActive(true);
+    frontResultRef.current = null;
+    backResultRef.current = null;
+    currentSideRef.current = 'front';
+    setCurrentSide('front');
+  }, []);
+
+  const renderResultField = useCallback((label, value, validationStatus) => {
+    if (!value) {
+      return null;
+    }
+
+    return (
+      <View style={styles.resultRow}>
+        <Text style={styles.resultLabel}>{label}:</Text>
+        <View style={styles.resultValueContainer}>
+          <Text style={styles.resultValue}>{value}</Text>
+          {validationStatus === 'valid' && <Text style={styles.validIcon}>✓</Text>}
+          {validationStatus === 'invalid' && <Text style={styles.invalidIcon}>⚠</Text>}
+        </View>
+      </View>
+    );
+  }, []);
+
+  const forwardStepResult = useCallback(
+    (payload) => {
+      if (!returnTo || !returnSourceStep) {
+        return;
+      }
+
+      navigation.navigate({
+        name: returnTo,
+        params: {
+          returnParams: {
+            sourceStep: returnSourceStep,
+            stepResult: payload,
+          },
+        },
+        merge: true,
+      });
+
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
+    },
+    [navigation, returnTo, returnSourceStep]
+  );
+
+  const parseLivePayload = useCallback(
+    (text, side) => {
+      try {
+        if (!text) {
+          return null;
+        }
+
+        ocrModule.options = ocrModule.options || {};
+        const previousSide = ocrModule.options.cardSide;
+        ocrModule.options.cardSide = side;
+
+        const fields = ocrModule.parseIDFields(text) || {};
+        const confidenceScore = ocrModule.calculateConfidence(fields);
+
+        ocrModule.options.cardSide = previousSide ?? 'front';
+
+        return {
+          text,
+          fields,
+          confidence: confidenceScore,
+          side,
+        };
+      } catch (error) {
+        console.error('[OCR] Live parse failed:', error);
+        return null;
+      }
+    },
+    [ocrModule]
+  );
+
+  const completeDualSideFlow = useCallback(() => {
+    if (!frontResultRef.current || !backResultRef.current) {
+      return;
+    }
+
+    try {
+      const frontFields = frontResultRef.current.fields || {};
+      const backFields = backResultRef.current.fields || {};
+      const mergedData = ocrModule.mergeAndValidate(frontFields, backFields);
+
+      const combinedResult = {
+        success: true,
+        text: `${frontResultRef.current.text || ''}\n\n${backResultRef.current.text || ''}`.trim(),
+        fields: mergedData,
+        confidence: mergedData.confidence ?? AUTO_ACCEPT_CONFIDENCE,
+        timestamp: new Date().toISOString(),
+        cardType: 'tc_kimlik',
+        source: 'dual-live-scan',
+      };
+
+      finalizeResult(combinedResult);
+    } catch (error) {
+      console.error('[OCR] Dual-side finalize error:', error);
+      Alert.alert('Hata', 'Ön/arka yüz birleştirilirken sorun oluştu. Lütfen tekrar deneyin.');
+      retryOCR();
+    }
+  }, [AUTO_ACCEPT_CONFIDENCE, finalizeResult, ocrModule, retryOCR]);
+
+  const handleLiveOcrFrame = useCallback(
+    (payload) => {
+      if (!payload?.text || isProcessing || hasForwardedRef.current) {
+        return;
+      }
+
+      const currentSideValue = currentSideRef.current;
+      const parsed = parseLivePayload(payload.text, currentSideValue);
+      if (!parsed) {
+        return;
+      }
+
+      appendCacheEntry(payload.text, {
+        side: currentSideValue,
+        confidence: parsed.confidence,
+        blocks: payload.blockCount ?? null,
+      });
+
+      setLivePreviewResult(parsed);
+      setCardDetected(
+        parsed.confidence >=
+        (currentSideValue === 'front' ? FRONT_DETECTION_THRESHOLD : BACK_DETECTION_THRESHOLD)
+      );
+
+      const acceptanceThreshold =
+        currentSideValue === 'front' ? FRONT_ACCEPTANCE_THRESHOLD : BACK_ACCEPTANCE_THRESHOLD;
+      if (parsed.confidence < acceptanceThreshold) {
+        return;
+      }
+
+      if (currentSideValue === 'front') {
+        frontResultRef.current = parsed;
+        currentSideRef.current = 'back';
+        setCurrentSide('back');
+        setDetectionHint('Ön yüz okundu. Lütfen kartı çevirip arka yüzü gösterin.');
+        setLivePreviewResult(null);
+        setCardDetected(false);
+      } else {
+        backResultRef.current = parsed;
+        setDetectionHint('Arka yüz okundu, sonuçlar hazırlanıyor...');
+        setIsProcessing(true);
+        completeDualSideFlow();
+      }
+    },
+    [
+      AUTO_ACCEPT_CONFIDENCE,
+      appendCacheEntry,
+      completeDualSideFlow,
+      isProcessing,
+      parseLivePayload,
+    ]
+  );
+
+  const frameProcessor = useFrameProcessor((frame) => {
+    'worklet';
+    try {
+      const result = VisionCameraProxy.call('ocrScanner', frame, {});
+      if (result?.text) {
+        runOnJS(handleLiveOcrFrame)(result);
+      }
+    } catch (error) {
+      // Native taraf gerekli logları basıyor
+    }
+  }, [handleLiveOcrFrame]);
 
   // Setup callbacks
   React.useEffect(() => {
@@ -1317,18 +1696,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
     
     ocrModule.onOCRResult((result) => {
       if (isMounted) {
-        console.log('[OCR] onOCRResult callback triggered');
-        setOcrResult(result);
-        setIsProcessing(false);
-        setIsCameraActive(false);
-        
-        // Otomatik dosyaya kaydet
-        console.log('[OCR] Calling saveResultsToFile...');
-        saveResultsToFile(result).then(() => {
-          console.log('[OCR] saveResultsToFile completed');
-        }).catch((err) => {
-          console.error('[OCR] saveResultsToFile error:', err);
-        });
+        finalizeResult(result);
       }
     });
 
@@ -1360,196 +1728,42 @@ export const OCRReaderScreen = ({ navigation, route }) => {
       unsubscribeFocus();
       unsubscribeBlur();
     };
-  }, [navigation, ocrResult]);
+  }, [checkCameraPermission, finalizeResult, navigation]);
 
-  const checkCameraPermission = async () => {
-    const result = await check(PERMISSIONS.ANDROID.CAMERA);
-    
-    if (result !== RESULTS.GRANTED) {
-      const requestResult = await request(PERMISSIONS.ANDROID.CAMERA);
-      if (requestResult !== RESULTS.GRANTED) {
-        Alert.alert(
-          'Kamera İzni Gerekli',
-          'OCR özelliğini kullanabilmek için kamera izni vermeniz gerekiyor.',
-          [{ text: 'Tamam', onPress: () => navigation.goBack() }]
-        );
-      }
-    }
-  };
+  useEffect(() => {
+    setDetectionHint(
+      currentSide === 'front'
+        ? 'Ön yüz: Kartı çerçeve içine hizalayın, otomatik olarak taranacak.'
+        : 'Arka yüz: Kartı çevirip MRZ satırlarını çerçevenin altına hizalayın.'
+    );
+  }, [currentSide]);
 
-  const takePicture = async (isAuto = false) => {
-    if (cameraRef.current && !isProcessing && !awaitingConfirmation) {
-      setIsProcessing(true);
-      setDetectionHint(isAuto ? 'Otomatik çekim yapılıyor...' : 'Fotoğraf çekiliyor...');
-      
-      try {
-        console.log('[OCR] Step 1: Taking picture...');
-        const data = await cameraRef.current.takePhoto({
-          quality: 90,
-          flash: flashMode,
-          skipMetadata: true,
-          enableAutoStabilization: false,
-          enableAutoRedEyeReduction: false,
-        });
-        const photoUri = `file://${data.path}`;
-        console.log('[OCR] Step 2: Picture taken successfully:', photoUri);
-        setPreviewImage(photoUri);
-        setIsCameraActive(false);
-        setIsProcessing(false);
-        setAwaitingConfirmation(true);
-        setDetectionHint('Fotoğrafı kontrol edin ve "Oku" butonuna basın');
-      } catch (error) {
-        console.error('[OCR] ERROR:', error);
-        console.error('[OCR] Error details:', error.message, error.stack);
-        Alert.alert('Hata', `Fotoğraf çekme hatası: ${error.message}`);
-        setIsProcessing(false);
-        setDetectionHint('Kimlik kartını çerçeve içine yerleştirin');
-      }
-    }
-  };
-  
-  const confirmAndProcessOCR = async () => {
-    if (!previewImage || isProcessing) return;
-    
-    setIsProcessing(true);
-    setAwaitingConfirmation(false);
-    setDetectionHint('OCR işlemi yapılıyor...');
-    
-    try {
-      console.log('[OCR] Step 3: Starting OCR processing...');
-      ocrModule.startOCR({ includeImage: true });
-      
-      console.log('[OCR] Step 4: Calling processImage...');
-      const result = await ocrModule.processImage(previewImage);
-      console.log('[OCR] Step 5: OCR Complete! Result:', JSON.stringify(result, null, 2));
-    } catch (error) {
-      console.error('[OCR] ERROR:', error);
-      console.error('[OCR] Error details:', error.message, error.stack);
-      Alert.alert('Hata', `OCR işleme hatası: ${error.message}`);
-      setIsProcessing(false);
-      setIsCameraActive(true);
-      setPreviewImage(null);
-      setAwaitingConfirmation(false);
-      setDetectionHint('Kimlik kartını çerçeve içine yerleştirin');
-    }
-  };
-  
-  const retakePicture = () => {
-    setPreviewImage(null);
-    setAwaitingConfirmation(false);
-    setIsCameraActive(true);
-    setDetectionHint('Kimlik kartını çerçeve içine yerleştirin');
-  };
+  // ... (rest of the code remains the same)
 
-  // Auto-capture effect - triggers after card is stable
-  // TODO: Implement real card detection with edge detection or ML Kit object detection
-  React.useEffect(() => {
-    if (autoCapture && cardDetected && isCameraActive && !isProcessing && !ocrResult) {
-      // Card detected and stable, schedule auto-capture
-      setDetectionHint('Kart algılandı! 2 saniye sabit tutun...');
-      
-      detectionTimeoutRef.current = setTimeout(() => {
-        setDetectionHint('Otomatik çekim yapılıyor...');
-        takePicture(true);
-      }, 2000);
-      
-      return () => {
-        if (detectionTimeoutRef.current) {
-          clearTimeout(detectionTimeoutRef.current);
-        }
-      };
-    }
-  }, [autoCapture, cardDetected, isCameraActive, isProcessing, ocrResult]);
-
-  const selectFromGallery = async () => {
-    try {
-      const image = await ImageCropPicker.openPicker({
-        width: 1200,
-        height: 800,
-        cropping: true,
-        cropperToolbarTitle: 'Kimlik Kartını Kırpın',
-        cropperChooseText: 'Seç',
-        cropperCancelText: 'İptal',
-      });
-
-      setPreviewImage(image.path);
-      setIsCameraActive(false);
-      setAwaitingConfirmation(true);
-      setDetectionHint('Fotoğrafı kontrol edin ve "Oku" butonuna basın');
-      
-    } catch (error) {
-      if (error.code !== 'E_PICKER_CANCELLED') {
-        Alert.alert('Hata', 'Görsel seçilemedi.');
-      }
-    }
-  };
-
-  const retryOCR = () => {
-    setOcrResult(null);
-    setPreviewImage(null);
-    setIsCameraActive(true);
-  };
-
-  const saveResultsToFile = async (result) => {
-    console.log('[OCR] saveResultsToFile CALLED');
-    console.log('[OCR] Result object:', JSON.stringify(result, null, 2));
-    
-    try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const fileName = `OCR_Result_${timestamp}.txt`;
-      const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
-      
-      console.log('[OCR] Preparing to save to:', filePath);
-      
-      let content = '=== OCR SONUÇLARI ===\n\n';
-      content += `Tarih: ${new Date().toLocaleString('tr-TR')}\n`;
-      content += `Güven Skoru: %${result.confidence}\n`;
-      if (result.fields.source) {
-        content += `Kaynak: ${result.fields.source}\n`;
-      }
-      content += '\n--- BULUNAN ALANLAR ---\n\n';
-      
-      const fields = result.fields;
-      if (fields.tcNo) content += `TC Kimlik No: ${fields.tcNo}\n`;
-      if (fields.name) content += `Ad: ${fields.name}\n`;
-      if (fields.surname) content += `Soyad: ${fields.surname}\n`;
-      if (fields.birthDate) content += `Doğum Tarihi: ${fields.birthDate}\n`;
-      if (fields.gender) content += `Cinsiyet: ${fields.gender}\n`;
-      if (fields.nationality) content += `Uyruk: ${fields.nationality}\n`;
-      if (fields.serialNo) content += `Seri No: ${fields.serialNo}\n`;
-      if (fields.validUntil) content += `Geçerlilik: ${fields.validUntil}\n`;
-      
-      content += '\n--- DOĞRULAMA DURUMU ---\n\n';
-      const validation = fields.validation || {};
-      Object.keys(validation).forEach(key => {
-        const status = validation[key] === 'valid' ? '✓ Geçerli' : '⚠ Geçersiz';
-        content += `${key}: ${status}\n`;
-      });
-      
-      content += '\n--- HAM METİN ---\n\n';
-      content += result.text;
-      
-      console.log('[OCR] Content length:', content.length, 'characters');
-      console.log('[OCR] Calling RNFS.writeFile...');
-      
-      await RNFS.writeFile(filePath, content, 'utf8');
-      
-      console.log('[OCR] ✅ File successfully saved to:', filePath);
-      
-      Alert.alert(
-        'Sonuçlar Kaydedildi',
-        `Dosya: ${fileName}\n\nKonum: ${filePath}`,
-        [{ text: 'Tamam' }]
-      );
-      
-      return filePath;
-    } catch (error) {
-      console.error('[OCR] ❌ FAILED to save results:', error);
-      console.error('[OCR] Error message:', error.message);
-      console.error('[OCR] Error stack:', error.stack);
-      Alert.alert('Hata', 'Sonuçlar kaydedilemedi: ' + error.message);
-    }
-  };
+  const renderCacheLog = useCallback(() => (
+    <View style={styles.cacheLogContainer}>
+      <Text style={styles.cacheLogTitle}>📄 OCR Ham Metin Logu (10 dk)</Text>
+      {cacheLog.length === 0 ? (
+        <Text style={styles.cacheLogEmpty}>Henüz kayıt yok</Text>
+      ) : (
+        <ScrollView style={styles.cacheLogList}>
+          {cacheLog.map((entry) => (
+            <View key={entry.id} style={styles.cacheLogItem}>
+              <View style={styles.cacheLogHeader}>
+                <Text style={styles.cacheLogTime}>{formatCacheTime(entry.timestamp)}</Text>
+                {entry.meta?.confidence ? (
+                  <Text style={styles.cacheLogConfidence}>
+                    %{entry.meta.confidence}
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={styles.cacheLogText}>{entry.text}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  ), [cacheLog, formatCacheTime]);
 
   const renderOverlay = () => (
     <View style={styles.overlay}>
@@ -1597,76 +1811,98 @@ export const OCRReaderScreen = ({ navigation, route }) => {
       
       <View style={styles.overlayBottom}>
         <Text style={styles.hintText}>
-          {autoCapture 
-            ? '🤖 Otomatik çekim: AÇIK'
-            : '📷 Manuel çekim: Butona basın'}
+          {currentSide === 'front' ? 'Ön yüz taranıyor' : 'Arka yüz (MRZ) taranıyor'}
         </Text>
         <Text style={styles.hintTextSmall}>
           • Kartın tamamı görünür olmalı{'\n'}
           • Yeterli ışık olduğundan emin olun{'\n'}
           • Yansıma ve gölge olmamasına dikkat edin
         </Text>
+        {livePreviewResult && !ocrResult && (
+          <View style={styles.livePreviewBox}>
+            <Text style={styles.livePreviewTitle}>
+              {livePreviewResult.side === 'back' ? 'MRZ Önizlemesi' : 'Anlık Önizleme'}
+            </Text>
+            {livePreviewResult.side === 'front' ? (
+              <>
+                {livePreviewResult.fields?.tcNo && (
+                  <Text style={styles.livePreviewValue}>TC Kimlik No: {livePreviewResult.fields.tcNo}</Text>
+                )}
+                {livePreviewResult.fields?.name && (
+                  <Text style={styles.livePreviewValue}>Ad: {livePreviewResult.fields.name}</Text>
+                )}
+                {livePreviewResult.fields?.surname && (
+                  <Text style={styles.livePreviewValue}>Soyad: {livePreviewResult.fields.surname}</Text>
+                )}
+              </>
+            ) : (
+              <>
+                {livePreviewResult.fields?.documentNo && (
+                  <Text style={styles.livePreviewValue}>Belge No: {livePreviewResult.fields.documentNo}</Text>
+                )}
+                {livePreviewResult.fields?.validUntil && (
+                  <Text style={styles.livePreviewValue}>Geçerlilik: {livePreviewResult.fields.validUntil}</Text>
+                )}
+                {livePreviewResult.fields?.tcNo && (
+                  <Text style={styles.livePreviewValue}>TC Kimlik No: {livePreviewResult.fields.tcNo}</Text>
+                )}
+              </>
+            )}
+            <Text style={styles.livePreviewConfidence}>
+              Güven Skoru: %{livePreviewResult.confidence ?? 0}
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   );
 
-  const renderResultField = (label, value, validationStatus) => {
-    if (!value) return null;
-    
-    return (
-      <View style={styles.resultRow}>
-        <Text style={styles.resultLabel}>{label}:</Text>
-        <View style={styles.resultValueContainer}>
-          <Text style={styles.resultValue} numberOfLines={1} ellipsizeMode="tail">
-            {value}
-          </Text>
-          {validationStatus === 'valid' && <Text style={styles.validIcon}>✓</Text>}
-          {validationStatus === 'invalid' && <Text style={styles.invalidIcon}>⚠</Text>}
-        </View>
-      </View>
-    );
-  };
+  // ... (rest of the code remains the same)
 
-  const renderResult = () => {
-    if (!ocrResult) return null;
+  const renderResult = (result) => {
+    if (!result) return null;
     
-    const validation = ocrResult.fields.validation || {};
+    const validation = result.fields.validation || {};
     const hasInvalidFields = Object.values(validation).some(v => v === 'invalid');
 
     return (
       <ScrollView style={styles.resultContainer} contentContainerStyle={styles.resultContent}>
         <Text style={styles.resultTitle}>OCR Sonuçları</Text>
-        
-        {ocrResult.fields.source && (
+
+        {result.fields.source && (
           <View style={styles.sourceBadge}>
             <Text style={styles.sourceBadgeText}>
-              {ocrResult.fields.source}
+              {result.fields.source}
             </Text>
           </View>
         )}
-        
-        <View style={[
-          styles.confidenceBanner,
-          { backgroundColor: ocrResult.confidence > 70 ? '#E8F5E9' : '#FFF3E0' }
-        ]}>
-          <Text style={[
-            styles.confidenceScore,
-            { color: ocrResult.confidence > 70 ? '#4CAF50' : '#FF9800' }
-          ]}>
-            %{ocrResult.confidence}
+
+        <View
+          style={[
+            styles.confidenceBanner,
+            { backgroundColor: result.confidence > 70 ? '#E8F5E9' : '#FFF3E0' }
+          ]}
+        >
+          <Text
+            style={[
+              styles.confidenceScore,
+              { color: result.confidence > 70 ? '#4CAF50' : '#FF9800' }
+            ]}
+          >
+            %{result.confidence}
           </Text>
           <Text style={styles.confidenceLabel}>Güven Skoru</Text>
         </View>
-        
-        {renderResultField('TC Kimlik No', ocrResult.fields.tcNo, validation.tcNo)}
-        {renderResultField('Ad', ocrResult.fields.name, validation.name)}
-        {renderResultField('Soyad', ocrResult.fields.surname, validation.surname)}
-        {renderResultField('Doğum Tarihi', ocrResult.fields.birthDate, validation.birthDate)}
-        {renderResultField('Cinsiyet', ocrResult.fields.gender, validation.gender)}
-        {renderResultField('Uyruk', ocrResult.fields.nationality, validation.nationality)}
-        {renderResultField('Seri No', ocrResult.fields.serialNo, validation.serialNo)}
-        {renderResultField('Geçerlilik', ocrResult.fields.validUntil, validation.validUntil)}
-        
+
+        {renderResultField('TC Kimlik No', result.fields.tcNo, validation.tcNo)}
+        {renderResultField('Ad', result.fields.name, validation.name)}
+        {renderResultField('Soyad', result.fields.surname, validation.surname)}
+        {renderResultField('Doğum Tarihi', result.fields.birthDate, validation.birthDate)}
+        {renderResultField('Cinsiyet', result.fields.gender, validation.gender)}
+        {renderResultField('Uyruk', result.fields.nationality, validation.nationality)}
+        {renderResultField('Seri No', result.fields.serialNo, validation.serialNo)}
+        {renderResultField('Geçerlilik', result.fields.validUntil, validation.validUntil)}
+
         {hasInvalidFields && (
           <View style={styles.warningBox}>
             <Text style={styles.warningText}>
@@ -1674,8 +1910,8 @@ export const OCRReaderScreen = ({ navigation, route }) => {
             </Text>
           </View>
         )}
-        
-        {ocrResult.confidence < 70 && (
+
+        {result.confidence < 70 && (
           <View style={styles.tipBox}>
             <Text style={styles.tipTitle}>💡 İpuçları:</Text>
             <Text style={styles.tipText}>
@@ -1686,7 +1922,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
             </Text>
           </View>
         )}
-        
+
         <TouchableOpacity style={styles.retryButton} onPress={retryOCR}>
           <Text style={styles.retryButtonText}>Yeniden Tara</Text>
         </TouchableOpacity>
@@ -1694,35 +1930,13 @@ export const OCRReaderScreen = ({ navigation, route }) => {
     );
   };
 
-  if (awaitingConfirmation && previewImage) {
-    return (
-      <View style={styles.container}>
-        <Image source={{ uri: previewImage }} style={styles.previewImageFull} />
-        
-        <View style={styles.confirmationOverlay}>
-          <Text style={styles.confirmationText}>{detectionHint}</Text>
-          
-          <View style={styles.confirmationButtons}>
-            <TouchableOpacity style={styles.retakeButton} onPress={retakePicture}>
-              <Text style={styles.retakeButtonText}>🔄 Tekrar Çek</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.confirmButton} onPress={confirmAndProcessOCR}>
-              <Text style={styles.confirmButtonText}>✓ Oku</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  }
-  
+  // ... (rest of the code remains the same)
+
   if (ocrResult) {
     return (
       <View style={styles.container}>
-        {previewImage && (
-          <Image source={{ uri: previewImage }} style={styles.previewImage} />
-        )}
-        {renderResult()}
+        {renderResult(ocrResult)}
+        {renderCacheLog()}
       </View>
     );
   }
@@ -1730,7 +1944,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
-      
+
       {/* Header with back button */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -1746,7 +1960,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
         <Text style={styles.headerTitle}>OCR Okuma</Text>
         <View style={styles.headerSpacer} />
       </View>
-      
+
       {device && isCameraActive ? (
         <>
           <Camera
@@ -1754,16 +1968,17 @@ export const OCRReaderScreen = ({ navigation, route }) => {
             style={styles.camera}
             device={device}
             isActive={isCameraActive}
-            photo={true}
             torch={torchEnabled ? 'on' : 'off'}
             exposure={0}
             enableZoomGesture={false}
             videoStabilizationMode="off"
             enableAutoStabilization={false}
+            frameProcessor={frameProcessor}
+            frameProcessorFps={4}
           />
-          
+
           {renderOverlay()}
-          
+
           {/* Flash, Torch & Auto-capture Controls */}
           <View style={styles.topControls}>
             <TouchableOpacity
@@ -1772,7 +1987,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
             >
               <Text style={styles.topControlIcon}>🔦</Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               style={[styles.topControlButton, flashMode !== 'off' && styles.topControlButtonActive]}
               onPress={() => {
@@ -1787,40 +2002,6 @@ export const OCRReaderScreen = ({ navigation, route }) => {
                 {flashMode === 'off' ? 'Kapalı' : flashMode === 'on' ? 'Açık' : 'Oto'}
               </Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.topControlButton, autoCapture && styles.topControlButtonActive]}
-              onPress={() => {
-                setAutoCapture(!autoCapture);
-                setCardDetected(false); // Reset detection
-              }}
-            >
-              <Text style={styles.topControlIcon}>🤖</Text>
-              <Text style={styles.topControlLabel}>
-                {autoCapture ? 'Oto' : 'Manuel'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.controls}>
-            <TouchableOpacity
-              style={[styles.captureButton, isProcessing && styles.captureButtonDisabled]}
-              onPress={takePicture}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <ActivityIndicator color="#FFF" size="large" />
-              ) : (
-                <View style={styles.captureButtonInner} />
-              )}
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.galleryButton}
-              onPress={selectFromGallery}
-            >
-              <Text style={styles.galleryButtonText}>📷</Text>
-            </TouchableOpacity>
           </View>
         </>
       ) : !device ? (
@@ -1833,6 +2014,8 @@ export const OCRReaderScreen = ({ navigation, route }) => {
           <Text style={styles.errorText}>Kamera başlatılıyor...</Text>
         </View>
       )}
+
+      {renderCacheLog()}
     </View>
   );
 };
