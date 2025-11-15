@@ -1,9 +1,9 @@
 /**
- * Liveness Demo Screen - Day 11 Final Demo Implementation
- * Canlılık Testi final demo - ardışık komutlar, ilerleme barı, başarı/hata mesajları
+ * Liveness Demo Screen - Vision Camera + ML Kit gerçek zamanlı akış
+ * Kafa hareketi (sağ/sol/yukarı/aşağı) doğrulamasına odaklı sade demo
  */
 
-import React, { useState, useRef, useMemo, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,90 +13,47 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
-  Dimensions,
-  Switch,
-  Animated,
-  Modal,
 } from "react-native";
-import { Camera, useCameraDevices } from "react-native-vision-camera";
 
-import LivenessDetector, {
-  LIVENESS_STATUS,
-  LIVENESS_INSTRUCTIONS,
-} from "../modules/liveness/LivenessDetector";
-import {
-  getRandomCommand,
-  getAvailableCommandTypes,
-  generateCommandSequence,
-} from "../modules/liveness/commands";
-import { validateResponse } from "../modules/liveness/validator";
-import { checkSpoof } from "../modules/liveness/antiSpoofing";
+import LivenessDetector, { LIVENESS_STATUS } from "../modules/liveness/LivenessDetector";
+import { getHeadMovementSequence } from "../modules/liveness/commands";
+import LivenessCamera from "../components/camera/LivenessCamera";
 import Logger from "../utils/logger";
 
-const { width, height } = Dimensions.get("window");
+const HEAD_MOVEMENT_SEQUENCE = getHeadMovementSequence();
 
 const LivenessDemoScreen = () => {
-  const [livenessData, setLivenessData] = useState(null);
   const [logs, setLogs] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [livenessStatus, setLivenessStatus] = useState("idle");
+  const [livenessStatus, setLivenessStatus] = useState(LIVENESS_STATUS.IDLE);
   const [progress, setProgress] = useState("");
-  const [currentInstruction, setCurrentInstruction] = useState(null);
-  const [capturedImages, setCapturedImages] = useState(0);
-  const [testResults, setTestResults] = useState(null);
   const [currentCommand, setCurrentCommand] = useState(null);
-  const [validationResult, setValidationResult] = useState(null);
-  const [commandSequence, setCommandSequence] = useState([]);
-  const [difficulty, setDifficulty] = useState("easy");
-
-  // Day 10: Real-time camera, face detection and anti-spoofing states
-  const [cameraPermission, setCameraPermission] = useState(null);
-  const [showCamera, setShowCamera] = useState(false);
-  const [realTimeMode, setRealTimeMode] = useState(true);
-  const [faceDetectionState, setFaceDetectionState] = useState(null);
   const [motionDetected, setMotionDetected] = useState(null);
-  const [antiSpoofingEnabled, setAntiSpoofingEnabled] = useState(true);
-  const [antiSpoofingResult, setAntiSpoofingResult] = useState(null);
-  const [spoofingTestMode, setSpoofingTestMode] = useState(false);
+  const [testResults, setTestResults] = useState(null);
+  const [cameraPermission, setCameraPermission] = useState("not-determined");
+  const [showCamera, setShowCamera] = useState(false);
 
-  const livenessDetectorRef = useRef(null);
-  const cameraRef = useRef(null);
-  const devices = useCameraDevices();
+  const addLog = useCallback((message, type = "info") => {
+    const timestamp = new Date().toLocaleTimeString("tr-TR");
+    const entry = {
+      id: `${Date.now()}-${Math.random()}`,
+      message,
+      type,
+      timestamp,
+    };
 
-  // Day 9: Camera permission check
-  useEffect(() => {
-    checkCameraPermission();
+    setLogs((prev) => [entry, ...prev.slice(0, 49)]);
+    Logger.info(`[${type.toUpperCase()}] ${message}`);
   }, []);
 
-  const checkCameraPermission = async () => {
-    try {
-      const permission = await Camera.getCameraPermissionStatus();
-      setCameraPermission(permission);
-
-      if (permission !== "authorized") {
-        const newPermission = await Camera.requestCameraPermission();
-        setCameraPermission(newPermission);
-      }
-    } catch (error) {
-      addLog(`❌ Kamera izni hatası: ${error.message}`, "error");
-    }
-  };
-
-  // Initialize Liveness Detector with callbacks (Day 9 Enhanced)
   const livenessDetector = useMemo(() => {
-    const detector = new LivenessDetector({ realTimeMode });
+    const detector = new LivenessDetector({ realTimeMode: true });
 
     detector.onSuccess = (data) => {
-      addLog(
-        `✅ Canlılık testi başarılı! (${
-          data.realTimeMode ? "Gerçek Zamanlı" : "Mock"
-        })`,
-        "success"
-      );
-      setLivenessData(data);
+      addLog("✅ Canlılık testi tamamlandı", "success");
       setIsProcessing(false);
-      setTestResults(data);
       setShowCamera(false);
+      setTestResults(data);
     };
 
     detector.onError = (error) => {
@@ -104,510 +61,259 @@ const LivenessDemoScreen = () => {
       setIsProcessing(false);
       setShowCamera(false);
 
-      Alert.alert("Canlılık Testi Hatası", error.message, [
-        { text: "Tekrar Dene", onPress: handleLivenessTest },
-        { text: "İptal", style: "cancel" },
-      ]);
+      Alert.alert("Canlılık Testi Hatası", error.message, [{ text: "Tamam" }]);
     };
 
     detector.onStatusChange = (newStatus, oldStatus) => {
       setLivenessStatus(newStatus);
-      addLog(`📊 Durum değişti: ${oldStatus} → ${newStatus}`, "info");
+      addLog(`📊 Durum: ${oldStatus} → ${newStatus}`, "info");
     };
 
     detector.onProgress = (message) => {
       setProgress(message);
-      addLog(`⏳ ${message}`, "progress");
+      addLog(message, "progress");
     };
 
-    detector.onInstructionGiven = (data) => {
-      addLog(
-        `📋 Talimat: ${data.message} ${
-          data.realTimeMode ? "(Gerçek Zamanlı)" : "(Mock)"
-        }`,
-        "instruction"
-      );
-      setCurrentInstruction(data.instruction);
-      setCurrentCommand(data.command);
+    detector.onInstructionGiven = ({ command, message }) => {
+      setCurrentCommand(command);
+      addLog(`📋 Talimat: ${message}`, "instruction");
     };
 
-    detector.onCaptureComplete = (data) => {
-      setCapturedImages(data.imageCount || 0);
-      addLog(`📸 Görüntü yakalandı: ${data.imageCount || 0}`, "capture");
+    detector.onMotionDetected = (data) => {
+      setMotionDetected(data);
     };
 
-    // Day 9: Motion detection callback
-    detector.onMotionDetected = (motionData) => {
-      setMotionDetected(motionData);
-      addLog(
-        `🎯 Hareket algılandı: ${
-          motionData.motionType
-        } (Güven: ${motionData.confidence.overall.toFixed(2)})`,
-        "motion"
-      );
-
-    livenessDetectorRef.current = detector;
     return detector;
-  }, [realTimeMode]);
+  }, [addLog]);
 
-  // Add log entry
-  const addLog = (message, type = "info") => {
-    const timestamp = new Date().toLocaleTimeString("tr-TR");
-    const logEntry = {
-      id: Date.now(),
-      message,
-      type,
-      timestamp,
+  useEffect(() => {
+    return () => {
+      livenessDetector.stopLivenessTest().catch(() => {});
     };
+  }, [livenessDetector]);
 
-    setLogs((prevLogs) => [logEntry, ...prevLogs.slice(0, 49)]);
-    Logger.info(`[${type.toUpperCase()}] ${message}`);
-  };
-
-  // Get status color
-  const getStatusColor = (status) => {
+  const getStatusColor = useCallback((status) => {
     switch (status) {
-      case "idle":
-        return "#9E9E9E";
-      case "initializing":
-        return "#FF9800";
-      case "camera_ready":
-        return "#2196F3";
-      case "instruction_given":
-        return "#9C27B0";
-      case "capturing":
-        return "#FF5722";
-      case "processing":
-        return "#FF9800";
-      case "success":
-        return "#4CAF50";
-      case "error":
-        return "#F44336";
+      case LIVENESS_STATUS.INITIALIZING:
+        return "#f59e0b";
+      case LIVENESS_STATUS.CAMERA_READY:
+        return "#2563eb";
+      case LIVENESS_STATUS.INSTRUCTION_GIVEN:
+        return "#7c3aed";
+      case LIVENESS_STATUS.CAPTURING:
+        return "#fb923c";
+      case LIVENESS_STATUS.PROCESSING:
+        return "#f59e0b";
+      case LIVENESS_STATUS.SUCCESS:
+        return "#22c55e";
+      case LIVENESS_STATUS.ERROR:
+        return "#ef4444";
       default:
-        return "#9E9E9E";
+        return "#6b7280";
     }
-  };
+  }, []);
 
-  // Start liveness test (Day 9 Enhanced)
-  const handleLivenessTest = async () => {
+  const handleStart = async () => {
+    if (cameraPermission !== "authorized") {
+      setShowCamera(true);
+      Alert.alert(
+        "Kamera izni gerekli",
+        "Lütfen Vision Camera bileşenine izin vererek testi tekrar başlatın."
+      );
+      return;
+    }
+
     try {
       setIsProcessing(true);
       setLogs([]);
-      setLivenessData(null);
-      setTestResults(null);
-      setValidationResult(null);
-      setCurrentCommand(null);
-      setCurrentInstruction(null);
       setProgress("");
+      setCurrentCommand(null);
       setMotionDetected(null);
+      setTestResults(null);
+      setShowCamera(true);
 
-      addLog(
-        `🚀 Canlılık testi başlatılıyor... (${
-          realTimeMode ? "Gerçek Zamanlı" : "Mock"
-        } Mod)`,
-        "info"
+      addLog("🚀 Liveness testi başlatılıyor", "info");
 
-      // Show camera for real-time mode
-      if (realTimeMode && cameraPermission === "authorized") {
-        setShowCamera(true);
-      }
-
-      const options = {
-        difficulty,
-        commandCount: 3,
-        maxRetries: 2,
-        realTimeMode,
-      };
-
-      await livenessDetector.startLivenessTest(options);
+      await livenessDetector.startLivenessTest({
+        commandCount: HEAD_MOVEMENT_SEQUENCE.length,
+        requireHeadMovements: true,
+        realTimeMode: true,
+      });
     } catch (error) {
-      addLog(`❌ Test başlatma hatası: ${error.message}`, "error");
+      addLog(`❌ Test başlatılamadı: ${error.message}`);
       setIsProcessing(false);
       setShowCamera(false);
-
-      Alert.alert(
-        "Test Hatası",
-        `Canlılık testi başlatılamadı: ${error.message}`,
-        [{ text: "Tamam" }]
-      );
     }
   };
 
-  // Handle Stop Liveness Test (Day 9 Enhanced)
-  const handleStopLivenessTest = async () => {
-    try {
-      await livenessDetector.stopLivenessTest();
-      addLog("⏹️ Canlılık testi durduruldu", "info");
-      setIsProcessing(false);
-      setShowCamera(false);
-    } catch (error) {
-      addLog(`❌ Durdurma hatası: ${error.message}`, "error");
-    }
-  };
-
-  // Handle Reset (Day 10 Enhanced)
-  const handleReset = () => {
-    livenessDetector.reset();
-    setLivenessData(null);
+  const handleStop = async () => {
+    await livenessDetector.stopLivenessTest();
     setIsProcessing(false);
     setShowCamera(false);
-    setMotionDetected(null);
-    setFaceDetectionState(null);
-    setAntiSpoofingResult(null);
-    setLivenessStatus("idle");
+  };
+
+  const handleReset = () => {
+    livenessDetector.reset();
+    setIsProcessing(false);
+    setShowCamera(false);
     setProgress("");
-    setCurrentInstruction(null);
-    setCapturedImages(0);
+    setCurrentCommand(null);
+    setMotionDetected(null);
     setTestResults(null);
-    setLogs([]);
-    addLog("🔄 Canlılık testi sıfırlandı", "info");
+    addLog("🔄 Test sıfırlandı", "info");
   };
 
-  // Day 10: Simulate spoofing test
-  const simulateSpoofingTest = async () => {
-    try {
-      addLog("🧪 Sahte test simülasyonu başlatılıyor...", "info");
+  const handleFrameAnalyzed = useCallback(() => {
+    // Ekstra işlem gerekmiyor; LivenessDetector kendi durumunu yönetiyor
+  }, []);
 
-      // Create fake frame data that should be detected as spoofing
-      const fakeFrameData = {
-        faces: [
-          {
-            bounds: { x: 100, y: 100, width: 200, height: 200 },
-            landmarks: {
-              leftEye: { openProbability: 0.9 },
-              rightEye: { openProbability: 0.9 },
-              nose: { position: { x: 200, y: 150, z: 0 } },
-              mouth: { position: { x: 200, y: 180, z: 0 } },
-            },
-            contours: {
-              face: [
-                { x: 100, y: 100, z: 0 },
-                { x: 300, y: 100, z: 0 },
-                { x: 300, y: 300, z: 0 },
-                { x: 100, y: 300, z: 0 },
-              ],
-            },
-            smileProbability: 0.1,
-          },
-        ],
-        imageData: {
-          width: 400,
-          height: 400,
-          format: "rgba",
-        },
-      };
-
-      // Force spoofing detection by manipulating the result
-      const spoofResult = await checkSpoof(fakeFrameData);
-
-      // Override result to simulate spoofing detection
-      const simulatedResult = {
-        ...spoofResult,
-        isReal: false,
-        confidence: 0.25,
-        reason: "Ekran/fotoğraf tespit edildi",
-        details: {
-          ...spoofResult.details,
-          simulatedTest: true,
-          textureVariance: 0.1,
-          pixelationScore: 0.9,
-          reflectionScore: 0.8,
-        }
-      };
-
-      setAntiSpoofingResult(simulatedResult);
-      addLog(`❌ Sahte tespit edildi: ${simulatedResult.reason}`, "error");
-      addLog(
-        `🔍 Güven skoru: ${(simulatedResult.confidence * 100).toFixed(1)}%`,
-        "info"
-
-      // Show alert
-      Alert.alert(
-        "❌ Sahte Tespit Edildi",
-        `Sistem sahte bir giriş tespit etti.\n\nSebep: ${
-          simulatedResult.reason
-        }\nGüven Skoru: ${(simulatedResult.confidence * 100).toFixed(1)}%`,
-        [{ text: "Tamam" }]
-      );
-    } catch (error) {
-      addLog(`❌ Sahte test simülasyonu hatası: ${error.message}`, "error");
+  const permissionMessage = useMemo(() => {
+    if (cameraPermission === "authorized") {
+      return "✅ Kamera izni verildi";
     }
-  };
-
-  // Clear logs
-  const clearLogs = () => {
-    setLogs([]);
-    addLog("📝 Loglar temizlendi", "info");
-  };
-
-  // Day 9: Camera frame processing
-  const onCameraFrame = async (frame) => {
-    if (!realTimeMode || !livenessDetector) {return;}
-
-    try {
-      const result = await livenessDetector.processCameraFrame(frame);
-      if (result) {
-        setFaceDetectionState(livenessDetector.getFaceDetectionState());
-      }
-    } catch (error) {
-      // Silent error handling for frame processing
+    if (cameraPermission === "denied") {
+      return "❌ Kamera izni reddedildi";
     }
-  };
+    return "ℹ️ Kamera izni bekleniyor";
+  }, [cameraPermission]);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
-        <Text style={styles.title}>Canlılık Testi Demo - Day 10 🛡️</Text>
+        <Text style={styles.title}>Canlılık Testi (Kafa Hareketleri)</Text>
 
-        {/* Real-time Mode Toggle */}
-        <View style={styles.modeContainer}>
-          <Text style={styles.modeLabel}>Mod:</Text>
-          <TouchableOpacity
-            style={[
-              styles.modeButton,
-              realTimeMode ? styles.realTimeModeActive : styles.mockModeActive,
-            ]}
-            onPress={() => setRealTimeMode(!realTimeMode)}
-            disabled={isProcessing}
-          >
-            <Text style={styles.modeButtonText}>
-              {realTimeMode ? "📹 Gerçek Zamanlı" : "🎭 Mock"}
-            </Text>
-          </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Komut Dizisi</Text>
+          <View style={styles.sequenceContainer}>
+            {HEAD_MOVEMENT_SEQUENCE.map((command) => (
+              <View key={command.id} style={styles.sequenceItem}>
+                <Text style={styles.sequenceIcon}>{command.icon}</Text>
+                <View style={styles.sequenceTextContainer}>
+                  <Text style={styles.sequenceTitle}>{command.message}</Text>
+                  <Text style={styles.sequenceSubtitle}>{command.instruction}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
 
-        {/* Anti-Spoofing Controls */}
-        <View style={styles.antiSpoofingContainer}>
-          <View style={styles.antiSpoofingRow}>
-            <Text style={styles.antiSpoofingLabel}>🛡️ Anti-Spoofing:</Text>
-            <Switch
-              value={antiSpoofingEnabled}
-              onValueChange={setAntiSpoofingEnabled}
-              disabled={isProcessing}
-              trackColor={{ false: "#767577", true: "#4CAF50" }}
-              thumbColor={antiSpoofingEnabled ? "#fff" : "#f4f3f4"}
-            />
-          </View>
-
-          <View style={styles.antiSpoofingRow}>
-            <Text style={styles.antiSpoofingLabel}>🧪 Sahte Test Modu:</Text>
-            <Switch
-              value={spoofingTestMode}
-              onValueChange={setSpoofingTestMode}
-              disabled={isProcessing}
-              trackColor={{ false: "#767577", true: "#FF9800" }}
-              thumbColor={spoofingTestMode ? "#fff" : "#f4f3f4"}
-            />
-          </View>
-
-          {spoofingTestMode && (
-            <View style={styles.spoofingWarning}>
-              <Text style={styles.spoofingWarningText}>
-                ⚠️ Sahte test modu aktif - sistem sahte girişleri simüle edecek
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Camera Permission Status */}
-        {realTimeMode && (
-          <View style={styles.permissionContainer}>
-            <Text style={styles.permissionLabel}>Kamera İzni:</Text>
-            <Text
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Kamera Akışı</Text>
+          <LivenessCamera
+            detector={livenessDetector}
+            isActive={showCamera}
+            instruction={
+              currentCommand
+                ? {
+                    icon: currentCommand.icon,
+                    title: "Talimat",
+                    message: currentCommand.message,
+                  }
+                : null
+            }
+            onFrameAnalyzed={handleFrameAnalyzed}
+            onMotionDetected={setMotionDetected}
+            onPermissionChange={setCameraPermission}
+            motionState={motionDetected}
+          />
+          <Text style={styles.permissionText}>{permissionMessage}</Text>
+          {motionDetected?.faceDetected ? (
+            <View
               style={[
-                styles.permissionStatus,
-                {
-                  color:
-                    cameraPermission === "authorized" ? "#4CAF50" : "#F44336",
-                },
+                styles.faceStatusChip,
+                motionDetected.motions?.lookStraight
+                  ? styles.faceStatusChipSuccess
+                  : styles.faceStatusChipAlert,
               ]}
             >
-              {cameraPermission === "authorized" ? "✅ Verildi" : "❌ Gerekli"}
-            </Text>
-          </View>
-        )}
-
-        {/* Status Display */}
-        <View style={styles.statusContainer}>
-          <Text style={styles.statusLabel}>Durum:</Text>
-          <Text
-            style={[
-              styles.statusValue,
-              { color: getStatusColor(livenessStatus) },
-            ]}
-          >
-            {livenessStatus.toUpperCase()}
-          </Text>
+              <Text
+                style={[
+                  styles.faceStatusText,
+                  motionDetected.motions?.lookStraight
+                    ? styles.faceStatusTextSuccess
+                    : styles.faceStatusTextAlert,
+                ]}
+              >
+                {motionDetected.motions?.lookStraight
+                  ? "Yüz hizalandı"
+                  : "Lütfen yüzünüzü ortalayın"}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
-        {progress ? (
-          <View style={styles.progressContainer}>
-            <Text style={styles.progressText}>{progress}</Text>
-          </View>
-        ) : null}
-
-        {/* Camera Feed for Real-time Mode */}
-        {showCamera &&
-          realTimeMode &&
-          cameraPermission === "authorized" &&
-          devices.front && (
-            <View style={styles.cameraContainer}>
-              <Text style={styles.cameraTitle}>📹 Canlı Kamera Feed</Text>
-              <Camera
-                ref={cameraRef}
-                style={styles.camera}
-                device={devices.front}
-                isActive={showCamera}
-                frameProcessor={onCameraFrame}
-              />
-              {faceDetectionState && (
-                <View style={styles.detectionOverlay}>
-                  <Text style={styles.detectionText}>
-                    {faceDetectionState.isReady
-                      ? "✅ Yüz Algılama Hazır"
-                      : "⏳ Hazırlanıyor..."}
-                  </Text>
-                  {motionDetected && (
-                    <Text style={styles.motionText}>
-                      🎯 {motionDetected.motionType}:{" "}
-                      {motionDetected.confidence.overall.toFixed(2)}
-                    </Text>
-                  )}
-                </View>
-              )}
-            </View>
-          )}
-
-        {/* Current Command Display */}
-        {currentCommand && (
-          <View style={styles.commandContainer}>
-            <Text style={styles.commandTitle}>Mevcut Komut:</Text>
-            <Text style={styles.commandText}>
-              {currentCommand.icon} {currentCommand.message}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Durum</Text>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>Test Durumu</Text>
+            <Text style={[styles.statusValue, { color: getStatusColor(livenessStatus) }]}>
+              {livenessStatus.toUpperCase()}
             </Text>
           </View>
-        )}
-
-        {/* Control Buttons */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              styles.primaryButton,
-              isProcessing && styles.disabledButton,
-            ]}
-            onPress={handleLivenessTest}
-            disabled={
-              isProcessing ||
-              (realTimeMode && cameraPermission !== "authorized")
-            }
-          >
-            {isProcessing ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.buttonText}>
-                {realTimeMode ? "📹 Gerçek Zamanlı Test" : "🎭 Mock Test"}
+          {progress ? <Text style={styles.progressText}>{progress}</Text> : null}
+          {motionDetected ? (
+            <View style={styles.motionContainer}>
+              <Text style={styles.motionTitle}>Son Hareket</Text>
+              <Text style={styles.motionText}>
+                {motionDetected.motionType} · {(motionDetected.confidence.overall || 0).toFixed(2)}
               </Text>
-            )}
-          </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
 
-          {isProcessing && (
+        <View style={styles.section}>
+          <View style={styles.buttonGroup}>
+            <TouchableOpacity
+              style={[styles.button, styles.primaryButton, isProcessing && styles.disabledButton]}
+              onPress={handleStart}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>🚀 Testi Başlat</Text>
+              )}
+            </TouchableOpacity>
+
+            {isProcessing && (
+              <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={handleStop}>
+                <Text style={styles.buttonText}>⏹️ Durdur</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[styles.button, styles.secondaryButton]}
-              onPress={handleStopLivenessTest}
+              onPress={handleReset}
+              disabled={isProcessing}
             >
-              <Text style={styles.buttonText}>⏹️ Durdur</Text>
+              <Text style={styles.buttonText}>🔄 Sıfırla</Text>
             </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            onPress={handleReset}
-            disabled={isProcessing}
-          >
-            <Text style={styles.buttonText}>🔄 Sıfırla</Text>
-          </TouchableOpacity>
-
-          {/* Spoofing Test Button */}
-          <TouchableOpacity
-            style={[styles.button, styles.spoofingTestButton]}
-            onPress={simulateSpoofingTest}
-            disabled={isProcessing}
-          >
-            <Text style={styles.buttonText}>🧪 Sahte Test</Text>
-          </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Anti-Spoofing Result Display */}
-        {antiSpoofingResult && (
-          <View
-            style={[
-              styles.resultContainer,
-              antiSpoofingResult.isReal
-                ? styles.realResultContainer
-                : styles.fakeResultContainer,
-            ]}
-          >
-            <Text style={styles.resultTitle}>
-              {antiSpoofingResult.isReal
-                ? "✅ Gerçek Yüz Tespit Edildi"
-                : "❌ Sahte Tespit Edildi"}
-            </Text>
-            <Text style={styles.resultText}>
-              Güven Skoru: {(antiSpoofingResult.confidence * 100).toFixed(1)}%
-            </Text>
-            <Text style={styles.resultText}>
-              Sebep: {antiSpoofingResult.reason}
-            </Text>
-            {antiSpoofingResult.details && (
-              <Text style={styles.resultText}>
-                Detaylar: {JSON.stringify(antiSpoofingResult.details, null, 2)}
-              </Text>
-            )}
-          </View>
-        )}
-
-        {/* Test Results */}
         {testResults && (
-          <View style={styles.resultContainer}>
-            <Text style={styles.resultTitle}>Test Sonuçları:</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Test Sonucu</Text>
             <Text style={styles.resultText}>Durum: {testResults.status}</Text>
+            <Text style={styles.resultText}>Süre: {testResults.duration} ms</Text>
             <Text style={styles.resultText}>
-              Süre: {testResults.duration}ms
+              Komutlar: {testResults.instructions?.length || 0} / {HEAD_MOVEMENT_SEQUENCE.length}
             </Text>
-            <Text style={styles.resultText}>
-              Tamamlanan Komutlar: {testResults.instructions?.length || 0}
-            </Text>
-            <Text style={styles.resultText}>
-              Mod: {testResults.realTimeMode ? "Gerçek Zamanlı" : "Mock"}
-            </Text>
-            {testResults.antiSpoofingEnabled && (
-              <Text style={styles.resultText}>
-                Anti-Spoofing:{" "}
-                {testResults.antiSpoofingResult?.isReal
-                  ? "✅ Geçti"
-                  : "❌ Başarısız"}
-              </Text>
-            )}
           </View>
         )}
 
-        {/* Logs */}
-        <View style={styles.logsContainer}>
+        <View style={styles.section}>
           <View style={styles.logsHeader}>
-            <Text style={styles.logsTitle}>Loglar ({logs.length})</Text>
-            <TouchableOpacity onPress={clearLogs} style={styles.clearButton}>
+            <Text style={styles.sectionTitle}>Loglar</Text>
+            <TouchableOpacity style={styles.clearButton} onPress={() => setLogs([])}>
               <Text style={styles.clearButtonText}>Temizle</Text>
             </TouchableOpacity>
           </View>
-
-          <ScrollView style={styles.logsScrollView} nestedScrollEnabled>
+          <ScrollView style={styles.logList} nestedScrollEnabled>
             {logs.map((log) => (
-              <View key={log.id} style={styles.logEntry}>
+              <View key={log.id} style={styles.logRow}>
                 <Text style={styles.logTimestamp}>{log.timestamp}</Text>
-                <Text style={[styles.logMessage, styles[`log_${log.type}`]]}>
-                  {log.message}
-                </Text>
+                <Text style={[styles.logMessage, styles[`log_${log.type}`]]}>{log.message}</Text>
               </View>
             ))}
           </ScrollView>
@@ -620,310 +326,176 @@ const LivenessDemoScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f3f4f6",
   },
   scrollView: {
     flex: 1,
     padding: 16,
   },
   title: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#111827",
     textAlign: "center",
-    marginBottom: 20,
-    color: "#333",
-  },
-  modeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
     marginBottom: 16,
-    padding: 12,
-    backgroundColor: "#fff",
-    borderRadius: 8,
   },
-  modeLabel: {
+  section: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  sectionTitle: {
     fontSize: 16,
     fontWeight: "600",
-    marginRight: 12,
-    color: "#333",
+    color: "#1f2937",
+    marginBottom: 12,
   },
-  modeButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 2,
+  sequenceContainer: {
+    gap: 12,
   },
-  realTimeModeActive: {
-    backgroundColor: "#2196F3",
-    borderColor: "#2196F3",
-  },
-  mockModeActive: {
-    backgroundColor: "#FF9800",
-    borderColor: "#FF9800",
-  },
-  modeButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-  },
-  permissionContainer: {
+  sequenceItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
     padding: 12,
-    backgroundColor: "#fff",
-    borderRadius: 8,
+    borderRadius: 10,
+    backgroundColor: "#f9fafb",
   },
-  permissionLabel: {
-    fontSize: 16,
-    fontWeight: "600",
+  sequenceIcon: {
+    fontSize: 22,
     marginRight: 12,
-    color: "#333",
   },
-  permissionStatus: {
+  sequenceTextContainer: {
+    flex: 1,
+  },
+  sequenceTitle: {
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
+    color: "#111827",
   },
-  statusContainer: {
+  sequenceSubtitle: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 2,
+  },
+  permissionText: {
+    marginTop: 12,
+    fontSize: 12,
+    color: "#6b7280",
+    textAlign: "center",
+  },
+  statusRow: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-    padding: 12,
-    backgroundColor: "#fff",
-    borderRadius: 8,
+    justifyContent: "space-between",
+    marginBottom: 8,
   },
   statusLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginRight: 12,
-    color: "#333",
+    fontSize: 14,
+    color: "#374151",
   },
   statusValue: {
     fontSize: 14,
-    fontWeight: "500",
-  },
-  progressContainer: {
-    marginBottom: 16,
-    padding: 12,
-    backgroundColor: "#fff",
-    borderRadius: 8,
+    fontWeight: "600",
   },
   progressText: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
+    fontSize: 13,
+    color: "#4b5563",
   },
-  cameraContainer: {
-    marginBottom: 16,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  cameraTitle: {
-    fontSize: 16,
-    fontWeight: "600",
+  motionContainer: {
+    marginTop: 12,
     padding: 12,
-    backgroundColor: "#f0f0f0",
-    color: "#333",
+    borderRadius: 10,
+    backgroundColor: "#ecfdf5",
   },
-  camera: {
-    width: "100%",
-    height: 300,
-  },
-  detectionOverlay: {
-    position: "absolute",
-    top: 50,
-    left: 12,
-    right: 12,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    padding: 8,
-    borderRadius: 4,
-  },
-  detectionText: {
-    color: "#fff",
-    fontSize: 12,
+  motionTitle: {
+    fontSize: 13,
     fontWeight: "600",
+    color: "#047857",
+    marginBottom: 4,
   },
   motionText: {
-    color: "#4CAF50",
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
+    fontSize: 13,
+    color: "#047857",
   },
-  commandContainer: {
-    marginBottom: 16,
-    padding: 12,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-  },
-  commandTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 8,
-    color: "#333",
-  },
-  commandText: {
-    fontSize: 18,
-    color: "#2196F3",
-    textAlign: "center",
-  },
-  buttonContainer: {
-    marginBottom: 20,
+  buttonGroup: {
+    gap: 12,
   },
   button: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    marginBottom: 12,
+    paddingVertical: 14,
+    borderRadius: 12,
     alignItems: "center",
   },
   primaryButton: {
-    backgroundColor: "#2196F3",
+    backgroundColor: "#2563eb",
   },
   secondaryButton: {
-    backgroundColor: "#757575",
+    backgroundColor: "#4b5563",
   },
   disabledButton: {
-    backgroundColor: "#BDBDBD",
+    backgroundColor: "#93c5fd",
   },
   buttonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
-  },
-  resultContainer: {
-    marginBottom: 20,
-    padding: 16,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-  },
-  resultTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 12,
-    color: "#333",
+    color: "#fff",
   },
   resultText: {
     fontSize: 14,
+    color: "#374151",
     marginBottom: 4,
-    color: "#666",
-  },
-  logsContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    maxHeight: 300,
   },
   logsHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  logsTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
+    justifyContent: "space-between",
   },
   clearButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: "#f44336",
-    borderRadius: 4,
+    backgroundColor: "#f3f4f6",
+    borderRadius: 6,
   },
   clearButtonText: {
-    color: "#fff",
     fontSize: 12,
+    color: "#4b5563",
     fontWeight: "600",
   },
-  logsScrollView: {
+  logList: {
     maxHeight: 200,
+    marginTop: 12,
   },
-  logEntry: {
-    padding: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+  logRow: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e5e7eb",
+    paddingVertical: 6,
   },
   logTimestamp: {
     fontSize: 10,
-    color: "#999",
-    marginBottom: 2,
+    color: "#9ca3af",
   },
   logMessage: {
     fontSize: 12,
-    color: "#333",
+    color: "#4b5563",
   },
   log_info: {
-    color: "#2196f3",
+    color: "#2563eb",
   },
   log_success: {
-    color: "#4caf50",
+    color: "#16a34a",
   },
   log_error: {
-    color: "#F44336",
-  },
-  log_warning: {
-    color: "#ff9800",
-  },
-  log_instruction: {
-    color: "#9c27b0",
+    color: "#dc2626",
   },
   log_progress: {
-    color: "#ff5722",
+    color: "#7c3aed",
   },
-  log_motion: {
-    color: "#4caf50",
-  },
-  log_capture: {
-    color: "#607d8b",
-  },
-
-  // Day 10: Anti-Spoofing Styles
-  antiSpoofingContainer: {
-    marginBottom: 16,
-    padding: 12,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-  },
-  antiSpoofingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  antiSpoofingLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-  },
-  spoofingWarning: {
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: "#FFF3E0",
-    borderRadius: 4,
-    borderLeftWidth: 4,
-    borderLeftColor: "#FF9800",
-  },
-  spoofingWarningText: {
-    fontSize: 14,
-    color: "#E65100",
-    fontWeight: "500",
-  },
-  spoofingTestButton: {
-    backgroundColor: "#FF9800",
-    borderColor: "#FF9800",
-  },
-  realResultContainer: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#4CAF50",
-    backgroundColor: "#E8F5E8",
-  },
-  fakeResultContainer: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#F44336",
-    backgroundColor: "#FFEBEE",
+  log_instruction: {
+    color: "#f97316",
   },
 });
 

@@ -101,7 +101,67 @@ if (fs.existsSync(mlKitFacePath)) {
   }
 }
 
-// Fix 6: Metro bundler middleware
+const mlKitFaceManifest = path.join(__dirname, '../node_modules/@react-native-ml-kit/face-detection/android/src/main/AndroidManifest.xml');
+if (fs.existsSync(mlKitFaceManifest)) {
+  let manifest = fs.readFileSync(mlKitFaceManifest, 'utf8');
+  manifest = manifest.replace(/package="[^"]+"/g, '');
+  fs.writeFileSync(mlKitFaceManifest, manifest, 'utf8');
+}
+
+// Fix 6: @react-native-ml-kit/text-recognition - Add namespace and update SDK versions
+const mlKitTextPath = path.join(__dirname, '../node_modules/@react-native-ml-kit/text-recognition/android/build.gradle');
+if (fs.existsSync(mlKitTextPath)) {
+  let content = fs.readFileSync(mlKitTextPath, 'utf8');
+  if (!content.includes('namespace "com.rnmlkit.textrecognition"')) {
+    content = content.replace(
+      /android\s*\{/,
+      'android {\n    namespace "com.rnmlkit.textrecognition"'
+    );
+  }
+
+  content = content.replace(
+    /compileSdkVersion safeExtGet\('compileSdkVersion', DEFAULT_COMPILE_SDK_VERSION\)/,
+    "compileSdkVersion safeExtGet('compileSdkVersion', 34)"
+  );
+  content = content.replace(
+    /buildToolsVersion safeExtGet\('buildToolsVersion', DEFAULT_BUILD_TOOLS_VERSION\)/,
+    "buildToolsVersion safeExtGet('buildToolsVersion', '34.0.0')"
+  );
+  content = content.replace(
+    /minSdkVersion safeExtGet\('minSdkVersion', DEFAULT_MIN_SDK_VERSION\)/,
+    "minSdkVersion safeExtGet('minSdkVersion', 21)"
+  );
+  content = content.replace(
+    /targetSdkVersion safeExtGet\('targetSdkVersion', DEFAULT_TARGET_SDK_VERSION\)/,
+    "targetSdkVersion safeExtGet('targetSdkVersion', 34)"
+  );
+
+  fs.writeFileSync(mlKitTextPath, content, 'utf8');
+  console.log('✅ Fixed @react-native-ml-kit/text-recognition namespace and SDK versions');
+}
+
+const mlKitTextManifest = path.join(__dirname, '../node_modules/@react-native-ml-kit/text-recognition/android/src/main/AndroidManifest.xml');
+if (fs.existsSync(mlKitTextManifest)) {
+  let manifest = fs.readFileSync(mlKitTextManifest, 'utf8');
+  manifest = manifest.replace(/package="[^"]+"/g, '');
+  fs.writeFileSync(mlKitTextManifest, manifest, 'utf8');
+}
+
+// Fix 7: react-native-worklets-core - Add namespace
+const workletsCorePath = path.join(__dirname, '../node_modules/react-native-worklets-core/android/build.gradle');
+if (fs.existsSync(workletsCorePath)) {
+  let content = fs.readFileSync(workletsCorePath, 'utf8');
+  if (!content.includes('namespace "com.worklets"')) {
+    content = content.replace(
+      /android\s*\{/,
+      'android {\n  namespace "com.worklets"'
+    );
+    fs.writeFileSync(workletsCorePath, content, 'utf8');
+    console.log('✅ Fixed react-native-worklets-core namespace');
+  }
+}
+
+// Fix 8: Metro bundler middleware
 const middlewarePath = path.join(__dirname, '../node_modules/@react-native/community-cli-plugin/dist/commands/start/middleware.js');
 if (fs.existsSync(middlewarePath)) {
   let content = fs.readFileSync(middlewarePath, 'utf8');

@@ -16,6 +16,7 @@ module.exports = {
         preventFullImport: true,
       },
     }],
+    'react-native-reanimated/plugin',
   ],
   env: {
     production: {

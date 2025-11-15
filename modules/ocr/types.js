@@ -4,6 +4,7 @@ const OCR_STATUS = {
   IDLE: 'idle',
   INITIALIZING: 'initializing',
   READY: 'ready',
+  SCANNING: 'scanning',
   CAPTURING: 'capturing',
   PROCESSING: 'processing',
   SUCCESS: 'success',

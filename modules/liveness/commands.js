@@ -23,6 +23,22 @@ const commands = [
   },
   {
     id: 3,
+    type: "lookUp",
+    message: "Lütfen yukarı bakın",
+    instruction: "LOOK_UP",
+    duration: 3000,
+    icon: "⬆️",
+  },
+  {
+    id: 4,
+    type: "lookDown",
+    message: "Lütfen aşağı bakın",
+    instruction: "LOOK_DOWN",
+    duration: 3000,
+    icon: "⬇️",
+  },
+  {
+    id: 5,
     type: "blink",
     message: "Lütfen gözlerinizi kırpın",
     instruction: "BLINK",
@@ -30,7 +46,7 @@ const commands = [
     icon: "👁️",
   },
   {
-    id: 4,
+    id: 6,
     type: "lookStraight",
     message: "Lütfen kameraya doğru bakın",
     instruction: "LOOK_STRAIGHT",
@@ -38,7 +54,7 @@ const commands = [
     icon: "👀",
   },
   {
-    id: 5,
+    id: 7,
     type: "smile",
     message: "Lütfen gülümseyin",
     instruction: "SMILE",
@@ -46,7 +62,7 @@ const commands = [
     icon: "😊",
   },
   {
-    id: 6,
+    id: 8,
     type: "nod",
     message: "Lütfen başınızı sallayın",
     instruction: "NOD",
@@ -131,6 +147,26 @@ export const generateCommandSequence = (count = 3, difficulty = 'easy') => {
   return sequence;
 };
 
+const createSequencedCommand = (command, index) => ({
+  ...command,
+  sequenceId: index + 1,
+  timestamp: Date.now() + index * 1000,
+});
+
+export const getHeadMovementSequence = () => {
+  const headMovementTypes = ["lookRight", "lookLeft", "lookUp", "lookDown"];
+
+  return headMovementTypes.map((type, index) => {
+    const command = getCommandByTypeExport(type);
+
+    if (!command) {
+      throw new Error(`Head movement command tanımlı değil: ${type}`);
+    }
+
+    return createSequencedCommand(command, index);
+  });
+};
+
 // Export functions and commands array (removed duplicate)
 
 module.exports = {
@@ -139,4 +175,5 @@ module.exports = {
   getCommandByInstruction: (instruction) => {
     return commands.find(cmd => cmd.instruction === instruction);
   },
+  getHeadMovementSequence,
 };

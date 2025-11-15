@@ -22,15 +22,66 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 
-// Import modules
+// Import modules and flows
 import { OCRReaderScreen } from './modules/ocr/OCRReaderModule';
 import { NFCReaderScreen } from './modules/nfc/NFCReaderModule';
 import { LivenessDetectionScreen } from './modules/liveness/LivenessDetectionModule';
 import DualSideOCRDemo from './examples/DualSideOCRDemo';
+import VerificationSequenceScreen from './VerificationSequenceScreen';
+import FullVerificationScreen from './FullVerificationScreen';
 
 const Stack = createStackNavigator();
 
 // Main Menu Screen
+const actionButtons = [
+  {
+    key: 'verificationSequence',
+    title: 'Doğrulamayı Başlat',
+    description: 'Sırayla OCR → NFC → Canlılık adımlarını çalıştırır.',
+    backgroundColor: '#DBEAFE',
+    icon: 'https://img.icons8.com/color/96/approval.png',
+    requiredPermissions: ['camera'],
+    navigateTo: 'VerificationSequence',
+  },
+  {
+    key: 'fullVerification',
+    title: 'Doğrulama OCR + NFC',
+    description:
+      'OCR ve NFC verilerini arka arkaya toplayıp tutarlılık raporu oluşturur.',
+    backgroundColor: '#E0F2F1',
+    icon: 'https://img.icons8.com/color/96/biometric-scan.png',
+    requiredPermissions: ['camera'],
+    navigateTo: 'FullVerification',
+  },
+  {
+    key: 'ocrOnly',
+    title: 'OCR',
+    description: 'OCR modülünü tek başına test edin.',
+    backgroundColor: '#E3F2FD',
+    icon: 'https://img.icons8.com/color/96/ocr.png',
+    requiredPermissions: ['camera'],
+    navigateTo: 'OCR',
+  },
+  {
+    key: 'nfcOnly',
+    title: 'NFC',
+    description: 'NFC okumadan gelen ham verileri inceleyin.',
+    backgroundColor: '#FFF3E0',
+    icon: 'https://img.icons8.com/color/96/nfc-tag.png',
+    requiredPermissions: [],
+    navigateTo: 'NFC',
+  },
+  {
+    key: 'livenessOnly',
+    title: 'Liveness',
+    description: 'Mevcut canlılık testini başlatın (beta).',
+    backgroundColor: '#F3E5F5',
+    icon: 'https://img.icons8.com/color/96/face-id.png',
+    requiredPermissions: ['camera'],
+    navigateTo: 'Liveness',
+  },
+];
+
 const MainMenuScreen = ({ navigation }) => {
   const [permissions, setPermissions] = useState({
     camera: false,
@@ -62,22 +113,22 @@ const MainMenuScreen = ({ navigation }) => {
     return false;
   };
 
-  const navigateToModule = async (moduleName) => {
-    if (moduleName === 'OCR' || moduleName === 'DualSideOCR' || moduleName === 'Liveness') {
-      if (!permissions.camera) {
-        const granted = await requestCameraPermission();
-        if (!granted) {
-          Alert.alert(
-            'Kamera İzni Gerekli',
-            'Bu özelliği kullanmak için kamera iznine ihtiyacımız var.',
-            [{ text: 'Tamam' }]
-          );
-          return;
-        }
+  const navigateWithPermissions = async (buttonConfig) => {
+    const { navigateTo, requiredPermissions = [] } = buttonConfig;
+
+    if (requiredPermissions.includes('camera') && !permissions.camera) {
+      const granted = await requestCameraPermission();
+      if (!granted) {
+        Alert.alert(
+          'Kamera İzni Gerekli',
+          'Bu özelliği kullanmak için kamera iznine ihtiyacımız var.',
+          [{ text: 'Tamam' }]
+        );
+        return;
       }
     }
-    
-    navigation.navigate(moduleName);
+
+    navigation.navigate(navigateTo);
   };
 
   if (permissions.loading) {
@@ -104,97 +155,28 @@ const MainMenuScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.modulesContainer}>
-          <TouchableOpacity
-            style={[styles.moduleCard, { backgroundColor: '#E3F2FD' }]}
-            onPress={() => navigateToModule('OCR')}
-            activeOpacity={0.8}
-          >
-            <Image 
-              source={{ uri: 'https://img.icons8.com/color/80/000000/ocr.png' }}
-              style={styles.moduleIcon}
-            />
-            <Text style={styles.moduleTitle}>OCR Okuma (Tek Yüz)</Text>
-            <Text style={styles.moduleDescription}>
-              Kimlik kartının tek yüzünü tarayın (hızlı, temel bilgiler)
-            </Text>
-            <View style={[
-              styles.permissionBadge,
-              { backgroundColor: permissions.camera ? '#4CAF50' : '#FF9800' }
-            ]}>
-              <Text style={styles.permissionText}>
-                {permissions.camera ? '✓ Hazır' : '⚠ İzin Gerekli'}
-              </Text>
-            </View>
-          </TouchableOpacity>
+          {actionButtons.map((button) => {
+            const isCameraRequired = button.requiredPermissions?.includes('camera');
+            const permissionReady = isCameraRequired ? permissions.camera : true;
+            const badgeColor = permissionReady ? '#4CAF50' : '#FF9800';
+            const badgeText = permissionReady ? '✓ Hazır' : '⚠ İzin Gerekli';
 
-          <TouchableOpacity
-            style={[styles.moduleCard, { backgroundColor: '#E8F5E9' }]}
-            onPress={() => navigateToModule('DualSideOCR')}
-            activeOpacity={0.8}
-          >
-            <Image 
-              source={{ uri: 'https://img.icons8.com/color/80/000000/id-card.png' }}
-              style={styles.moduleIcon}
-            />
-            <Text style={styles.moduleTitle}>Çift Taraflı Tarama ⭐</Text>
-            <Text style={styles.moduleDescription}>
-              Ön ve arka yüzü birlikte tarayarak %100 eksiksiz veri çıkarın
-            </Text>
-            <View style={[
-              styles.permissionBadge,
-              { backgroundColor: permissions.camera ? '#4CAF50' : '#FF9800' }
-            ]}>
-              <Text style={styles.permissionText}>
-                {permissions.camera ? '✓ Hazır' : '⚠ İzin Gerekli'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.moduleCard, { backgroundColor: '#FFF3E0' }]}
-            onPress={() => navigateToModule('NFC')}
-            activeOpacity={0.8}
-          >
-            <Image 
-              source={{ uri: 'https://img.icons8.com/color/80/000000/nfc-tag.png' }}
-              style={styles.moduleIcon}
-            />
-            <Text style={styles.moduleTitle}>NFC Okuma</Text>
-            <Text style={styles.moduleDescription}>
-              Kimlik kartınızdaki çipi okuyarak bilgilerinizi güvenli şekilde alın
-            </Text>
-            <View style={[
-              styles.permissionBadge,
-              { backgroundColor: permissions.nfc ? '#4CAF50' : '#FF9800' }
-            ]}>
-              <Text style={styles.permissionText}>
-                {permissions.nfc ? '✓ Hazır' : '⚠ NFC Kapalı'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.moduleCard, { backgroundColor: '#F3E5F5' }]}
-            onPress={() => navigateToModule('Liveness')}
-            activeOpacity={0.8}
-          >
-            <Image 
-              source={{ uri: 'https://img.icons8.com/color/80/000000/face-id.png' }}
-              style={styles.moduleIcon}
-            />
-            <Text style={styles.moduleTitle}>Canlılık Testi</Text>
-            <Text style={styles.moduleDescription}>
-              Yüz doğrulama ile gerçek kişi olduğunuzu kanıtlayın
-            </Text>
-            <View style={[
-              styles.permissionBadge,
-              { backgroundColor: permissions.camera ? '#4CAF50' : '#FF9800' }
-            ]}>
-              <Text style={styles.permissionText}>
-                {permissions.camera ? '✓ Hazır' : '⚠ İzin Gerekli'}
-              </Text>
-            </View>
-          </TouchableOpacity>
+            return (
+              <TouchableOpacity
+                key={button.key}
+                style={[styles.moduleCard, { backgroundColor: button.backgroundColor }]}
+                onPress={() => navigateWithPermissions(button)}
+                activeOpacity={0.85}
+              >
+                <Image source={{ uri: button.icon }} style={styles.moduleIcon} />
+                <Text style={styles.moduleTitle}>{button.title}</Text>
+                <Text style={styles.moduleDescription}>{button.description}</Text>
+                <View style={[styles.permissionBadge, { backgroundColor: badgeColor }]}>
+                  <Text style={styles.permissionText}>{badgeText}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <View style={styles.infoSection}>
@@ -310,6 +292,8 @@ export default function MainApp() {
         <Stack.Screen name="MainMenu" component={MainMenuScreen} />
         <Stack.Screen name="OCR" component={OCRReaderScreen} />
         <Stack.Screen name="DualSideOCR" component={DualSideOCRDemo} />
+        <Stack.Screen name="VerificationSequence" component={VerificationSequenceScreen} />
+        <Stack.Screen name="FullVerification" component={FullVerificationScreen} />
         <Stack.Screen name="NFC" component={NFCReaderScreen} />
         <Stack.Screen name="Liveness" component={LivenessDetectionScreen} />
         <Stack.Screen name="TestResult" component={TestResultScreen} />

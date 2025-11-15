@@ -1,29 +1,21 @@
 package com.ocrmobilesdk;
 
-import android.app.Application;
 import androidx.multidex.MultiDexApplication;
 
 import com.facebook.react.ReactApplication;
+import com.facebook.react.PackageList;
+import com.facebook.react.ReactInstanceManager;
 import com.facebook.react.ReactNativeHost;
 import com.facebook.react.ReactPackage;
-import com.facebook.react.PackageList;
-import com.facebook.react.shell.MainReactPackage;
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
 import com.facebook.react.defaults.DefaultReactNativeHost;
-import com.facebook.react.ReactInstanceManager;
+import com.ocr.modules.FaceDetectionPackage;
 import com.facebook.react.ReactInstanceEventListener;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.soloader.SoLoader;
+import com.ocr.frameprocessor.OCRFrameProcessorPlugin;
 import android.util.Log;
 
-import com.ocrmobilesdk.BuildConfig;
-import com.ocr.OCRSDKPackage;
-import com.ocr.modules.FaceDetectionPackage;
-
-// Native modules will be auto-linked via PackageList
-
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class MainApplication extends MultiDexApplication implements ReactApplication {
@@ -51,13 +43,9 @@ public class MainApplication extends MultiDexApplication implements ReactApplica
 
     @Override
     protected List<ReactPackage> getPackages() {
-      @SuppressWarnings("UnnecessaryLocalVariable")
       List<ReactPackage> packages = new PackageList(this).getPackages();
-      // Add custom OCR SDK package
-      packages.add(new OCRSDKPackage());
-      // Add Face Detection package
+      // Packages that cannot be autolinked yet can be added manually here. For example:
       packages.add(new FaceDetectionPackage());
-      
       return packages;
     }
   };
@@ -74,6 +62,7 @@ public class MainApplication extends MultiDexApplication implements ReactApplica
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       DefaultNewArchitectureEntryPoint.load();
     }
+    OCRFrameProcessorPlugin.register();
     
     // Add ReactInstanceEventListener to ensure bridge is ready before modules send events
     final ReactInstanceManager reactInstanceManager = mReactNativeHost.getReactInstanceManager();
