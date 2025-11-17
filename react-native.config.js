@@ -20,7 +20,11 @@ module.exports = {
     },
     '@react-native-ml-kit/text-recognition': {
       platforms: {
-        android: null,
+        android: {
+          packageImportPath:
+            'import com.reactnativemlkit.textrecognition.TextRecognitionPackage;',
+          packageInstance: 'new TextRecognitionPackage()',
+        },
         ios: null,
       },
     },

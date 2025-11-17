@@ -6,15 +6,10 @@ import React, {
   useState,
 } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
-import {
-  Camera,
-  useCameraDevices,
-  useFrameProcessor,
-} from "react-native-vision-camera";
-import { runOnJS } from "react-native-reanimated";
+import { Camera, useCameraDevices } from "react-native-vision-camera";
 import Logger from "../../utils/logger";
 
-const CAMERA_FPS = 24;
+const FRAME_CAPTURE_INTERVAL_MS = 1200;
 
 const LivenessCamera = ({
   detector,
@@ -32,6 +27,7 @@ const LivenessCamera = ({
 
   const [permission, setPermission] = useState("not-determined");
   const [initializing, setInitializing] = useState(true);
+  const isCapturingRef = useRef(false);
 
   useEffect(() => {
     const requestPermission = async () => {
@@ -56,34 +52,44 @@ const LivenessCamera = ({
     requestPermission();
   }, [detector, onPermissionChange]);
 
-  const handleFrame = useCallback(
-    async (frame) => {
-      if (!detector) {
-        return;
-      }
+  const captureFrame = useCallback(async () => {
+    if (
+      !detector ||
+      !cameraRef.current ||
+      permission !== "authorized" ||
+      !isActive ||
+      isCapturingRef.current
+    ) {
+      return;
+    }
 
-      try {
-        const result = await detector.processCameraFrame(frame);
-        if (result?.motionData && onMotionDetected) {
-          onMotionDetected(result.motionData);
-        }
-        if (result && onFrameAnalyzed) {
-          onFrameAnalyzed(result);
-        }
-      } catch (error) {
-        Logger.error("Frame processing failed", error.message);
-      }
-    },
-    [detector, onFrameAnalyzed, onMotionDetected]
-  );
+    isCapturingRef.current = true;
+    try {
+      const photo = await cameraRef.current.takePhoto({
+        qualityPrioritization: "balanced",
+        flash: "off",
+        skipMetadata: true,
+      });
 
-  const frameProcessor = useFrameProcessor(
-    (frame) => {
-      "worklet";
-      runOnJS(handleFrame)(frame);
-    },
-    [handleFrame]
-  );
+      const framePayload = {
+        path: photo?.path || photo?.uri,
+        width: photo?.width,
+        height: photo?.height,
+      };
+
+      const result = await detector.processCameraFrame(framePayload);
+      if (result?.motionData && onMotionDetected) {
+        onMotionDetected(result.motionData);
+      }
+      if (result && onFrameAnalyzed) {
+        onFrameAnalyzed(result);
+      }
+    } catch (error) {
+      Logger.error("Snapshot processing failed", error.message);
+    } finally {
+      isCapturingRef.current = false;
+    }
+  }, [detector, isActive, onFrameAnalyzed, onMotionDetected, permission]);
 
   useEffect(() => {
     if (detector && permission === "authorized") {
@@ -92,6 +98,19 @@ const LivenessCamera = ({
       });
     }
   }, [detector, permission]);
+
+  useEffect(() => {
+    if (!detector || permission !== "authorized" || !isActive) {
+      return;
+    }
+
+    captureFrame();
+    const intervalId = setInterval(() => {
+      captureFrame();
+    }, FRAME_CAPTURE_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [captureFrame, detector, isActive, permission]);
 
   const cameraContent = useMemo(() => {
     if (!device) {
@@ -108,11 +127,10 @@ const LivenessCamera = ({
         style={StyleSheet.compose(styles.camera, style)}
         device={device}
         isActive={isActive && permission === "authorized"}
-        frameProcessor={frameProcessor}
-        frameProcessorFps={CAMERA_FPS}
+        photo={true}
       />
     );
-  }, [device, frameProcessor, isActive, permission, style]);
+  }, [device, isActive, permission, style]);
 
   if (initializing) {
     return (

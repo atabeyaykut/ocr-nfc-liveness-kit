@@ -35,10 +35,6 @@
 # Gesture Handler
 -keep class com.swmansion.gesturehandler.** { *; }
 
-# Worklets
--keep class com.margelo.nitro.** { *; }
--keep class com.swmansion.worklets.** { *; }
-
 # Text Recognition
 -keep class com.google.android.gms.vision.** { *; }
 

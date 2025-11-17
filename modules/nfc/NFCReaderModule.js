@@ -17,12 +17,13 @@ import {
   BackHandler,
   Image,
   StatusBar,
+  ScrollView,
 } from 'react-native';
-import NfcManager, { 
-  NfcTech, 
+import NfcManager, {
+  NfcTech,
   NfcEvents,
   Ndef,
-  NfcAdapter 
+  NfcAdapter
 } from 'react-native-nfc-manager';
 import { NFCFallbackModal } from '../../components/NFCFallbackModal';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
@@ -52,6 +53,7 @@ class NFCReaderModule {
   constructor() {
     this.callbacks = {};
     this.isReading = false;
+    this.discoverListener = null;
   }
 
   // API Methods
@@ -62,9 +64,9 @@ class NFCReaderModule {
       cardType: 'tc_kimlik',
       retryCount: 3,
     };
-    
+
     this.options = { ...defaultOptions, ...options };
-    
+
     try {
       // Check NFC support
       const isSupported = await NfcManager.isSupported();
@@ -82,13 +84,15 @@ class NFCReaderModule {
       await NfcManager.start();
       this.isReading = true;
 
+      this.setupDiscoverTagListener();
+
       if (this.callbacks.onStarted) {
         this.callbacks.onStarted();
       }
 
       // Register NFC discovery
       await this.registerNfcDiscovery();
-      
+
     } catch (error) {
       this.handleError(error);
     }
@@ -99,12 +103,35 @@ class NFCReaderModule {
       this.isReading = false;
       await NfcManager.unregisterTagEvent();
       await NfcManager.stopTechnology();
-      
+      this.removeDiscoverTagListener();
+
       if (this.callbacks.onStopped) {
         this.callbacks.onStopped();
       }
     } catch (error) {
       console.warn('NFC stop error:', error);
+    }
+  };
+
+  setupDiscoverTagListener = () => {
+    if (this.discoverListener) {
+      NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
+    }
+
+    this.discoverListener = (tag) => {
+      console.log('[NFC] DiscoverTag event yakalandı:', tag?.id || 'unknown tag');
+      if (this.callbacks.onTagDiscovered) {
+        this.callbacks.onTagDiscovered(tag);
+      }
+    };
+
+    NfcManager.setEventListener(NfcEvents.DiscoverTag, this.discoverListener);
+  };
+
+  removeDiscoverTagListener = () => {
+    if (this.discoverListener) {
+      NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
+      this.discoverListener = null;
     }
   };
 
@@ -124,6 +151,10 @@ class NFCReaderModule {
     this.callbacks.onStopped = callback;
   };
 
+  onNFCTagDiscovered = (callback) => {
+    this.callbacks.onTagDiscovered = callback;
+  };
+
   // Private Methods
   registerNfcDiscovery = async () => {
     await NfcManager.registerTagEvent(
@@ -131,7 +162,7 @@ class NFCReaderModule {
         if (this.options.enableVibration) {
           Vibration.vibrate(100);
         }
-        
+
         await this.handleTag(tag);
       },
       'Hold your ID card to the back of your phone',
@@ -148,26 +179,46 @@ class NFCReaderModule {
 
   handleTag = async (tag) => {
     try {
+      const techList = Array.isArray(tag?.tech)
+        ? tag.tech
+        : Array.isArray(tag?.techTypes)
+          ? tag.techTypes
+          : [];
+
+      if (techList.length === 0) {
+        throw new Error('Kart teknolojisi algılanamadı. Lütfen kartı yeniden konumlandırın.');
+      }
+
+      const hasTech = (needle) =>
+        techList.some((tech) => (tech || '').toLowerCase().includes(needle.toLowerCase()));
+
+      console.log('[NFC] Tag detected with tech list:', techList);
+
       let result = null;
 
-      // Try IsoDep first (most common for ID cards)
-      if (tag.tech.includes(NfcTech.IsoDep)) {
+      if (hasTech('isodep')) {
         result = await this.readIsoDep(tag);
-      }
-      // Try NDEF
-      else if (tag.tech.includes(NfcTech.Ndef)) {
+      } else if (hasTech('ndef')) {
         result = await this.readNdef(tag);
-      }
-      // Try MifareClassic
-      else if (tag.tech.includes(NfcTech.MifareClassic)) {
+      } else if (hasTech('mifare')) {
         result = await this.readMifareClassic(tag);
-      }
-      // Try NfcA
-      else if (tag.tech.includes(NfcTech.NfcA)) {
+      } else if (hasTech('nfc')) {
         result = await this.readNfcA(tag);
       }
 
-      if (result) {
+      const hasMeaningfulData = result && Object.values(result).some((value) => {
+        if (!value) return false;
+        if (typeof value === 'string') {
+          return value.trim().length > 0;
+        }
+        if (typeof value === 'object') {
+          return Object.keys(value).length > 0;
+        }
+        return true;
+      });
+
+      if (result && hasMeaningfulData) {
+        console.log('[NFC] Parsed fields:', result);
         const response = {
           success: true,
           raw: tag,
@@ -180,9 +231,9 @@ class NFCReaderModule {
           this.callbacks.onResult(response);
         }
       } else {
-        throw new Error('Kart okunamadı. Desteklenmeyen kart tipi olabilir.');
+        throw new Error('Kart verisi okunamadı. Desteklenmeyen kart tipi olabilir.');
       }
-      
+
     } catch (error) {
       this.handleError(error);
     } finally {
@@ -193,10 +244,10 @@ class NFCReaderModule {
   readIsoDep = async (tag) => {
     try {
       await NfcManager.requestTechnology(NfcTech.IsoDep);
-      
+
       // Select application
       const selectResponse = await NfcManager.transceive(NFC_COMMANDS.SELECT_APP);
-      
+
       if (!this.isSuccessResponse(selectResponse)) {
         throw new Error('Kart uygulaması seçilemedi');
       }
@@ -214,7 +265,7 @@ class NFCReaderModule {
       });
 
       return parsed;
-      
+
     } catch (error) {
       console.error('IsoDep read error:', error);
       return null;
@@ -224,22 +275,22 @@ class NFCReaderModule {
   readNdef = async (tag) => {
     try {
       await NfcManager.requestTechnology(NfcTech.Ndef);
-      
+
       const message = await NfcManager.getNdefMessage();
-      
+
       if (message && message.length > 0) {
         const parsed = {};
-        
+
         message.forEach((record, index) => {
           const text = Ndef.text.decodePayload(record.payload);
           parsed[`field_${index}`] = text;
         });
-        
+
         return parsed;
       }
-      
+
       return null;
-      
+
     } catch (error) {
       console.error('NDEF read error:', error);
       return null;
@@ -249,10 +300,10 @@ class NFCReaderModule {
   readMifareClassic = async (tag) => {
     try {
       await NfcManager.requestTechnology(NfcTech.MifareClassic);
-      
+
       // Authenticate and read sectors
       const data = {};
-      
+
       // Try to read common sectors
       for (let sector = 0; sector < 4; sector++) {
         try {
@@ -262,9 +313,9 @@ class NFCReaderModule {
           console.warn(`Cannot read sector ${sector}:`, e);
         }
       }
-      
+
       return data;
-      
+
     } catch (error) {
       console.error('MifareClassic read error:', error);
       return null;
@@ -274,16 +325,16 @@ class NFCReaderModule {
   readNfcA = async (tag) => {
     try {
       await NfcManager.requestTechnology(NfcTech.NfcA);
-      
+
       const atqa = await NfcManager.getNfcAAtqa();
       const sak = await NfcManager.getNfcASak();
-      
+
       return {
         atqa: this.bytesToHex(atqa),
         sak: sak,
         uid: tag.id,
       };
-      
+
     } catch (error) {
       console.error('NfcA read error:', error);
       return null;
@@ -293,7 +344,7 @@ class NFCReaderModule {
   parseCardData = (rawData) => {
     // Parse Turkish ID card data
     const fields = {};
-    
+
     try {
       // Parse personal data
       if (rawData.personal) {
@@ -328,11 +379,11 @@ class NFCReaderModule {
         id: this.bytesToHex(rawData.id),
         birth: this.bytesToHex(rawData.birth),
       };
-      
+
     } catch (error) {
       console.error('Parse error:', error);
     }
-    
+
     return fields;
   };
 
@@ -350,27 +401,27 @@ class NFCReaderModule {
     if (!response || response.length < 2) return false;
     const sw1 = response[response.length - 2];
     const sw2 = response[response.length - 1];
-    
+
     // Check for PACE/BAC requirement (CRITICAL for modern Turkish ID cards)
     if (sw1 === 0x69 && sw2 === 0x82) {
       throw new Error(NFC_ERROR_CODES.SECURITY_NOT_SATISFIED);
     }
-    
+
     // Check for BAC requirement
     if (sw1 === 0x63 && sw2 === 0x00) {
       throw new Error(NFC_ERROR_CODES.BAC_REQUIRED);
     }
-    
+
     // Check for authentication failure
     if (sw1 === 0x69 && sw2 === 0x88) {
       throw new Error(NFC_ERROR_CODES.AUTHENTICATION_FAILED);
     }
-    
+
     // Check for file not found (unsupported card)
     if (sw1 === 0x6A && sw2 === 0x82) {
       throw new Error(NFC_ERROR_CODES.CARD_NOT_SUPPORTED);
     }
-    
+
     return sw1 === 0x90 && sw2 === 0x00;
   };
 
@@ -378,10 +429,10 @@ class NFCReaderModule {
     let errorMessage = error.message || 'NFC okuma hatası';
     let errorCode = 'NFC_READ_ERROR';
     let fallbackOption = null;
-    
+
     // Detect PACE requirement and provide user-friendly messages
     if (error.message === NFC_ERROR_CODES.SECURITY_NOT_SATISFIED ||
-        error.message === NFC_ERROR_CODES.PACE_REQUIRED) {
+      error.message === NFC_ERROR_CODES.PACE_REQUIRED) {
       errorCode = NFC_ERROR_CODES.PACE_REQUIRED;
       errorMessage = 'Bu kimlik kartı gelişmiş güvenlik protokolü (PACE) gerektiriyor.';
       fallbackOption = {
@@ -412,7 +463,7 @@ class NFCReaderModule {
       errorCode = NFC_ERROR_CODES.TAG_LOST;
       errorMessage = 'Kart okuma sırasında hareket etti. Lütfen tekrar deneyin.';
     }
-    
+
     const errorResponse = {
       success: false,
       error: errorMessage,
@@ -437,10 +488,22 @@ export const NFCReaderScreen = ({ navigation, route }) => {
   const [error, setError] = useState(null);
   const [showFallbackModal, setShowFallbackModal] = useState(false);
   const [fallbackErrorInfo, setFallbackErrorInfo] = useState({});
+  const [logs, setLogs] = useState([]);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const nfcModule = useRef(new NFCReaderModule()).current;
   const returnTo = route?.params?.returnTo;
   const returnSourceStep = route?.params?.returnParams?.sourceStep;
+  const autoStart = route?.params?.autoStart;
+  const mrzSeed = route?.params?.mrzSeed;
+
+  const addLog = useCallback((message) => {
+    console.log('[NFC LOG]', message);
+    setLogs((prev) => {
+      const timestamp = new Date().toLocaleTimeString('tr-TR');
+      const entry = `[${timestamp}] ${message}`;
+      return [entry, ...prev].slice(0, 50);
+    });
+  }, []);
 
   const forwardStepResult = useCallback(
     (payload) => {
@@ -469,13 +532,15 @@ export const NFCReaderScreen = ({ navigation, route }) => {
     nfcModule.onNFCResult((result) => {
       setNfcResult(result);
       setIsScanning(false);
+      addLog('NFC okuma başarılı. Veriler alındı.');
       Vibration.vibrate([100, 200, 100]);
     });
 
     nfcModule.onNFCError((errorResponse) => {
       setError(errorResponse.error);
       setIsScanning(false);
-      
+      addLog(`Hata: ${errorResponse.error}`);
+
       // Check if PACE/BAC fallback is available
       if (errorResponse.fallback && errorResponse.fallback.type === 'MANUAL_MRZ_ENTRY') {
         setFallbackErrorInfo({
@@ -483,7 +548,7 @@ export const NFCReaderScreen = ({ navigation, route }) => {
           message: errorResponse.error,
           action: errorResponse.fallback.action,
         });
-        
+
         // Show fallback option in alert
         Alert.alert(
           'NFC Okuma Başarısız',
@@ -504,11 +569,13 @@ export const NFCReaderScreen = ({ navigation, route }) => {
 
     nfcModule.onNFCStarted(() => {
       setIsScanning(true);
+      addLog('NFC dinleme modu başlatıldı.');
       startPulseAnimation();
     });
 
     nfcModule.onNFCStopped(() => {
       setIsScanning(false);
+      addLog('NFC dinleme modu durduruldu.');
     });
 
     // Check NFC on mount
@@ -518,7 +585,14 @@ export const NFCReaderScreen = ({ navigation, route }) => {
     return () => {
       nfcModule.stopNFC();
     };
-  }, []);
+  }, [addLog, nfcModule]);
+
+  useEffect(() => {
+    if (autoStart && !isScanning) {
+      addLog('OCR’den gelen MRZ verisi ile NFC başlatılıyor...');
+      startScanning();
+    }
+  }, [autoStart, isScanning, addLog]);
 
   useEffect(() => {
     if (returnTo && returnSourceStep && nfcResult) {
@@ -581,6 +655,7 @@ export const NFCReaderScreen = ({ navigation, route }) => {
   const startScanning = async () => {
     setError(null);
     setNfcResult(null);
+    addLog('NFC okuma başlatılıyor...');
     await nfcModule.startNFC();
   };
 
@@ -591,10 +666,10 @@ export const NFCReaderScreen = ({ navigation, route }) => {
 
   const handleMRZEntered = (parsedData) => {
     console.log('[NFC Fallback] MRZ data entered:', parsedData);
-    
+
     // Close modal
     setShowFallbackModal(false);
-    
+
     // Set result as if it came from NFC
     const fallbackResult = {
       success: true,
@@ -602,13 +677,13 @@ export const NFCReaderScreen = ({ navigation, route }) => {
       source: 'MANUAL_MRZ',
       timestamp: new Date().toISOString(),
     };
-    
+
     setNfcResult(fallbackResult);
     setError(null);
-    
+
     // Vibrate to indicate success
     Vibration.vibrate([100, 200, 100]);
-    
+
     // Show success message
     Alert.alert(
       'İşlem Başarılı',
@@ -644,33 +719,33 @@ export const NFCReaderScreen = ({ navigation, route }) => {
     return (
       <View style={styles.resultContainer}>
         <Text style={styles.resultTitle}>NFC Okuma Başarılı ✓</Text>
-        
+
         {nfcResult.parsedFields.tcNo && (
           <View style={styles.resultRow}>
             <Text style={styles.resultLabel}>TC Kimlik No:</Text>
             <Text style={styles.resultValue}>{nfcResult.parsedFields.tcNo}</Text>
           </View>
         )}
-        
+
         {nfcResult.parsedFields.fullName && (
           <View style={styles.resultRow}>
             <Text style={styles.resultLabel}>Ad Soyad:</Text>
             <Text style={styles.resultValue}>{nfcResult.parsedFields.fullName}</Text>
           </View>
         )}
-        
+
         {nfcResult.parsedFields.birthDate && (
           <View style={styles.resultRow}>
             <Text style={styles.resultLabel}>Doğum Tarihi:</Text>
             <Text style={styles.resultValue}>{nfcResult.parsedFields.birthDate}</Text>
           </View>
         )}
-        
+
         <View style={styles.resultRow}>
           <Text style={styles.resultLabel}>Kart ID:</Text>
           <Text style={styles.resultValue}>{nfcResult.raw.id}</Text>
         </View>
-        
+
         <TouchableOpacity style={styles.retryButton} onPress={startScanning}>
           <Text style={styles.retryButtonText}>Yeniden Oku</Text>
         </TouchableOpacity>
@@ -681,14 +756,14 @@ export const NFCReaderScreen = ({ navigation, route }) => {
   const renderScanning = () => (
     <View style={styles.scanningContainer}>
       <Animated.View style={[styles.nfcIcon, { transform: [{ scale: pulseAnim }] }]}>
-        <Image 
+        <Image
           source={{ uri: 'https://img.icons8.com/color/200/000000/nfc-tag.png' }}
           style={styles.nfcImage}
         />
       </Animated.View>
-      
+
       <Text style={styles.scanningTitle}>Kimlik Kartını Yaklaştırın</Text>
-      
+
       <View style={styles.instructionsContainer}>
         <Text style={styles.instructionText}>
           📱 Kimlik kartınızı telefonun arkasına yaklaştırın
@@ -703,19 +778,36 @@ export const NFCReaderScreen = ({ navigation, route }) => {
           📳 Titreme hissedince kartı çekebilirsiniz
         </Text>
       </View>
-      
+
       <ActivityIndicator size="large" color="#2196F3" style={styles.loader} />
-      
+
       <TouchableOpacity style={styles.cancelButton} onPress={stopScanning}>
         <Text style={styles.cancelButtonText}>İptal</Text>
       </TouchableOpacity>
     </View>
   );
 
+  const renderLogs = () => (
+    <View style={styles.logContainer}>
+      <Text style={styles.logTitle}>NFC Debug Logları</Text>
+      {logs.length === 0 ? (
+        <Text style={styles.logEmpty}>Henüz log yok.</Text>
+      ) : (
+        <ScrollView style={styles.logList}>
+          {logs.map((log, index) => (
+            <Text key={`${log}-${index}`} style={styles.logItem}>
+              {log}
+            </Text>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
-      
+
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backButton}>←</Text>
@@ -723,23 +815,23 @@ export const NFCReaderScreen = ({ navigation, route }) => {
         <Text style={styles.headerTitle}>NFC Kimlik Okuyucu</Text>
         <View style={{ width: 40 }} />
       </View>
-      
+
       {!isScanning && !nfcResult && (
         <View style={styles.startContainer}>
-          <Image 
+          <Image
             source={{ uri: 'https://img.icons8.com/color/150/000000/nfc-tag.png' }}
             style={styles.nfcLogo}
           />
-          
+
           <Text style={styles.welcomeTitle}>NFC ile Kimlik Okuma</Text>
           <Text style={styles.welcomeText}>
             Kimlik kartınızdaki çip üzerinden bilgileri güvenli bir şekilde okuyabiliriz.
           </Text>
-          
+
           <TouchableOpacity style={styles.startButton} onPress={startScanning}>
             <Text style={styles.startButtonText}>Okumaya Başla</Text>
           </TouchableOpacity>
-          
+
           {error && (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>⚠️ {error}</Text>
@@ -747,16 +839,17 @@ export const NFCReaderScreen = ({ navigation, route }) => {
           )}
         </View>
       )}
-      
+
       {isScanning && renderScanning()}
-      {nfcResult && renderResult()}
-      
-      {/* PACE Fallback Modal */}
+      {renderResult()}
+      {renderLogs()}
+
       <NFCFallbackModal
         visible={showFallbackModal}
         onMRZEntered={handleMRZEntered}
         onCancel={handleFallbackCancel}
         errorInfo={fallbackErrorInfo}
+        initialMRZData={mrzSeed?.data || mrzSeed}
       />
     </View>
   );
@@ -782,7 +875,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#333',
   },
@@ -869,8 +962,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   resultContainer: {
-    flex: 1,
-    padding: 30,
+    marginTop: 20,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   resultTitle: {
     fontSize: 20,
@@ -922,6 +1023,31 @@ const styles = StyleSheet.create({
     color: '#E65100',
     fontSize: 14,
     textAlign: 'center',
+  },
+  logContainer: {
+    marginTop: 20,
+    marginHorizontal: 20,
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    padding: 16,
+  },
+  logTitle: {
+    color: '#93c5fd',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  logEmpty: {
+    color: '#cbd5f5',
+    fontSize: 12,
+  },
+  logList: {
+    maxHeight: 160,
+  },
+  logItem: {
+    color: '#e2e8f0',
+    fontSize: 12,
+    marginBottom: 4,
   },
 });
 

@@ -19,7 +19,7 @@ public class MainActivity extends ReactActivity {
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(null);
-    
+
     // Initialize NFC adapter
     nfcAdapter = NfcAdapter.getDefaultAdapter(this);
     if (nfcAdapter != null) {
@@ -50,9 +50,9 @@ public class MainActivity extends ReactActivity {
   public void onNewIntent(Intent intent) {
     super.onNewIntent(intent);
     setIntent(intent);
-    
+
     // Handle NFC intent
-    if (NfcAdapter.ACTION_TECH_DISCOVERED.equals(intent.getAction()) || 
+    if (NfcAdapter.ACTION_TECH_DISCOVERED.equals(intent.getAction()) ||
         NfcAdapter.ACTION_TAG_DISCOVERED.equals(intent.getAction())) {
       Tag tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
       if (tag != null) {
@@ -63,13 +63,16 @@ public class MainActivity extends ReactActivity {
 
   @Override
   protected String getMainComponentName() {
-    // This should match the app name registered from JavaScript (AppRegistry.registerComponent)
+    // This should match the app name registered from JavaScript
+    // (AppRegistry.registerComponent)
     return "mobile-sdk-ocr-nfc-liveness";
   }
 
   /**
-   * Returns the instance of the {@link ReactActivityDelegate}. There the RootView is created and
-   * you can specify the renderer you wish to use - the new renderer (Fabric) or the old renderer
+   * Returns the instance of the {@link ReactActivityDelegate}. There the RootView
+   * is created and
+   * you can specify the renderer you wish to use - the new renderer (Fabric) or
+   * the old renderer
    * (Paper).
    */
   @Override
@@ -79,7 +82,7 @@ public class MainActivity extends ReactActivity {
         getMainComponentName(),
         // If you opted-in for the New Architecture, we enable the Fabric Renderer.
         DefaultNewArchitectureEntryPoint.getFabricEnabled()) {
-      
+
       @Override
       protected ReactRootView createRootView() {
         ReactRootView reactRootView = new ReactRootView(MainActivity.this);
