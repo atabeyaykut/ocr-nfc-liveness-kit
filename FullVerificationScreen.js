@@ -1,12 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  StatusBar,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   buildCoreConsistencyReport,
@@ -73,9 +66,15 @@ const FullVerificationScreen = ({ navigation, route }) => {
         updateStepResult(sourceStep, stepResult);
         const label = STEP_LABELS[sourceStep] || sourceStep;
         addLog(`${label} adımı tamamlandı.`);
+
+        if (sourceStep === 'ocr') {
+          markStepInProgress('nfc');
+          addLog('MRZ verisi doğrulandı, NFC adımına yönlendiriliyor...');
+        }
+
         navigation.setParams({ returnParams: null });
       }
-    }, [route.params?.returnParams, updateStepResult, addLog, navigation])
+    }, [route.params?.returnParams, updateStepResult, addLog, navigation, markStepInProgress])
   );
 
   useEffect(() => {
@@ -98,170 +97,50 @@ const FullVerificationScreen = ({ navigation, route }) => {
     [steps]
   );
 
-  const handleStartOCR = () => {
+  const handleStartPipeline = () => {
     markStepInProgress('ocr');
-    addLog('OCR modülü başlatılıyor...');
+    addLog('Doğrulama akışı başlatılıyor...');
     navigation.navigate('OCR', {
       returnTo: 'FullVerification',
       returnParams: { sourceStep: 'ocr' },
+      scanMode: 'back-only',
     });
   };
 
-  const handleStartNFC = () => {
-    if (steps.ocr.status !== STEP_STATUS.COMPLETED) {
-      addLog('Önce OCR adımını tamamlayın.');
-      return;
-    }
-    markStepInProgress('nfc');
-    addLog('NFC modülü başlatılıyor...');
+  const handleLaunchStandaloneNFC = () => {
+    addLog('NFC modu bağımsız başlatılıyor...');
     navigation.navigate('NFC', {
+      autoStart: true,
       returnTo: 'FullVerification',
       returnParams: { sourceStep: 'nfc' },
     });
   };
 
-  const handleStartLiveness = () => {
-    if (steps.nfc.status !== STEP_STATUS.COMPLETED) {
-      addLog('Önce NFC adımını tamamlayın.');
-      return;
-    }
-    markStepInProgress('liveness');
-    addLog('Canlılık testi başlatılıyor...');
-    navigation.navigate('Liveness', {
-      returnTo: 'FullVerification',
-      returnParams: { sourceStep: 'liveness' },
-    });
-  };
-
-  const renderStep = (title, description, stepKey, onPress, disabled) => {
-    const step = steps[stepKey];
-    const statusLabel =
-      step.status === STEP_STATUS.COMPLETED
-        ? 'Tamamlandı'
-        : step.status === STEP_STATUS.IN_PROGRESS
-        ? 'Devam ediyor'
-        : 'Hazır';
-
-    return (
-      <View style={styles.stepCard} key={stepKey}>
-        <View style={styles.stepHeader}>
-          <Text style={styles.stepTitle}>{title}</Text>
-          <Text
-            style={[
-              styles.stepStatus,
-              step.status === STEP_STATUS.COMPLETED && styles.statusCompleted,
-              step.status === STEP_STATUS.IN_PROGRESS && styles.statusInProgress,
-            ]}
-          >
-            {statusLabel}
-          </Text>
-        </View>
-        <Text style={styles.stepDescription}>{description}</Text>
-
-        <TouchableOpacity
-          style={[styles.stepButton, disabled && styles.stepButtonDisabled]}
-          onPress={onPress}
-          disabled={disabled}
-        >
-          <Text style={styles.stepButtonText}>
-            {step.status === STEP_STATUS.IN_PROGRESS ? 'Devam ediyor...' : 'Başlat'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  const renderConsistencySummary = () => {
-    if (!consistencyReport) {
-      return null;
-    }
-
-    return (
-      <View style={styles.reportContainer}>
-        <Text style={styles.reportTitle}>OCR & NFC Tutarlılık Özeti</Text>
-        <Text style={styles.reportSummary}>{consistencyReport.summary}</Text>
-        <View style={styles.reportBadges}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeLabel}>Genel Durum</Text>
-            <Text style={styles.badgeValue}>
-              {consistencyReport.overallStatus.toUpperCase()}
-            </Text>
-          </View>
-          <View style={styles.badge}>
-            <Text style={styles.badgeLabel}>Kaynaklar</Text>
-            <Text style={styles.badgeValue}>
-              {consistencyReport.source.mrz} · {consistencyReport.source.nfc}
-            </Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
-      <ScrollView contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>Doğrulama Akışı</Text>
-        <Text style={styles.subtitle}>
-          Kimlik doğrulama için OCR → NFC → Canlılık adımlarını tamamlayın.
+      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <View style={styles.contentWrapper}>
+        <Text style={styles.heading}>Doğrulamayı Başlat</Text>
+        <Text style={styles.description}>
+          Tek adımla OCR → NFC süreci başlar ve MRZ verisi otomatik olarak NFC
+          taramasına aktarılır.
         </Text>
 
-        {renderStep(
-          '1. OCR Tarama',
-          'Kimlik kartını kamerayla okutarak temel verileri alın.',
-          'ocr',
-          handleStartOCR,
-          steps.ocr.status === STEP_STATUS.COMPLETED
-        )}
+        <TouchableOpacity style={styles.primaryButton} onPress={handleStartPipeline}>
+          <Text style={styles.primaryButtonText}>Doğrulamayı Başlat</Text>
+        </TouchableOpacity>
 
-        {renderStep(
-          '2. NFC Okuma',
-          'Kartın çipinden detaylı verileri okuyun ve doğrulayın.',
-          'nfc',
-          handleStartNFC,
-          steps.nfc.status === STEP_STATUS.COMPLETED
-        )}
-
-        {renderStep(
-          '3. Canlılık Testi',
-          'Kişinin canlı olduğunu doğrulamak için yüz hareketlerini kontrol edin.',
-          'liveness',
-          handleStartLiveness,
-          steps.liveness.status === STEP_STATUS.COMPLETED
-        )}
-
-        {renderConsistencySummary()}
+        <TouchableOpacity style={styles.secondaryButton} onPress={handleLaunchStandaloneNFC}>
+          <Text style={styles.secondaryButtonText}>Sadece NFC Test Et</Text>
+        </TouchableOpacity>
 
         {allStepsCompleted && (
-          <View style={styles.completionBanner}>
-            <Text style={styles.completionTitle}>✅ Doğrulama Tamamlandı</Text>
-            <Text style={styles.completionText}>
-              Tüm kritik adımlar başarıyla tamamlandı. Sonuçları dışa \
-aktarabilir
-              veya rapor oluşturabilirsiniz.
-            </Text>
+          <View style={styles.summaryBadge}>
+            <Text style={styles.summaryTitle}>✅ Doğrulama Tamamlandı</Text>
+            <Text style={styles.summaryText}>OCR ve NFC sonuçları başarıyla eşlendi.</Text>
           </View>
         )}
-
-        <View style={styles.logsContainer}>
-          <View style={styles.logsHeader}>
-            <Text style={styles.logsTitle}>İşlem Logları</Text>
-            <Text style={styles.logsCount}>{logs.length}</Text>
-          </View>
-          <View style={styles.logsContent}>
-            {logs.length === 0 ? (
-              <Text style={styles.emptyLogText}>Henüz log bulunmuyor.</Text>
-            ) : (
-              logs.map((log, index) => (
-                <Text key={`${log}-${index}`} style={styles.logItem}>
-                  {log}
-                </Text>
-              ))
-            )}
-          </View>
-        </View>
-      </ScrollView>
+      </View>
     </View>
   );
 };
@@ -271,185 +150,79 @@ export default FullVerificationScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  contentContainer: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1E3A8A',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#475569',
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  stepCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  stepHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  stepTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
+  contentWrapper: {
+    width: '90%',
+    backgroundColor: '#1E293B',
+    borderRadius: 24,
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
-  stepStatus: {
-    fontSize: 12,
+  heading: {
+    fontSize: 26,
     fontWeight: '700',
-    color: '#64748B',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: '#E2E8F0',
+    color: '#E2E8F0',
+    marginBottom: 12,
+    textAlign: 'center',
   },
-  statusCompleted: {
-    backgroundColor: '#DCFCE7',
-    color: '#15803D',
-  },
-  statusInProgress: {
-    backgroundColor: '#FEF3C7',
-    color: '#D97706',
-  },
-  stepDescription: {
+  description: {
     fontSize: 14,
-    color: '#475569',
+    color: '#CBD5F5',
+    textAlign: 'center',
+    marginBottom: 24,
     lineHeight: 20,
-    marginBottom: 16,
   },
-  stepButton: {
-    alignSelf: 'flex-start',
+  primaryButton: {
+    width: '100%',
     backgroundColor: '#2563EB',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  stepButtonDisabled: {
-    backgroundColor: '#CBD5F5',
-  },
-  stepButtonText: {
+  primaryButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 16,
   },
-  reportContainer: {
-    backgroundColor: '#1E3A8A',
-    padding: 20,
-    borderRadius: 18,
-    marginTop: 8,
+  secondaryButton: {
+    width: '100%',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderColor: '#38BDF8',
+    borderWidth: 1,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
     marginBottom: 16,
   },
-  reportTitle: {
-    color: '#BFDBFE',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  reportSummary: {
+  secondaryButtonText: {
     color: '#E0F2FE',
-    fontSize: 14,
-    lineHeight: 20,
+    fontWeight: '600',
+    fontSize: 15,
   },
-  reportBadges: {
-    flexDirection: 'row',
-    marginTop: 16,
-    gap: 12,
-  },
-  badge: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    padding: 12,
-    borderRadius: 12,
-  },
-  badgeLabel: {
-    color: '#E0F2FE',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  badgeValue: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  completionBanner: {
-    backgroundColor: '#ECFDF5',
+  summaryBadge: {
+    width: '100%',
+    backgroundColor: '#0F766E',
     borderRadius: 16,
-    padding: 18,
-    marginBottom: 20,
+    padding: 16,
   },
-  completionTitle: {
-    fontSize: 18,
+  summaryTitle: {
+    color: '#ECFDF5',
     fontWeight: '700',
-    color: '#047857',
-    marginBottom: 8,
-  },
-  completionText: {
-    fontSize: 14,
-    color: '#047857',
-    lineHeight: 20,
-  },
-  logsContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
-    marginTop: 12,
-    marginBottom: 40,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  logsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  logsTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
+    marginBottom: 6,
   },
-  logsCount: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    backgroundColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  logsContent: {
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    paddingTop: 12,
-    gap: 6,
-  },
-  logItem: {
-    fontSize: 12,
-    color: '#334155',
-    lineHeight: 18,
-  },
-  emptyLogText: {
-    fontSize: 12,
-    color: '#94A3B8',
+  summaryText: {
+    color: '#D1FAE5',
+    fontSize: 14,
   },
 });

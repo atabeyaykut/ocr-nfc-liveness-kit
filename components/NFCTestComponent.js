@@ -17,12 +17,12 @@ import {
 const handleNFCRead = async (mockDataType = 'default') => {
   // Simulate NFC reading delay
   await new Promise(resolve => setTimeout(resolve, 2000));
-  
+
   // Import mock data
   const mockNFCData = require('../mock/nfcData.js');
-  
+
   const selectedData = mockNFCData[mockDataType] || mockNFCData.default;
-  
+
   return {
     success: true,
     ...selectedData,
@@ -71,20 +71,20 @@ const NFCTestComponent = () => {
       setNfcData(null);
 
       console.log('📡 NFC Test Started:', mockType);
-      
+
       // Simulate error for error mock type
       if (mockType === 'error') {
         throw new Error('NFC kartı okunamadı. Lütfen kartı doğru konumda tutun.');
       }
-      
+
       const result = await handleNFCRead(mockType);
-      
+
       setNfcData(result);
-      
+
       console.log('✅ NFC Test Completed:', result);
       console.log('📋 Card Data:', result.cardData);
       console.log('🔐 Verification:', result.verification);
-      
+
       Alert.alert(
         'NFC Test Tamamlandı',
         `Kart türü: ${result.cardData?.cardType || 'Bilinmeyen'}\n\nVeriler konsola yazdırıldı.`,
@@ -106,9 +106,9 @@ const NFCTestComponent = () => {
 
   const formatCardData = (data) => {
     if (!data) return [];
-    
+
     const fields = [];
-    
+
     if (data.firstName) fields.push({ label: 'Ad', value: data.firstName });
     if (data.lastName) fields.push({ label: 'Soyad', value: data.lastName });
     if (data.idNumber) fields.push({ label: 'T.C. No', value: data.idNumber });
@@ -120,7 +120,7 @@ const NFCTestComponent = () => {
     if (data.documentNumber) fields.push({ label: 'Belge No', value: data.documentNumber });
     if (data.issueDate) fields.push({ label: 'Veriliş Tarihi', value: data.issueDate });
     if (data.expiryDate) fields.push({ label: 'Son Geçerlilik', value: data.expiryDate });
-    
+
     return fields;
   };
 
@@ -161,18 +161,18 @@ const NFCTestComponent = () => {
         {nfcData && (
           <View style={styles.resultsContainer}>
             <Text style={styles.resultsTitle}>📋 NFC Okuma Sonuçları</Text>
-            
+
             <View style={styles.statusContainer}>
               <View style={styles.statusItem}>
                 <Text style={styles.statusLabel}>Durum:</Text>
                 <Text style={[styles.statusValue, styles.successText]}>✅ Başarılı</Text>
               </View>
-              
+
               <View style={styles.statusItem}>
                 <Text style={styles.statusLabel}>Okuma Süresi:</Text>
                 <Text style={styles.statusValue}>{nfcData.processingTime}ms</Text>
               </View>
-              
+
               <View style={styles.statusItem}>
                 <Text style={styles.statusLabel}>Kart Türü:</Text>
                 <Text style={styles.statusValue}>{nfcData.cardData?.cardType || 'Bilinmeyen'}</Text>
@@ -194,7 +194,7 @@ const NFCTestComponent = () => {
             {nfcData.verification && (
               <View style={styles.verificationContainer}>
                 <Text style={styles.sectionTitle}>🔐 Doğrulama Bilgileri</Text>
-                
+
                 <View style={styles.dataItem}>
                   <Text style={styles.dataLabel}>Geçerlilik:</Text>
                   <Text style={[
@@ -204,17 +204,17 @@ const NFCTestComponent = () => {
                     {nfcData.verification.isValid ? '✅ Geçerli' : '❌ Geçersiz'}
                   </Text>
                 </View>
-                
+
                 <View style={styles.dataItem}>
                   <Text style={styles.dataLabel}>Checksum:</Text>
                   <Text style={styles.dataValue}>{nfcData.verification.checksum}</Text>
                 </View>
-                
+
                 <View style={styles.dataItem}>
                   <Text style={styles.dataLabel}>Dijital İmza:</Text>
                   <Text style={styles.dataValue}>{nfcData.verification.digitalSignature}</Text>
                 </View>
-                
+
                 <View style={styles.dataItem}>
                   <Text style={styles.dataLabel}>Okuma Yöntemi:</Text>
                   <Text style={styles.dataValue}>{nfcData.verification.readMethod}</Text>
@@ -225,17 +225,17 @@ const NFCTestComponent = () => {
             {nfcData.nfcData && (
               <View style={styles.technicalContainer}>
                 <Text style={styles.sectionTitle}>🔧 Teknik Bilgiler</Text>
-                
+
                 <View style={styles.dataItem}>
                   <Text style={styles.dataLabel}>UID:</Text>
                   <Text style={styles.dataValue}>{nfcData.nfcData.uid}</Text>
                 </View>
-                
+
                 <View style={styles.dataItem}>
                   <Text style={styles.dataLabel}>Teknoloji:</Text>
                   <Text style={styles.dataValue}>{nfcData.nfcData.technology}</Text>
                 </View>
-                
+
                 <View style={styles.dataItem}>
                   <Text style={styles.dataLabel}>Okuma Zamanı:</Text>
                   <Text style={styles.dataValue}>{new Date(nfcData.readTime).toLocaleString('tr-TR')}</Text>

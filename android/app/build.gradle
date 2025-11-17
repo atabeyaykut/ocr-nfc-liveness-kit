@@ -10,6 +10,7 @@ plugins {
 android {
   namespace "com.ocrmobilesdk"
   compileSdkVersion 35
+  ndkVersion rootProject.ext.ndkVersion
 
   defaultConfig {
     applicationId "com.ocrmobilesdk"
@@ -142,6 +143,9 @@ dependencies {
   
   // ML Kit Text Recognition - UNBUNDLED model (react-native-text-recognition için gerekli)
   implementation "com.google.mlkit:text-recognition:16.0.0"
+
+  // Bundle on-device text recognition model so it works on devices/emulators without Play Services downloads
+  implementation "com.google.android.gms:play-services-mlkit-text-recognition:18.0.2"
   
   // Eski versiyon (bundled - react-native-text-recognition ile uyumlu değil)
   // implementation "com.google.android.gms:play-services-mlkit-text-recognition:19.0.0"

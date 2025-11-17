@@ -13,7 +13,6 @@ import com.ocr.modules.FaceDetectionPackage;
 import com.facebook.react.ReactInstanceEventListener;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.soloader.SoLoader;
-import com.ocr.frameprocessor.OCRFrameProcessorPlugin;
 import android.util.Log;
 
 import java.util.List;
@@ -44,7 +43,8 @@ public class MainApplication extends MultiDexApplication implements ReactApplica
     @Override
     protected List<ReactPackage> getPackages() {
       List<ReactPackage> packages = new PackageList(this).getPackages();
-      // Packages that cannot be autolinked yet can be added manually here. For example:
+      // Packages that cannot be autolinked yet can be added manually here. For
+      // example:
       packages.add(new FaceDetectionPackage());
       return packages;
     }
@@ -62,9 +62,8 @@ public class MainApplication extends MultiDexApplication implements ReactApplica
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       DefaultNewArchitectureEntryPoint.load();
     }
-    OCRFrameProcessorPlugin.register();
-    
-    // Add ReactInstanceEventListener to ensure bridge is ready before modules send events
+    // Add ReactInstanceEventListener to ensure bridge is ready before modules send
+    // events
     final ReactInstanceManager reactInstanceManager = mReactNativeHost.getReactInstanceManager();
     reactInstanceManager.addReactInstanceEventListener(new ReactInstanceEventListener() {
       @Override

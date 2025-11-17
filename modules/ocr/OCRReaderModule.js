@@ -17,45 +17,203 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { Camera, useCameraDevice, useFrameProcessor, VisionCameraProxy } from 'react-native-vision-camera';
-import { runOnJS } from 'react-native-reanimated';
+import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import RNFS from 'react-native-fs';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+import ImageResizerModule from '@bam.tech/react-native-image-resizer';
+import TextRecognition from '@react-native-ml-kit/text-recognition';
+import { NFCReaderModule } from '../nfc/NFCReaderModule';
 
 const { ImageProcessor } = require('../../utils/imageProcessor');
+const ImageResizer = ImageResizerModule?.default ?? ImageResizerModule;
+const PermissionsAndroid = require('react-native').PermissionsAndroid;
+
+const ensureFileUri = (path) => {
+  if (!path) {
+    return path;
+  }
+
+  // Preserve content URIs returned by some VisionCamera configs
+  if (path.startsWith('content://')) {
+    return path;
+  }
+
+  if (path.startsWith('file:///')) {
+    return path;
+  }
+
+  if (path.startsWith('file://')) {
+    // Normalize legacy double-slash variants to triple-slash
+    return path.replace('file://', 'file:///');
+  }
+
+  if (path.startsWith('file:/')) {
+    return path.replace('file:/', 'file:///');
+  }
+
+  // Absolute paths coming from native modules (e.g. /data/user/0/...)
+  if (path.startsWith('/')) {
+    return `file://${path}`;
+  }
+
+  // Fallback for any other path format
+  return `file:///${path}`;
+};
+
+const extractMRZGenderChar = (match) => {
+  if (!match) {
+    return '';
+  }
+
+  const letterRegex = /[A-Z]/i;
+  const candidateIndexes = [3, 2, 4];
+
+  for (const index of candidateIndexes) {
+    const candidate = match[index];
+    if (candidate && letterRegex.test(candidate)) {
+      return candidate.charAt(0).toUpperCase();
+    }
+  }
+
+  return '';
+};
+
+// Normalize MRZ name segments by removing filler artifacts and OCR noise
+const normalizeMRZNameSegment = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  let cleaned = value
+    .replace(/[^A-ZÇĞİÖŞÜ<\s]/gi, '')
+    .toUpperCase()
+    .replace(/</g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const trailingArtifacts = /(C?K{2,}|I{2,}|L{2,})$/;
+  while (trailingArtifacts.test(cleaned)) {
+    cleaned = cleaned.replace(trailingArtifacts, '').trim();
+  }
+
+  return cleaned;
+};
+
+// Normalize serial number extracted from MRZ or visible fields
+const normalizeSerialNumber = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  const cleaned = value
+    .toUpperCase()
+    .replace(/O/g, '0')
+    .replace(/[^A-Z0-9]/g, '');
+
+  if (cleaned.length < 8) {
+    return null;
+  }
+
+  const patterns = [
+    /^[A-Z][0-9][0-9][A-Z][0-9]{5,6}$/,
+    /^[A-Z][0-9]{2}[A-Z][0-9]{5,6}$/,
+    /^[A-Z][0-9]{7,8}$/,
+  ];
+
+  return patterns.some((regex) => regex.test(cleaned)) ? cleaned : null;
+};
+
+const getCacheDirectory = () =>
+  RNFS.CachesDirectoryPath || RNFS.TemporaryDirectoryPath || RNFS.DocumentDirectoryPath;
+
+const ensureDirectoryExists = async (directoryPath) => {
+  if (!directoryPath) {
+    throw new Error('Geçici dosya dizini bulunamadı.');
+  }
+
+  try {
+    const exists = await RNFS.exists(directoryPath);
+    if (!exists) {
+      await RNFS.mkdir(directoryPath);
+    }
+  } catch (error) {
+    console.error('[OCR] Failed to prepare directory:', directoryPath, error.message);
+    throw new Error('Geçici dosya dizini oluşturulamadı.');
+  }
+};
+
+const generateTempFilePath = (extension = 'jpg') => {
+  const cacheDir = getCacheDirectory();
+  return `${cacheDir}/ocr_tmp_${Date.now()}_${Math.floor(Math.random() * 100000)}.${extension}`;
+};
+
+const resolveNativePath = async (path, tempFiles = null) => {
+  if (!path) {
+    return path;
+  }
+
+  if (path.startsWith('content://')) {
+    const targetPath = generateTempFilePath();
+    try {
+      await RNFS.copyFile(path, targetPath);
+      if (tempFiles) {
+        tempFiles.push(targetPath);
+      }
+      return targetPath;
+    } catch (copyError) {
+      console.error('[OCR] Failed to copy content URI to cache:', copyError.message);
+      throw new Error('Görsel kaynağı okunamadı. Lütfen depolama izni verildiğinden emin olun.');
+    }
+  }
+
+  if (path.startsWith('file://')) {
+    return path.replace('file://', '');
+  }
+
+  if (path.startsWith('file:/')) {
+    return path.replace('file:/', '');
+  }
+
+  return path;
+};
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const CACHE_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+
+const appendLogEntryHelper = (setter, label, payload) => {
+  const timestamp = new Date().toLocaleTimeString('tr-TR', { hour12: false });
+  setter((prev) => [{ timestamp, label, payload }, ...prev].slice(0, 20));
+};
 
 // OCR Field Patterns for Turkish ID Card - Enhanced
 const ID_PATTERNS = {
   // TC Kimlik No: 11 digit number
   TC_NO: /\b\d{11}\b/g,
-  
+
   // Name: After "AD", "ADI", "NAME" keywords - more flexible
   NAME: /(?:AD[IİĪ]?|NAME|İSİM)\s*[:\-]?\s*([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜa-zçğıöşü\s]{0,30})/im,
-  
+
   // Surname: After "SOYAD", "SOYADI", "SURNAME" keywords - more flexible
   SURNAME: /(?:SOYAD[IİĪ]?|SURNAME|SOYİSİM)\s*[:\-]?\s*([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜa-zçğıöşü\s]{0,30})/im,
-  
+
   // Birth Date: DD.MM.YYYY or DD/MM/YYYY format - more variations
   BIRTH_DATE: /(?:DO[ĞG]UM|D[OÖ]?[ĞG]?\s*TAR[İIĪ]H[İIĪ]?|BIRTH|DTH)\s*[:\-]?\s*(\d{1,2}[\.\/\-\s]\d{1,2}[\.\/\-\s]\d{4})/im,
-  
+
   // Serial No: Letter-Digit-Digit-Letter-Digit-Digit-Digit-Digit-Digit format - allow O/0 confusion
   SERIAL_NO: /\b([A-Z][0O]\d[A-Z]\d{6}|[A-Z]\d{2}[A-Z]\d{6})\b/,
-  
+
   // Valid Until Date - more variations
   VALID_UNTIL: /(?:GE[ÇC]ERL[İIĪ][KL][İIĪ][KĞG]|VALID|EXPIRES?|BİTİŞ)\s*[:\-]?\s*(\d{1,2}[\.\/\-\s]\d{1,2}[\.\/\-\s]\d{4})/im,
-  
+
   // Gender: E (Erkek/Male), K (Kadın/Female) - more variations
   GENDER: /(?:C[İIĪ]NS[İIĪ]YET|GENDER|SEX|CİNS)\s*[:\-]?\s*([EKMFek])/im,
-  
+
   // Mother's Name - appears on back side above MRZ
   MOTHER_NAME: /(?:ANNE\s*AD[IİĪ]?|MOTHER'?S?\s*NAME)\s*[:\-]?\s*([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜa-zçğıöşü\s]{1,40})/im,
-  
+
   // Father's Name - appears on back side above MRZ
   FATHER_NAME: /(?:BABA\s*AD[IİĪ]?|FATHER'?S?\s*NAME)\s*[:\-]?\s*([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜa-zçğıöşü\s]{1,40})/im,
-  
+
   // Issued By - appears on back side above MRZ (flexible for OCR errors)
   ISSUED_BY: /(?:VEREN\s*MAKAM|[IS]{1,2}UED\s*BY|SSUEDBY|VER[İI]L[İI]\u015e\s*YER)\s*[:\-\/]?\s*([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜa-zçğıöşü\s\/\-]{1,50})/im,
 };
@@ -69,17 +227,17 @@ const MRZ_PATTERNS = {
   // Format: I<TUR[DOC_NO(9)][CHECK(1)]<[TC_NO(11)]<<<
   LINE1_STRICT: /[I1][<][T][U][R]([A-Z0-9]{9})(\d)<(\d{11})<<<$/,
   LINE1_FLEXIBLE: /[I1il|][<][T7][U][R]([A-Z0-9]{8,10})(\d?)[<](\d{10,11})[<]{0,3}/i,
-  
+
   // Line 2: Birth Date + Check + Sex + Expiry + Check + Nationality + <<<<<<<<<< + Composite Check
   // Format: [BIRTH_YYMMDD(6)][CHECK(1)][SEX(1)][EXPIRY_YYMMDD(6)][CHECK(1)]TUR<<<<<<<<<<<[COMPOSITE_CHECK(1)]
   LINE2_STRICT: /(\d{6})(\d)([MF])(\d{6})(\d)[T][U][R][<]{11}(\d)$/,
   LINE2_FLEXIBLE: /(\d{6})([0-9]?)([MF0])(\d{6})([0-9]?)[T7][U][R][<]{8,}([0-9]?)/i,
-  
+
   // Line 3: Surname << Given Names <<<<<<<<<<<
   // Format: [SURNAME]<<[GIVEN_NAMES]<<<<<<<<<<
   LINE3_STRICT: /^([A-Z]+)<<([A-Z<]+)$/,
   LINE3_FLEXIBLE: /^([A-Z]{2,})<<([A-Z<\s]{1,})/i,
-  
+
   // Very flexible - for heavily corrupted MRZ (fallback)
   LINE1_LOOSE: /[I1il|].*?[T7][U][R].*?(\d{9,11})/i,
   LINE2_LOOSE: /(\d{5,6}).*?([MF]).*?(\d{5,6})/i,
@@ -96,7 +254,7 @@ const cleanMRZText = (text) => {
     .replace(/[`'"]/g, '') // Remove quotes
     .replace(/[~]/g, '') // Remove tildes
     .toUpperCase();
-  
+
   return cleaned;
 };
 
@@ -104,11 +262,11 @@ const cleanMRZText = (text) => {
 const calculateCheckDigit = (data) => {
   const weights = [7, 3, 1];
   let sum = 0;
-  
+
   for (let i = 0; i < data.length; i++) {
     let charValue;
     const char = data[i];
-    
+
     if (char === '<') {
       charValue = 0;
     } else if (char >= '0' && char <= '9') {
@@ -118,10 +276,10 @@ const calculateCheckDigit = (data) => {
     } else {
       charValue = 0;
     }
-    
+
     sum += charValue * weights[i % 3];
   }
-  
+
   return sum % 10;
 };
 
@@ -129,19 +287,19 @@ const calculateCheckDigit = (data) => {
 const validateCheckDigit = (data, checkDigit) => {
   const calculated = calculateCheckDigit(data);
   const provided = parseInt(checkDigit);
-  
+
   // If check digit is NaN or missing, still accept (OCR may miss it)
   if (isNaN(provided)) {
     console.warn(`[MRZ] Check digit missing or unreadable (NaN), accepting anyway`);
     return true; // Accept anyway
   }
-  
+
   if (calculated !== provided) {
     console.warn(`[MRZ] Check digit mismatch: calculated=${calculated}, provided=${provided}`);
     // Still return true for now - OCR errors are common in check digits
     return true; // Relaxed validation
   }
-  
+
   return true;
 };
 
@@ -150,88 +308,90 @@ const parseMRZ = (text) => {
   try {
     console.log('[MRZ] Starting 3-line MRZ parsing');
     const lines = text.split('\n').map(line => line.trim());
-    
+
     // Try to find 3 consecutive MRZ lines - they are usually at the bottom
     for (let i = 0; i < lines.length - 2; i++) {
       const line1Raw = lines[i];
       const line2Raw = lines[i + 1];
       const line3Raw = lines[i + 2];
-      
+
       // Clean lines for better pattern matching
       const line1 = cleanMRZText(line1Raw);
       const line2 = cleanMRZText(line2Raw);
       const line3 = cleanMRZText(line3Raw);
-      
+
       console.log('[MRZ] Trying lines:', { line1: line1.substring(0, 30), line2: line2.substring(0, 30), line3: line3.substring(0, 30) });
-      
+
       // Try to match all 3 lines
       let match1 = line1.match(MRZ_PATTERNS.LINE1_STRICT);
       let match2 = line2.match(MRZ_PATTERNS.LINE2_STRICT);
       let match3 = line3.match(MRZ_PATTERNS.LINE3_STRICT);
-      
+
       // Fallback to flexible patterns
       if (!match1) {
         match1 = line1.match(MRZ_PATTERNS.LINE1_FLEXIBLE);
         if (match1) console.log('[MRZ] Using flexible LINE1 pattern');
       }
-      
+
       if (!match2) {
         match2 = line2.match(MRZ_PATTERNS.LINE2_FLEXIBLE);
         if (match2) console.log('[MRZ] Using flexible LINE2 pattern');
       }
-      
+
       if (!match3) {
         match3 = line3.match(MRZ_PATTERNS.LINE3_FLEXIBLE);
         if (match3) console.log('[MRZ] Using flexible LINE3 pattern');
       }
-      
+
       // Last resort: very loose patterns
       if (!match1 || !match2 || !match3) {
         if (!match1) match1 = line1.match(MRZ_PATTERNS.LINE1_LOOSE);
         if (!match2) match2 = line2.match(MRZ_PATTERNS.LINE2_LOOSE);
         if (!match3) match3 = line3.match(MRZ_PATTERNS.LINE3_LOOSE);
-        
+
         if (match1 || match2 || match3) {
           console.log('[MRZ] Using loose patterns as fallback');
         }
       }
-      
+
       if (match1 && match2 && match3) {
         console.log('[MRZ] All 3 MRZ lines matched!');
         console.log('[MRZ] Line1:', match1);
         console.log('[MRZ] Line2:', match2);
         console.log('[MRZ] Line3:', match3);
-        
+
         try {
           // Parse Line 1: Document info and TC No
           const documentNo = (match1[1] || '').replace(/[^A-Z0-9]/g, '').substring(0, 9);
           const docCheckDigit = match1[2] || '';
           const tcNo = (match1[3] || '').replace(/[^0-9]/g, '').substring(0, 11);
-          
+          const serialNo = normalizeSerialNumber(documentNo);
+
           // Validate document number check digit if available
           if (docCheckDigit && documentNo.length === 9) {
             validateCheckDigit(documentNo, docCheckDigit);
           }
-          
+
           // Parse Line 2: Dates, gender, nationality
           const fullMatch2 = match2[0] || '';
           const birthDate = (match2[1] || '').replace(/[^0-9]/g, '').substring(0, 6);
           // Gender is in match2[3] for flexible pattern
-          let genderChar = (match2[3] || match2[2] || 'M').charAt(0).toUpperCase();
+          let genderChar = extractMRZGenderChar(match2) || 'M';
           // Handle OCR errors: 0 → M
           if (genderChar === '0' || genderChar === 'O') genderChar = 'M';
-          const expiryDate = (match2[4] || match2[3] || '').replace(/[^0-9]/g, '').substring(0, 6);
-          
+          const expirySource = match2[4] && /\d+/.test(match2[4]) ? match2[4] : match2[3];
+          const expiryDate = (expirySource || '').replace(/[^0-9]/g, '').substring(0, 6);
+
           console.log('[MRZ] Parsed Line2:', { fullMatch2, birthDate, genderChar, expiryDate });
-          
-          const gender = genderChar === 'M' ? 'Erkek' : genderChar === 'F' ? 'Kadın' : 'Erkek';
+
+          const gender = (genderChar === 'F' || genderChar === 'K') ? 'Kadın' : 'Erkek';
           const nationality = 'TUR';
-          
+
           // Parse Line 3: Surname and given names
           // Handle OCR errors: KK, II, etc. can be << separators
           let surnameRaw = (match3[1] || '');
           let givenNamesRaw = (match3[2] || '');
-          
+
           // Try to split if they got merged (e.g., "AYKUTKKATABEY" → "AYKUT" + "ATABEY")
           if (!givenNamesRaw || givenNamesRaw.replace(/</g, '').trim().length === 0) {
             // No given names found, might be merged
@@ -244,59 +404,60 @@ const parseMRZ = (text) => {
               console.log('[MRZ] Split merged names:', { surname: surnameRaw, name: givenNamesRaw });
             }
           }
-          
-          const surname = surnameRaw.replace(/</g, ' ').trim();
-          const givenNames = givenNamesRaw.replace(/</g, ' ').trim();
-          
+
+          const surname = normalizeMRZNameSegment(surnameRaw);
+          const givenNames = normalizeMRZNameSegment(givenNamesRaw);
+
           // Validate extracted data
           if (tcNo.length !== 11) {
             console.warn('[MRZ] TC No invalid length:', tcNo.length, tcNo);
             continue;
           }
-          
+
           // Birth date is required, expiry date is optional
           if (birthDate.length !== 6) {
             console.warn('[MRZ] Invalid birth date length:', birthDate.length, birthDate);
             continue;
           }
-          
+
           if (!surname || surname.length < 2) {
             console.warn('[MRZ] Invalid surname:', surname);
             continue;
           }
-          
+
           // Convert dates to DD.MM.YYYY format
           const formatMRZDate = (yymmdd) => {
             if (!yymmdd || yymmdd.length !== 6) return '';
-            
+
             const yy = yymmdd.substring(0, 2);
             const mm = yymmdd.substring(2, 4);
             const dd = yymmdd.substring(4, 6);
-            
+
             // Validate month and day
             const monthNum = parseInt(mm);
             const dayNum = parseInt(dd);
-            
+
             if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
               console.warn('[MRZ] Invalid date components:', { yy, mm, dd });
               return '';
             }
-            
+
             const year = parseInt(yy) > 50 ? `19${yy}` : `20${yy}`;
             return `${dd}.${mm}.${year}`;
           };
-          
+
           const formattedBirthDate = formatMRZDate(birthDate);
           const formattedExpiryDate = expiryDate ? formatMRZDate(expiryDate) : null;
-          
+
           if (!formattedBirthDate) {
             console.warn('[MRZ] Birth date formatting failed');
             continue;
           }
-          
+
           const result = {
             tcNo: tcNo,
             documentNo: documentNo,
+            ...(serialNo ? { serialNo } : {}),
             name: givenNames.toUpperCase(),
             surname: surname.toUpperCase(),
             birthDate: formattedBirthDate,
@@ -305,12 +466,12 @@ const parseMRZ = (text) => {
             source: 'MRZ (3-Line)',
             checkDigitsValid: true, // Simplified - could add more validation
           };
-          
+
           // Add expiry date if available
           if (formattedExpiryDate) {
             result.validUntil = formattedExpiryDate;
           }
-          
+
           console.log('[MRZ] Successfully parsed 3-line MRZ data:', result);
           return result;
         } catch (parseError) {
@@ -320,7 +481,7 @@ const parseMRZ = (text) => {
         }
       }
     }
-    
+
     console.log('[MRZ] No valid 3-line MRZ pattern found in text');
     return null;
   } catch (error) {
@@ -333,44 +494,44 @@ const parseMRZ = (text) => {
 const VALIDATORS = {
   validateTCNo: (tcNo) => {
     if (!tcNo || tcNo.length !== 11) return false;
-    
+
     // TC Kimlik No validation algorithm
     const digits = tcNo.split('').map(Number);
-    
+
     // First digit cannot be 0
     if (digits[0] === 0) return false;
-    
+
     // 10th digit check
     const sum1 = (digits[0] + digits[2] + digits[4] + digits[6] + digits[8]) * 7;
     const sum2 = digits[1] + digits[3] + digits[5] + digits[7];
     const digit10 = (sum1 - sum2) % 10;
     if (digits[9] !== digit10) return false;
-    
+
     // 11th digit check
     const sumAll = digits.slice(0, 10).reduce((a, b) => a + b, 0);
     const digit11 = sumAll % 10;
     if (digits[10] !== digit11) return false;
-    
+
     return true;
   },
-  
+
   validateDate: (dateStr) => {
     if (!dateStr) return false;
-    
+
     const parts = dateStr.split(/[\.\/\-]/);
     if (parts.length !== 3) return false;
-    
+
     const day = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10);
     const year = parseInt(parts[2], 10);
-    
+
     if (day < 1 || day > 31) return false;
     if (month < 1 || month > 12) return false;
     if (year < 1900 || year > 2100) return false;
-    
+
     return true;
   },
-  
+
   validateName: (name) => {
     if (!name || name.length < 2) return false;
     // Only Turkish letters and spaces
@@ -399,11 +560,11 @@ class OCRReaderModule {
       cardSide: 'front', // 'front' or 'back'
       enableFlash: false,
     };
-    
+
     this.options = { ...defaultOptions, ...options };
-    
+
     console.log('[OCR] OCR started with options:', this.options);
-    
+
     if (this.callbacks.onStarted) {
       this.callbacks.onStarted();
     }
@@ -425,10 +586,9 @@ class OCRReaderModule {
   preprocessImage = async (imagePath) => {
     try {
       console.log('[OCR] Pre-processing image...');
-      
-      // Remove file:// prefix for ImageResizer
-      const nativePath = imagePath.replace('file://', '');
-      
+
+      const nativePath = await resolveNativePath(imagePath);
+
       // Resize and enhance image for better OCR
       const processedImage = await ImageResizer.createResizedImage(
         nativePath,
@@ -445,31 +605,31 @@ class OCRReaderModule {
         }
       );
 
-  const renderCacheLog = () => (
-    <View style={styles.cacheLogContainer}>
-      <Text style={styles.cacheLogTitle}>📄 OCR Ham Metin Logu (10 dk)</Text>
-      {cacheLog.length === 0 ? (
-        <Text style={styles.cacheLogEmpty}>Henüz kayıt yok</Text>
-      ) : (
-        <ScrollView style={styles.cacheLogList}>
-          {cacheLog.map((entry) => (
-            <View key={entry.id} style={styles.cacheLogItem}>
-              <View style={styles.cacheLogHeader}>
-                <Text style={styles.cacheLogTime}>{formatCacheTime(entry.timestamp)}</Text>
-                {entry.meta?.confidence ? (
-                  <Text style={styles.cacheLogConfidence}>
-                    %{entry.meta.confidence}
-                  </Text>
-                ) : null}
-              </View>
-              <Text style={styles.cacheLogText}>{entry.text}</Text>
-            </View>
-          ))}
-        </ScrollView>
-      )}
-    </View>
-  );
-      
+      const renderCacheLog = () => (
+        <View style={styles.cacheLogContainer}>
+          <Text style={styles.cacheLogTitle}>📄 OCR Ham Metin Logu (10 dk)</Text>
+          {cacheLog.length === 0 ? (
+            <Text style={styles.cacheLogEmpty}>Henüz kayıt yok</Text>
+          ) : (
+            <ScrollView style={styles.cacheLogList}>
+              {cacheLog.map((entry) => (
+                <View key={entry.id} style={styles.cacheLogItem}>
+                  <View style={styles.cacheLogHeader}>
+                    <Text style={styles.cacheLogTime}>{formatCacheTime(entry.timestamp)}</Text>
+                    {entry.meta?.confidence ? (
+                      <Text style={styles.cacheLogConfidence}>
+                        %{entry.meta.confidence}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.cacheLogText}>{entry.text}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      );
+
       console.log('[OCR] Image pre-processed:', processedImage.uri);
       return processedImage.uri;
     } catch (error) {
@@ -478,28 +638,29 @@ class OCRReaderModule {
     }
   };
 
-  checkImageQuality = async (imagePath) => {
+  checkImageQuality = async (imagePath, tempFiles = null) => {
     try {
+      const nativePath = await resolveNativePath(imagePath, tempFiles);
       // Check file size as a basic quality indicator
-      const stats = await RNFS.stat(imagePath.replace('file://', ''));
+      const stats = await RNFS.stat(nativePath);
       const fileSizeKB = stats.size / 1024;
-      
+
       console.log('[OCR] Image size:', fileSizeKB, 'KB');
-      
+
       if (fileSizeKB < 50) {
         return {
           isGood: false,
           reason: 'Görüntü çok düşük kaliteli. Daha net bir fotoğraf çekin.',
         };
       }
-      
+
       if (fileSizeKB > 10000) {
         return {
           isGood: false,
           reason: 'Görüntü çok büyük. Daha yakından çekin.',
         };
       }
-      
+
       return { isGood: true };
     } catch (error) {
       console.warn('[OCR] Quality check failed:', error.message);
@@ -512,11 +673,11 @@ class OCRReaderModule {
     try {
       const cacheDir = RNFS.CachesDirectoryPath;
       const files = await RNFS.readDir(cacheDir);
-      
+
       // Delete files older than 1 hour
       const oneHourAgo = Date.now() - (60 * 60 * 1000);
       let deletedCount = 0;
-      
+
       for (const file of files) {
         // Only delete .JPEG files (our processed images)
         if (file.name.endsWith('.JPEG') && new Date(file.mtime).getTime() < oneHourAgo) {
@@ -528,7 +689,7 @@ class OCRReaderModule {
           }
         }
       }
-      
+
       if (deletedCount > 0) {
         console.log(`[OCR] Cleanup: Deleted ${deletedCount} temp files`);
       }
@@ -540,33 +701,58 @@ class OCRReaderModule {
 
   // Processing Methods with multi-attempt
   processImage = async (imagePath) => {
+    const tempFiles = [];
     try {
       console.log('[OCR] processImage called with:', imagePath);
       console.log('[OCR] Card side:', this.options.cardSide);
-      
+
+      if (Platform.OS === 'android') {
+        const readMediaPermission = Platform.Version >= 33
+          ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES
+          : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
+
+        const hasPermission = await PermissionsAndroid.check(readMediaPermission);
+        if (!hasPermission) {
+          const granted = await PermissionsAndroid.request(readMediaPermission);
+          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+            throw new Error('Depolama izni gerekli. Lütfen uygulama ayarlarından izin verin.');
+          }
+        }
+      }
+
       // Step 1: Check image quality
       console.log('[OCR] Checking image quality...');
-      const qualityCheck = await this.checkImageQuality(imagePath);
+      const originalInputUri = ensureFileUri(imagePath);
+      const originalNativePath = await resolveNativePath(originalInputUri, tempFiles);
+      const normalizedOriginalUri = ensureFileUri(originalNativePath);
+      const qualityCheck = await this.checkImageQuality(originalInputUri, tempFiles);
       if (!qualityCheck.isGood) {
         throw new Error(qualityCheck.reason);
       }
-      
+
       // Step 2: Apply special preprocessing for back side (MRZ)
-      let preprocessedPath = imagePath;
+      let preprocessedPath = normalizedOriginalUri;
       if (this.options.cardSide === 'back') {
         console.log('[OCR] Applying back side preprocessing for MRZ...');
         try {
-          preprocessedPath = await ImageProcessor.preprocessBackSide(imagePath);
+          preprocessedPath = await ImageProcessor.preprocessBackSide(normalizedOriginalUri);
           console.log('[OCR] Back side preprocessing completed:', preprocessedPath);
         } catch (preprocessError) {
           console.warn('[OCR] Back side preprocessing failed, using original:', preprocessError.message);
-          preprocessedPath = imagePath;
+          preprocessedPath = normalizedOriginalUri;
         }
       }
-      
+
+      // Ensure downstream consumers always receive normalized URIs
+      preprocessedPath = ensureFileUri(preprocessedPath);
+
+      // Ensure cache directory exists for resized outputs
+      const cacheDir = getCacheDirectory();
+      await ensureDirectoryExists(cacheDir);
+
       // Step 3: Try multiple OCR strategies
       console.log('[OCR] Attempting OCR with multiple strategies...');
-      
+
       // Different strategies for front vs back side
       const strategies = this.options.cardSide === 'back' ? [
         // Back side strategies - optimized for MRZ
@@ -580,78 +766,127 @@ class OCRReaderModule {
         { quality: 95, maxWidth: 1600, maxHeight: 1200 },  // Medium quality, different aspect
         { quality: 90, maxWidth: 2048, maxHeight: 1536 },  // Higher resolution
       ];
-      
+
       let bestResult = null;
       let bestConfidence = 0;
-      
+
       for (let i = 0; i < strategies.length; i++) {
         try {
           console.log(`[OCR] Attempt ${i + 1}/${strategies.length}...`);
-          
+
           // Pre-process with current strategy
           const strategy = strategies[i];
-          
+
           // Remove file:// prefix for ImageResizer (needs native path)
-          const nativePath = preprocessedPath.replace('file://', '');
+          const nativePath = await resolveNativePath(preprocessedPath, tempFiles);
           console.log(`[OCR] Native path for ImageResizer:`, nativePath);
-          
+
           console.log(`[OCR] Calling ImageResizer with strategy:`, strategy);
-          const processedImage = await ImageResizer.createResizedImage(
-            nativePath,
-            strategy.maxWidth,
-            strategy.maxHeight,
-            'JPEG',
-            strategy.quality,
-            0,
-            null,
-            false,
-            { mode: 'contain', onlyScaleDown: true }
-          );
-          console.log(`[OCR] ImageResizer completed:`, processedImage.uri);
-          
-          // Text recognition - ML Kit accepts file:// URI
-          console.log(`[OCR] Calling ML Kit TextRecognition with:`, processedImage.uri);
-          
-          let result;
+          const outputDirectory = cacheDir;
+          let processedImage;
           try {
-            // ML Kit Text Recognition returns { text, blocks }
-            const mlKitResult = await TextRecognition.recognize(processedImage.uri);
-            result = mlKitResult.text; // Extract text string
-            console.log(`[OCR] ML Kit TextRecognition completed, text length:`, result?.length || 0);
-          } catch (textRecError) {
-            console.error(`[OCR] ML Kit TextRecognition FAILED:`, textRecError.message);
-            console.error(`[OCR] Error stack:`, textRecError.stack);
-            
-            // Try with native path as fallback
+            processedImage = await ImageResizer.createResizedImage(
+              nativePath,
+              strategy.maxWidth,
+              strategy.maxHeight,
+              'JPEG',
+              strategy.quality,
+              0,
+              outputDirectory,
+              false,
+              { mode: 'contain', onlyScaleDown: true }
+            );
+          } catch (resizeError) {
+            const sourceExists = await RNFS.exists(nativePath).catch(() => false);
+            console.error('[OCR] ImageResizer failed for strategy', strategy, {
+              nativePath,
+              sourceExists,
+              outputDirectory,
+            });
+            throw resizeError;
+          }
+          const resizedSource = processedImage?.path || processedImage?.uri;
+          if (!resizedSource) {
+            throw new Error('ImageResizer returned no output path');
+          }
+          const nativeResizedPath = await resolveNativePath(resizedSource, tempFiles);
+          const fileExists = await RNFS.exists(nativeResizedPath);
+          if (!fileExists) {
+            throw new Error(`Processed image not found at ${nativeResizedPath}`);
+          }
+          const normalizedUri = ensureFileUri(nativeResizedPath);
+          const processedImageUri = processedImage?.uri ? ensureFileUri(processedImage.uri) : null;
+          const processedImagePathUri = processedImage?.path ? ensureFileUri(processedImage.path) : null;
+          console.log(`[OCR] ImageResizer completed:`, normalizedUri, {
+            hasPath: !!processedImage?.path,
+            hasUri: !!processedImage?.uri,
+          });
+
+          // Text recognition - try multiple path formats before failing
+          if (!TextRecognition || typeof TextRecognition.recognize !== 'function') {
+            throw new Error('TextRecognition native module is not linked. Rebuild the app or run pod install/gradlew clean');
+          }
+
+          const recognitionSources = [];
+          const addRecognitionSource = (label, value) => {
+            if (!value) {
+              return;
+            }
+            recognitionSources.push({ label, value });
+          };
+
+          addRecognitionSource('normalizedResizedUri', normalizedUri);
+          addRecognitionSource('nativeResizedUri', normalizedUri);
+          addRecognitionSource('processedImage.uri', processedImageUri || processedImage?.uri);
+          addRecognitionSource('processedImage.path', processedImagePathUri);
+          addRecognitionSource('preprocessedPath', preprocessedPath);
+          addRecognitionSource('originalImage', normalizedOriginalUri);
+
+          let result = null;
+          let lastTextRecError = null;
+
+          for (const source of recognitionSources) {
             try {
-              const nativeTextPath = processedImage.uri.replace('file://', '');
-              console.log(`[OCR] Retry with native path:`, nativeTextPath);
-              const mlKitResult = await TextRecognition.recognize(nativeTextPath);
-              result = mlKitResult.text;
-              console.log(`[OCR] ML Kit TextRecognition (native path) completed`);
-            } catch (fallbackError) {
-              console.error(`[OCR] Fallback also failed:`, fallbackError.message);
-              throw new Error('Text recognition failed');
+              console.log(`[OCR] TextRecognition attempt with ${source.label}:`, source.value);
+              const mlKitResult = await TextRecognition.recognize(source.value);
+              result = mlKitResult?.text || '';
+              console.log(`[OCR] ML Kit TextRecognition succeeded for ${source.label}, text length:`, result?.length || 0);
+              if (result && result.length > 0) {
+                break;
+              }
+            } catch (textRecError) {
+              lastTextRecError = textRecError;
+              console.error(`[OCR] TextRecognition failed for ${source.label}:`, textRecError.message);
+              console.error('[OCR] TextRecognition stack:', textRecError.stack);
             }
           }
-          
+
+          if (!result || result.length === 0) {
+            if (lastTextRecError) {
+              const textError = new Error('Text recognition failed');
+              textError.cause = lastTextRecError;
+              throw textError;
+            }
+            continue;
+          }
+
           if (result && result.length > 0) {
             // Parse and calculate confidence
             const parsedFields = this.parseIDFields(result);
             const confidence = this.calculateConfidence(parsedFields);
-            
+
             console.log(`[OCR] Attempt ${i + 1} confidence: ${confidence}%`);
             console.log(`[OCR] Parsed fields:`, parsedFields);
-            
+
             if (confidence > bestConfidence) {
               bestResult = { text: result, fields: parsedFields };
               bestConfidence = confidence;
             }
-            
+
             // For back side with MRZ, accept lower threshold (60%)
             // For front side, require higher threshold (70%)
             const acceptableThreshold = this.options.cardSide === 'back' ? 60 : 70;
-            
+
             if (confidence > acceptableThreshold) {
               console.log(`[OCR] Good result achieved (>${acceptableThreshold}%), stopping attempts`);
               break;
@@ -663,22 +898,22 @@ class OCRReaderModule {
           console.error(`[OCR] Error stack:`, attemptError.stack);
         }
       }
-      
+
       if (!bestResult || !bestResult.text || bestResult.text.length === 0) {
         throw new Error('Metin algılanamadı. Lütfen daha net bir fotoğraf çekin.');
       }
-      
+
       const result = bestResult.text;
       const parsedFields = bestResult.fields;
       const confidence = bestConfidence;
 
       console.log('[OCR] Best result selected with confidence:', confidence, '%');
       console.log('[OCR] Parsed fields:', parsedFields);
-      
+
       // Get base64 if requested
       let imageBase64 = null;
       if (this.options.includeImage) {
-        const nativePath = imagePath.replace('file://', '');
+        const nativePath = await resolveNativePath(normalizedOriginalUri, tempFiles);
         imageBase64 = await RNFS.readFile(nativePath, 'base64');
       }
 
@@ -701,7 +936,7 @@ class OCRReaderModule {
     } catch (error) {
       console.error('[OCR] processImage ERROR:', error);
       console.error('[OCR] Error message:', error.message);
-      
+
       const errorResponse = {
         success: false,
         error: error.message,
@@ -713,6 +948,19 @@ class OCRReaderModule {
       }
 
       throw error;
+    } finally {
+      if (tempFiles.length > 0) {
+        for (const tempFile of tempFiles) {
+          try {
+            const exists = await RNFS.exists(tempFile);
+            if (exists) {
+              await RNFS.unlink(tempFile);
+            }
+          } catch (cleanupError) {
+            console.warn('[OCR] Temp file cleanup skipped:', cleanupError.message);
+          }
+        }
+      }
     }
   };
 
@@ -747,7 +995,7 @@ class OCRReaderModule {
     if (!hasMRZData) {
       console.log('[OCR] No MRZ found, using regular OCR parsing');
     }
-    
+
     // Split text into lines for easier parsing
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
 
@@ -763,7 +1011,7 @@ class OCRReaderModule {
             break;
           }
         }
-        
+
         // If no valid found, use first match but mark as invalid
         if (!fields.tcNo && tcMatches.length > 0) {
           fields.tcNo = tcMatches[0];
@@ -771,12 +1019,12 @@ class OCRReaderModule {
         }
       }
     }
-    
+
     // Line-by-line parsing for better accuracy
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const nextLine = i + 1 < lines.length ? lines[i + 1] : '';
-      
+
       // Soyad - line after "Soyadi" or "Surname" (ONLY FOR FRONT SIDE, or if no MRZ data)
       if (!fields.surname && !isBackSide && /Soyad[iı]?\s*\/?\s*Surname/i.test(line) && nextLine) {
         // Skip if it's a label line (contains "Mother" or "Father")
@@ -788,7 +1036,7 @@ class OCRReaderModule {
           }
         }
       }
-      
+
       // Ad - line after "Adi" or "Given Name" (ONLY FOR FRONT SIDE, or if no MRZ data)
       if (!fields.name && !isBackSide && /Ad[iı]?\s*\/?\s*Given\s*Name/i.test(line) && nextLine) {
         // Skip if it's a label line (contains "Mother" or "Father")
@@ -800,7 +1048,7 @@ class OCRReaderModule {
           }
         }
       }
-      
+
       // Doğum Tarihi - same line or next line after "Doğum"
       if (/Do[ğg]um|Birth/i.test(line)) {
         const dateMatch = (line + ' ' + nextLine).match(/(\d{2})[\.\/\-](\d{2})[\.\/\-](\d{4})/);
@@ -812,7 +1060,7 @@ class OCRReaderModule {
           }
         }
       }
-      
+
       // Cinsiyet - E/M or just E or M (check multiple lines)
       if (!fields.gender && /Cinsiyet|Gender|Sex/i.test(line)) {
         // Check current line, next line, and line after
@@ -829,7 +1077,7 @@ class OCRReaderModule {
           console.log(`[OCR] Gender found: ${fields.gender} (raw: ${g})`);
         }
       }
-      
+
       // Uyruk - T.C. or TUR
       if (/Uyru[ğg]u|Nationality/i.test(line)) {
         const nationalityMatch = (line + ' ' + nextLine).match(/T\.?C\.?\/?(TUR)?|TUR/i);
@@ -838,7 +1086,7 @@ class OCRReaderModule {
           validationResults.nationality = 'valid';
         }
       }
-      
+
       // Seri No - line after "Seri No" or "Document No"
       if (/Seri\s*No|Document\s*No/i.test(line) && nextLine) {
         const serialMatch = nextLine.match(/([A-Z][0-9O][0-9][A-Z][0-9]{5,6}|[A-Z]\d{2}[A-Z]\d{5,6})/);
@@ -848,7 +1096,7 @@ class OCRReaderModule {
           validationResults.serialNo = 'valid';
         }
       }
-      
+
       // Son Geçerlilik - same line or next line after "Geçerlilik" or "Valid"
       if (/Ge[çc]erlilik|Valid\s*Until?/i.test(line)) {
         const validMatch = (line + ' ' + nextLine).match(/(\d{2})[\.\/-](\d{2})[\.\/-](\d{4})/);
@@ -860,7 +1108,7 @@ class OCRReaderModule {
           }
         }
       }
-      
+
       // Anne Adı - line after "Anne Adı" or "Mother's Name" (ONLY FOR BACK SIDE)
       if (isBackSide && /Anne\s*Ad[ıi]?|Mother'?s?\s*Name/i.test(line) && nextLine) {
         const motherName = nextLine.replace(/[^A-ZÇĞİÖŞÜ\s]/g, '').trim();
@@ -870,7 +1118,7 @@ class OCRReaderModule {
           validationResults.motherName = 'valid';
         }
       }
-      
+
       // Baba Adı - line after "Baba Adı" or "Father's Name" (ONLY FOR BACK SIDE)
       if (isBackSide && /Baba\s*Ad[ıi]?|Father'?s?\s*Name/i.test(line) && nextLine) {
         const fatherName = nextLine.replace(/[^A-ZÇĞİÖŞÜ\s]/g, '').trim();
@@ -880,7 +1128,7 @@ class OCRReaderModule {
           validationResults.fatherName = 'valid';
         }
       }
-      
+
       // Veren Makam - line after "Veren Makam" or "Issued By" (ONLY FOR BACK SIDE)
       // More flexible pattern to catch OCR errors like "SSUEDBY"
       if (isBackSide && /Veren\s*Makam|[IS]{1,2}ued\s*By|SSUEDBY|Ver[iı]l[iı]ş\s*Yer/i.test(line) && nextLine) {
@@ -905,7 +1153,7 @@ class OCRReaderModule {
         }
       }
     }
-    
+
     if (!isBackSide && !fields.surname) {
       const surnameMatch = text.match(ID_PATTERNS.SURNAME);
       if (surnameMatch && surnameMatch[1]) {
@@ -916,7 +1164,7 @@ class OCRReaderModule {
         }
       }
     }
-    
+
     // Regex-based fallback for back side fields
     if (!fields.motherName) {
       const motherMatch = text.match(ID_PATTERNS.MOTHER_NAME);
@@ -928,7 +1176,7 @@ class OCRReaderModule {
         }
       }
     }
-    
+
     if (!fields.fatherName) {
       const fatherMatch = text.match(ID_PATTERNS.FATHER_NAME);
       if (fatherMatch && fatherMatch[1]) {
@@ -939,7 +1187,7 @@ class OCRReaderModule {
         }
       }
     }
-    
+
     if (!fields.issuedBy) {
       const issuedMatch = text.match(ID_PATTERNS.ISSUED_BY);
       if (issuedMatch && issuedMatch[1]) {
@@ -950,7 +1198,7 @@ class OCRReaderModule {
         }
       }
     }
-    
+
     // Gender fallback
     if (!fields.gender) {
       const genderMatch = text.match(ID_PATTERNS.GENDER);
@@ -960,7 +1208,7 @@ class OCRReaderModule {
         validationResults.gender = 'valid';
       }
     }
-    
+
     // Valid Until fallback
     if (!fields.validUntil) {
       const validMatch = text.match(ID_PATTERNS.VALID_UNTIL);
@@ -972,7 +1220,7 @@ class OCRReaderModule {
         }
       }
     }
-    
+
     // Serial No fallback
     if (!fields.serialNo) {
       const serialMatch = text.match(ID_PATTERNS.SERIAL_NO);
@@ -984,7 +1232,7 @@ class OCRReaderModule {
     }
 
     fields.validation = validationResults;
-    
+
     // Debug logging
     console.log('[OCR] Parsed fields:', {
       tcNo: fields.tcNo || 'NOT FOUND',
@@ -996,14 +1244,14 @@ class OCRReaderModule {
       serialNo: fields.serialNo || 'NOT FOUND',
       validUntil: fields.validUntil || 'NOT FOUND',
     });
-    
+
     return fields;
   };
 
   calculateConfidence = (fields) => {
     const requiredFields = ['tcNo', 'name', 'surname'];
     const optionalFields = ['birthDate', 'serialNo', 'validUntil', 'gender', 'nationality'];
-    
+
     let score = 0;
     let maxScore = 0;
     const validation = fields.validation || {};
@@ -1036,7 +1284,7 @@ class OCRReaderModule {
 
     // Ensure score doesn't go below 0
     score = Math.max(0, score);
-    
+
     return Math.round((score / maxScore) * 100);
   };
 
@@ -1064,7 +1312,7 @@ class OCRReaderModule {
       // ⚡ OPTIMIZATION: Parallel Processing (50% faster!)
       // Process both sides simultaneously instead of sequentially
       console.log('[OCR] Processing both sides in parallel...');
-      
+
       const [frontResult, backResult] = await Promise.all([
         (async () => {
           console.log('[OCR] Processing front side...');
@@ -1079,7 +1327,7 @@ class OCRReaderModule {
             this.options.cardSide = originalCardSide;
           }
         })(),
-        
+
         (async () => {
           console.log('[OCR] Processing back side...');
           // Create separate options for back side (avoid race condition)
@@ -1094,14 +1342,14 @@ class OCRReaderModule {
           }
         })()
       ]);
-      
+
       // processImage already returns { success, text, fields, confidence }
       const frontFields = frontResult.fields || {};
       const backFields = backResult.fields || {};
 
       // Merge and validate results
       const mergedData = this.mergeAndValidate(frontFields, backFields);
-      
+
       console.log('[OCR] Merged and validated results:', mergedData);
 
       // 💾 OPTIMIZATION: Cleanup old temp files (non-blocking)
@@ -1130,18 +1378,18 @@ class OCRReaderModule {
    */
   mergeAndValidate = (frontData, backData) => {
     console.log('[OCR] Merging front and back data...');
-    
+
     const merged = {};
     const conflicts = [];
     const validation = {};
 
     // Priority fields: Use MRZ (back) data as primary source (more accurate)
     const mrzPriorityFields = ['tcNo', 'name', 'surname', 'birthDate', 'gender', 'nationality'];
-    
+
     mrzPriorityFields.forEach(field => {
       const frontValue = frontData[field];
       const backValue = backData[field];
-      
+
       if (backValue && frontValue) {
         // Both sides have data - compare
         if (this.compareFieldValues(field, backValue, frontValue)) {
@@ -1210,11 +1458,11 @@ class OCRReaderModule {
     merged.conflicts = conflicts;
     merged.source = 'dual-side-scan';
     merged.confidence = this.calculateDualSideConfidence(merged, conflicts);
-    
+
     // Calculate completeness
     // Count only actual ID fields, not metadata like checkDigitsValid
     const totalFields = 12; // Total expected ID fields
-    const filledFields = Object.keys(merged).filter(k => 
+    const filledFields = Object.keys(merged).filter(k =>
       !['validation', 'conflicts', 'source', 'confidence', 'completeness', 'checkDigitsValid'].includes(k)
     ).length;
     merged.completeness = Math.round((filledFields / totalFields) * 100);
@@ -1231,7 +1479,7 @@ class OCRReaderModule {
    */
   compareFieldValues = (fieldName, value1, value2) => {
     if (!value1 || !value2) return false;
-    
+
     // Normalize strings
     const normalize = (str) => {
       return str.toString()
@@ -1264,9 +1512,9 @@ class OCRReaderModule {
       // Calculate similarity (simple Levenshtein-like)
       const maxLen = Math.max(norm1.length, norm2.length);
       const minLen = Math.min(norm1.length, norm2.length);
-      
+
       if (maxLen === 0) return true;
-      
+
       // Allow up to 20% difference for names
       const similarity = minLen / maxLen;
       if (similarity >= 0.8) {
@@ -1288,28 +1536,30 @@ class OCRReaderModule {
    */
   calculateDualSideConfidence = (mergedData, conflicts) => {
     let baseScore = 100;
-    
+
     // Penalty for conflicts
     const conflictPenalty = conflicts.length * 10;
     baseScore -= conflictPenalty;
-    
+
     // Bonus for verified fields
     const validation = mergedData.validation || {};
     const verifiedCount = Object.values(validation).filter(v => v === 'verified').length;
     const verifiedBonus = verifiedCount * 5;
     baseScore += verifiedBonus;
-    
+
     // Check completeness of critical fields
     const criticalFields = ['tcNo', 'name', 'surname', 'birthDate'];
     const criticalComplete = criticalFields.every(f => mergedData[f]);
     if (criticalComplete) {
       baseScore += 10;
     }
-    
+
     // Ensure score is between 0-100
     return Math.max(0, Math.min(100, Math.round(baseScore)));
   };
 }
+
+const detectionHintIntro = 'MRZ: Kartın arka yüzündeki MRZ satırlarını çerçeveye hizalayın. Kart algılandığında ardışık 3 fotoğraf otomatik alınacaktır.';
 
 // React Component for OCR UI
 export const OCRReaderScreen = ({ navigation, route }) => {
@@ -1318,26 +1568,111 @@ export const OCRReaderScreen = ({ navigation, route }) => {
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [ocrResult, setOcrResult] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [cardDetected, setCardDetected] = useState(false);
-  const [detectionHint, setDetectionHint] = useState('Ön yüz: Kartı çerçeve içine yerleştirin');
-  const [livePreviewResult, setLivePreviewResult] = useState(null);
-  const [currentSide, setCurrentSide] = useState('front');
+  const [detectionHint, setDetectionHint] = useState(detectionHintIntro);
+  const [pendingCaptures, setPendingCaptures] = useState(0);
   const [cacheLog, setCacheLog] = useState([]);
+  const [ocrLogs, setOcrLogs] = useState([]);
+  const [nfcLogs, setNfcLogs] = useState([]);
+  const [nfcPhase, setNfcPhase] = useState('pending');
+  const [nfcError, setNfcError] = useState(null);
   const cameraRef = useRef(null);
   const device = useCameraDevice('back');
   const ocrModule = useRef(new OCRReaderModule()).current;
+  const nfcModuleRef = useRef(null);
+  const nfcSessionActiveRef = useRef(false);
+  const lastMrzFieldsRef = useRef(null);
   const returnTo = route?.params?.returnTo;
   const returnSourceStep = route?.params?.returnParams?.sourceStep;
   const hasForwardedRef = useRef(false);
   const AUTO_ACCEPT_CONFIDENCE = 70;
-  const FRONT_DETECTION_THRESHOLD = 45;
-  const BACK_DETECTION_THRESHOLD = 35;
-  const FRONT_ACCEPTANCE_THRESHOLD = 58;
-  const BACK_ACCEPTANCE_THRESHOLD = 60;
-  const frontResultRef = useRef(null);
-  const backResultRef = useRef(null);
-  const currentSideRef = useRef('front');
   const cacheRef = useRef([]);
+  const CAPTURE_SEQUENCE_COUNT = 3;
+  const CAPTURE_DELAY_MS = 350;
+  const AUTO_CAPTURE_DELAY_MS = 1200;
+  const autoCaptureTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (!NFCReaderModule) {
+      console.warn('[OCR→NFC] NFCReaderModule bulunamadı. NFC akışı atlanacak.');
+      return;
+    }
+
+    const moduleInstance = nfcModuleRef.current || new NFCReaderModule();
+    nfcModuleRef.current = moduleInstance;
+
+    const handleNfcResult = (response) => {
+      console.log('[OCR→NFC] NFC okuma tamamlandı. Ayrıştırılan alanlar:', response?.parsedFields || {});
+      console.log('[OCR→NFC] NFC JSON:', JSON.stringify(response, null, 2));
+      appendLogEntryHelper(setNfcLogs, 'NFC_OK', response);
+      setDetectionHint('NFC okuma tamamlandı.');
+      setNfcPhase('completed');
+      setNfcError(null);
+      nfcSessionActiveRef.current = false;
+      moduleInstance.stopNFC().catch(() => { });
+    };
+
+    const handleNfcError = (errorResponse) => {
+      console.error('[OCR→NFC] NFC okuma hatası:', errorResponse);
+      appendLogEntryHelper(setNfcLogs, 'NFC_ERROR', errorResponse);
+      setDetectionHint('NFC okuma başarısız oldu, tekrar deneyin.');
+      setNfcError(errorResponse);
+      setNfcPhase('error');
+      nfcSessionActiveRef.current = false;
+    };
+
+    moduleInstance.onNFCResult(handleNfcResult);
+    moduleInstance.onNFCError(handleNfcError);
+    moduleInstance.onNFCStarted(() => {
+      console.log('[OCR→NFC] NFC dinleme modu başladı. Kartı cihaza yaklaştırın.');
+    });
+    moduleInstance.onNFCStopped(() => {
+      console.log('[OCR→NFC] NFC dinleme modu durduruldu.');
+    });
+
+    return () => {
+      nfcSessionActiveRef.current = false;
+      moduleInstance.stopNFC().catch(() => { });
+    };
+  }, []);
+
+  const startNfcFlow = useCallback((mrzFields = {}) => {
+    if (!nfcModuleRef.current) {
+      console.warn('[OCR→NFC] NFC modülü hazır değil.');
+      return;
+    }
+
+    if (nfcSessionActiveRef.current) {
+      console.log('[OCR→NFC] NFC okuması zaten aktif.');
+      return;
+    }
+
+    nfcSessionActiveRef.current = true;
+    lastMrzFieldsRef.current = mrzFields;
+    setNfcError(null);
+    setNfcPhase('scanning');
+
+    const mrzSummary = {
+      tcNo: mrzFields.tcNo || null,
+      name: mrzFields.name || null,
+      surname: mrzFields.surname || null,
+      birthDate: mrzFields.birthDate || null,
+      documentNo: mrzFields.documentNo || null,
+    };
+
+    console.log('[OCR→NFC] OCR tamamlandı. NFC başlatılıyor...', mrzSummary);
+    appendLogEntryHelper(setOcrLogs, 'OCR_RESULT', mrzFields);
+    setDetectionHint('NFC hazır: Kartınızı telefonun arkasına yaklaştırın.');
+
+    nfcModuleRef.current.startNFC({
+      cardType: 'tc_kimlik',
+      readTimeout: 45000,
+      mrzSeed: mrzSummary,
+    }).catch((error) => {
+      nfcSessionActiveRef.current = false;
+      console.error('[OCR→NFC] NFC başlatma hatası:', error);
+      setDetectionHint('NFC başlatılamadı. Tekrar deneyin.');
+    });
+  }, []);
 
   const checkCameraPermission = useCallback(async () => {
     try {
@@ -1491,6 +1826,9 @@ export const OCRReaderScreen = ({ navigation, route }) => {
       setOcrResult(result);
       setDetectionHint('OCR sonucu alındı, devam ediliyor...');
       setIsProcessing(false);
+      lastMrzFieldsRef.current = result?.fields || null;
+      setNfcPhase('pending');
+      setNfcError(null);
 
       forwardStepResult({
         success: true,
@@ -1502,22 +1840,27 @@ export const OCRReaderScreen = ({ navigation, route }) => {
       saveResultsToFile(result).catch((err) => {
         console.error('[OCR] saveResultsToFile error:', err);
       });
+
+      startNfcFlow(result?.fields || {});
     },
-    [appendCacheEntry, forwardStepResult]
+    [appendCacheEntry, forwardStepResult, startNfcFlow]
   );
 
   const retryOCR = useCallback(() => {
     hasForwardedRef.current = false;
     setOcrResult(null);
-    setDetectionHint('Ön yüz: Kartı çerçeve içine yerleştirin');
-    setCardDetected(false);
-    setLivePreviewResult(null);
+    const detectionHintIntro = 'MRZ: Kartın arka yüzündeki MRZ satırlarını çerçeveye hizalayın. Kart algılandığında ardışık 3 fotoğraf otomatik alınacaktır.';
     setIsProcessing(false);
     setIsCameraActive(true);
-    frontResultRef.current = null;
-    backResultRef.current = null;
-    currentSideRef.current = 'front';
-    setCurrentSide('front');
+    setPendingCaptures(0);
+    if (nfcModuleRef.current) {
+      nfcModuleRef.current.stopNFC().catch(() => { });
+    }
+    nfcSessionActiveRef.current = false;
+    setNfcPhase('pending');
+    setNfcError(null);
+    lastMrzFieldsRef.current = null;
+    setNfcLogs([]);
   }, []);
 
   const renderResultField = useCallback((label, value, validationStatus) => {
@@ -1561,139 +1904,107 @@ export const OCRReaderScreen = ({ navigation, route }) => {
     [navigation, returnTo, returnSourceStep]
   );
 
-  const parseLivePayload = useCallback(
-    (text, side) => {
-      try {
-        if (!text) {
-          return null;
-        }
+  const captureSingleMrz = useCallback(async () => {
+    const photo = await cameraRef.current.takePhoto({
+      qualityPrioritization: 'speed',
+      flash: flashMode,
+      skipMetadata: true,
+    });
 
-        ocrModule.options = ocrModule.options || {};
-        const previousSide = ocrModule.options.cardSide;
-        ocrModule.options.cardSide = side;
+    const photoPath = photo?.path || photo?.uri;
+    if (!photoPath) {
+      throw new Error('Fotoğraf alınamadı');
+    }
 
-        const fields = ocrModule.parseIDFields(text) || {};
-        const confidenceScore = ocrModule.calculateConfidence(fields);
+    ocrModule.options = { ...(ocrModule.options || {}), cardSide: 'back' };
+    const result = await ocrModule.processImage(photoPath);
+    if (!result?.success) {
+      throw new Error(result?.error || 'OCR işlemi başarısız oldu');
+    }
 
-        ocrModule.options.cardSide = previousSide ?? 'front';
+    appendCacheEntry(result.text || '', {
+      confidence: result.confidence ?? null,
+      side: 'back',
+    });
 
-        return {
-          text,
-          fields,
-          confidence: confidenceScore,
-          side,
-        };
-      } catch (error) {
-        console.error('[OCR] Live parse failed:', error);
-        return null;
-      }
-    },
-    [ocrModule]
-  );
+    return result;
+  }, [appendCacheEntry, flashMode, ocrModule]);
 
-  const completeDualSideFlow = useCallback(() => {
-    if (!frontResultRef.current || !backResultRef.current) {
+  const takePhotoAndProcess = useCallback(async () => {
+    if (!cameraRef.current || isProcessing) {
       return;
     }
 
     try {
-      const frontFields = frontResultRef.current.fields || {};
-      const backFields = backResultRef.current.fields || {};
-      const mergedData = ocrModule.mergeAndValidate(frontFields, backFields);
+      setIsProcessing(true);
+      setPendingCaptures(CAPTURE_SEQUENCE_COUNT);
+      const successfulCaptures = [];
 
-      const combinedResult = {
-        success: true,
-        text: `${frontResultRef.current.text || ''}\n\n${backResultRef.current.text || ''}`.trim(),
-        fields: mergedData,
-        confidence: mergedData.confidence ?? AUTO_ACCEPT_CONFIDENCE,
-        timestamp: new Date().toISOString(),
-        cardType: 'tc_kimlik',
-        source: 'dual-live-scan',
-      };
+      for (let i = 0; i < CAPTURE_SEQUENCE_COUNT; i++) {
+        try {
+          const result = await captureSingleMrz();
+          successfulCaptures.push(result);
+        } catch (error) {
+          console.warn('[OCR] MRZ capture attempt failed:', error?.message || error);
+        }
 
-      finalizeResult(combinedResult);
+        setPendingCaptures(CAPTURE_SEQUENCE_COUNT - (i + 1));
+        await new Promise((resolve) => setTimeout(resolve, CAPTURE_DELAY_MS));
+      }
+
+      setPendingCaptures(0);
+
+      if (successfulCaptures.length === 0) {
+        throw new Error('Hiçbir çekimden MRZ verisi elde edilemedi. Lütfen tekrar deneyin.');
+      }
+
+      const bestResult = successfulCaptures.reduce((best, current) => {
+        const bestConfidence = best?.confidence ?? 0;
+        const currentConfidence = current?.confidence ?? 0;
+        return currentConfidence > bestConfidence ? current : best;
+      }, successfulCaptures[0]);
+
+      setDetectionHint('MRZ okundu, sonuçlar hazırlanıyor...');
+      finalizeResult(bestResult);
     } catch (error) {
-      console.error('[OCR] Dual-side finalize error:', error);
-      Alert.alert('Hata', 'Ön/arka yüz birleştirilirken sorun oluştu. Lütfen tekrar deneyin.');
-      retryOCR();
+      console.error('[OCR] Fotoğraf yakalama/OCR hatası:', error);
+      Alert.alert('Hata', error.message || 'Fotoğraf alınamadı');
+      setIsProcessing(false);
     }
-  }, [AUTO_ACCEPT_CONFIDENCE, finalizeResult, ocrModule, retryOCR]);
+  }, [CAPTURE_DELAY_MS, CAPTURE_SEQUENCE_COUNT, captureSingleMrz, finalizeResult, isProcessing]);
 
-  const handleLiveOcrFrame = useCallback(
-    (payload) => {
-      if (!payload?.text || isProcessing || hasForwardedRef.current) {
-        return;
+  useEffect(() => {
+    if (!isCameraActive || isProcessing || pendingCaptures > 0 || !!ocrResult) {
+      if (autoCaptureTimeoutRef.current) {
+        clearTimeout(autoCaptureTimeoutRef.current);
+        autoCaptureTimeoutRef.current = null;
       }
-
-      const currentSideValue = currentSideRef.current;
-      const parsed = parseLivePayload(payload.text, currentSideValue);
-      if (!parsed) {
-        return;
-      }
-
-      appendCacheEntry(payload.text, {
-        side: currentSideValue,
-        confidence: parsed.confidence,
-        blocks: payload.blockCount ?? null,
-      });
-
-      setLivePreviewResult(parsed);
-      setCardDetected(
-        parsed.confidence >=
-        (currentSideValue === 'front' ? FRONT_DETECTION_THRESHOLD : BACK_DETECTION_THRESHOLD)
-      );
-
-      const acceptanceThreshold =
-        currentSideValue === 'front' ? FRONT_ACCEPTANCE_THRESHOLD : BACK_ACCEPTANCE_THRESHOLD;
-      if (parsed.confidence < acceptanceThreshold) {
-        return;
-      }
-
-      if (currentSideValue === 'front') {
-        frontResultRef.current = parsed;
-        currentSideRef.current = 'back';
-        setCurrentSide('back');
-        setDetectionHint('Ön yüz okundu. Lütfen kartı çevirip arka yüzü gösterin.');
-        setLivePreviewResult(null);
-        setCardDetected(false);
-      } else {
-        backResultRef.current = parsed;
-        setDetectionHint('Arka yüz okundu, sonuçlar hazırlanıyor...');
-        setIsProcessing(true);
-        completeDualSideFlow();
-      }
-    },
-    [
-      AUTO_ACCEPT_CONFIDENCE,
-      appendCacheEntry,
-      completeDualSideFlow,
-      isProcessing,
-      parseLivePayload,
-    ]
-  );
-
-  const frameProcessor = useFrameProcessor((frame) => {
-    'worklet';
-    try {
-      const result = VisionCameraProxy.call('ocrScanner', frame, {});
-      if (result?.text) {
-        runOnJS(handleLiveOcrFrame)(result);
-      }
-    } catch (error) {
-      // Native taraf gerekli logları basıyor
+      return;
     }
-  }, [handleLiveOcrFrame]);
+
+    autoCaptureTimeoutRef.current = setTimeout(() => {
+      autoCaptureTimeoutRef.current = null;
+      takePhotoAndProcess();
+    }, AUTO_CAPTURE_DELAY_MS);
+
+    return () => {
+      if (autoCaptureTimeoutRef.current) {
+        clearTimeout(autoCaptureTimeoutRef.current);
+        autoCaptureTimeoutRef.current = null;
+      }
+    };
+  }, [AUTO_CAPTURE_DELAY_MS, isCameraActive, isProcessing, pendingCaptures, ocrResult, takePhotoAndProcess]);
 
   // Setup callbacks
   React.useEffect(() => {
     let isMounted = true;
-    
+
     checkCameraPermission().then(() => {
       if (isMounted) {
         setIsCameraActive(true);
       }
     });
-    
+
     ocrModule.onOCRResult((result) => {
       if (isMounted) {
         finalizeResult(result);
@@ -1706,21 +2017,21 @@ export const OCRReaderScreen = ({ navigation, route }) => {
         setIsProcessing(false);
       }
     });
-    
+
     // Listen to navigation focus/blur to control camera
     const unsubscribeFocus = navigation.addListener('focus', () => {
       if (isMounted && !ocrResult) {
         setIsCameraActive(true);
       }
     });
-    
+
     const unsubscribeBlur = navigation.addListener('blur', () => {
       if (isMounted) {
         setIsCameraActive(false);
         setTorchEnabled(false);
       }
     });
-    
+
     return () => {
       isMounted = false;
       setIsCameraActive(false);
@@ -1729,14 +2040,6 @@ export const OCRReaderScreen = ({ navigation, route }) => {
       unsubscribeBlur();
     };
   }, [checkCameraPermission, finalizeResult, navigation]);
-
-  useEffect(() => {
-    setDetectionHint(
-      currentSide === 'front'
-        ? 'Ön yüz: Kartı çerçeve içine hizalayın, otomatik olarak taranacak.'
-        : 'Arka yüz: Kartı çevirip MRZ satırlarını çerçevenin altına hizalayın.'
-    );
-  }, [currentSide]);
 
   // ... (rest of the code remains the same)
 
@@ -1765,94 +2068,104 @@ export const OCRReaderScreen = ({ navigation, route }) => {
     </View>
   ), [cacheLog, formatCacheTime]);
 
+  const renderStructuredLog = useCallback((title, logs, emptyMessage) => (
+    <View style={styles.structuredLogContainer}>
+      <Text style={styles.structuredLogTitle}>{title}</Text>
+      {logs.length === 0 ? (
+        <Text style={styles.logEmpty}>{emptyMessage}</Text>
+      ) : (
+        <ScrollView style={styles.structuredLogList}>
+          {logs.map((entry, idx) => (
+            <View key={`${entry.timestamp}-${idx}`} style={styles.structuredLogItem}>
+              <View style={styles.structuredLogHeader}>
+                <Text style={styles.structuredLogTime}>{entry.timestamp}</Text>
+                <Text style={styles.structuredLogLabel}>{entry.label}</Text>
+              </View>
+              <Text style={styles.structuredLogPayload}>{JSON.stringify(entry.payload, null, 2)}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  ), []);
+
+  const renderNfcStatusCard = useCallback(() => {
+    if (!ocrResult) {
+      return null;
+    }
+
+    if (nfcPhase === 'completed') {
+      return (
+        <View style={styles.nfcStatusCardSuccess}>
+          <Text style={styles.nfcStatusTitle}>NFC Okundu ✓</Text>
+          <Text style={styles.nfcStatusMessage}>Kart çip verileri başarıyla alındı. Aşağıda logları inceleyebilirsiniz.</Text>
+        </View>
+      );
+    }
+
+    if (nfcPhase === 'error') {
+      return (
+        <View style={styles.nfcStatusCardError}>
+          <Text style={styles.nfcStatusTitle}>NFC Okuması Başarısız</Text>
+          <Text style={styles.nfcStatusMessage}>{nfcError?.error || 'NFC okuması tamamlanamadı.'}</Text>
+          <TouchableOpacity
+            style={styles.nfcRetryButton}
+            onPress={() => startNfcFlow(lastMrzFieldsRef.current || {})}
+          >
+            <Text style={styles.nfcRetryButtonText}>Tekrar Dene</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (nfcPhase === 'scanning') {
+      return (
+        <View style={styles.nfcStatusCardScanning}>
+          <ActivityIndicator color="#2563EB" style={styles.nfcStatusSpinner} />
+          <Text style={styles.nfcStatusTitle}>NFC Okuma Devam Ediyor</Text>
+          <Text style={styles.nfcStatusMessage}>Kartınızı telefonun arkasına yaklaştırın ve sabit tutun.</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.nfcStatusCardInfo}>
+        <Text style={styles.nfcStatusTitle}>NFC Hazırlanıyor</Text>
+        <Text style={styles.nfcStatusMessage}>Kart okuma işlemi birazdan başlayacak.</Text>
+      </View>
+    );
+  }, [nfcPhase, nfcError, ocrResult, startNfcFlow]);
+
   const renderOverlay = () => (
     <View style={styles.overlay}>
       <View style={styles.overlayTop}>
-        <Text style={[
-          styles.instructionText,
-          cardDetected && styles.instructionTextSuccess
-        ]}>
+        <Text style={styles.instructionText}>
           {detectionHint}
         </Text>
-        {cardDetected && <Text style={styles.checkmark}>✓</Text>}
       </View>
-      
+
       <View style={styles.overlayMiddle}>
         <View style={styles.overlayLeft} />
-        
-        <View style={[
-          styles.frameContainer,
-          cardDetected ? styles.frameContainerDetected : styles.frameContainerNotDetected
-        ]}>
-          <View style={[
-            styles.corner, 
-            styles.cornerTopLeft,
-            cardDetected ? styles.cornerDetected : styles.cornerNotDetected
-          ]} />
-          <View style={[
-            styles.corner, 
-            styles.cornerTopRight,
-            cardDetected ? styles.cornerDetected : styles.cornerNotDetected
-          ]} />
-          <View style={[
-            styles.corner, 
-            styles.cornerBottomLeft,
-            cardDetected ? styles.cornerDetected : styles.cornerNotDetected
-          ]} />
-          <View style={[
-            styles.corner, 
-            styles.cornerBottomRight,
-            cardDetected ? styles.cornerDetected : styles.cornerNotDetected
-          ]} />
+
+        <View style={styles.frameContainer}>
+          <View style={[styles.corner, styles.cornerTopLeft]} />
+          <View style={[styles.corner, styles.cornerTopRight]} />
+          <View style={[styles.corner, styles.cornerBottomLeft]} />
+          <View style={[styles.corner, styles.cornerBottomRight]} />
         </View>
-        
+
         <View style={styles.overlayRight} />
       </View>
-      
+
       <View style={styles.overlayBottom}>
         <Text style={styles.hintText}>
-          {currentSide === 'front' ? 'Ön yüz taranıyor' : 'Arka yüz (MRZ) taranıyor'}
+          Arka yüz (MRZ) taranıyor
         </Text>
         <Text style={styles.hintTextSmall}>
           • Kartın tamamı görünür olmalı{'\n'}
           • Yeterli ışık olduğundan emin olun{'\n'}
           • Yansıma ve gölge olmamasına dikkat edin
         </Text>
-        {livePreviewResult && !ocrResult && (
-          <View style={styles.livePreviewBox}>
-            <Text style={styles.livePreviewTitle}>
-              {livePreviewResult.side === 'back' ? 'MRZ Önizlemesi' : 'Anlık Önizleme'}
-            </Text>
-            {livePreviewResult.side === 'front' ? (
-              <>
-                {livePreviewResult.fields?.tcNo && (
-                  <Text style={styles.livePreviewValue}>TC Kimlik No: {livePreviewResult.fields.tcNo}</Text>
-                )}
-                {livePreviewResult.fields?.name && (
-                  <Text style={styles.livePreviewValue}>Ad: {livePreviewResult.fields.name}</Text>
-                )}
-                {livePreviewResult.fields?.surname && (
-                  <Text style={styles.livePreviewValue}>Soyad: {livePreviewResult.fields.surname}</Text>
-                )}
-              </>
-            ) : (
-              <>
-                {livePreviewResult.fields?.documentNo && (
-                  <Text style={styles.livePreviewValue}>Belge No: {livePreviewResult.fields.documentNo}</Text>
-                )}
-                {livePreviewResult.fields?.validUntil && (
-                  <Text style={styles.livePreviewValue}>Geçerlilik: {livePreviewResult.fields.validUntil}</Text>
-                )}
-                {livePreviewResult.fields?.tcNo && (
-                  <Text style={styles.livePreviewValue}>TC Kimlik No: {livePreviewResult.fields.tcNo}</Text>
-                )}
-              </>
-            )}
-            <Text style={styles.livePreviewConfidence}>
-              Güven Skoru: %{livePreviewResult.confidence ?? 0}
-            </Text>
-          </View>
-        )}
       </View>
     </View>
   );
@@ -1861,7 +2174,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
 
   const renderResult = (result) => {
     if (!result) return null;
-    
+
     const validation = result.fields.validation || {};
     const hasInvalidFields = Object.values(validation).some(v => v === 'invalid');
 
@@ -1934,9 +2247,16 @@ export const OCRReaderScreen = ({ navigation, route }) => {
 
   if (ocrResult) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, styles.resultScreen]}>
         {renderResult(ocrResult)}
-        {renderCacheLog()}
+        {renderNfcStatusCard()}
+        {nfcPhase === 'completed' && (
+          <>
+            {renderStructuredLog('📄 OCR İşlem Logları', ocrLogs, 'Henüz OCR logu yok.')}
+            {renderStructuredLog('📶 NFC İşlem Logları', nfcLogs, 'Henüz NFC logu yok.')}
+            {renderCacheLog()}
+          </>
+        )}
       </View>
     );
   }
@@ -1973,8 +2293,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
             enableZoomGesture={false}
             videoStabilizationMode="off"
             enableAutoStabilization={false}
-            frameProcessor={frameProcessor}
-            frameProcessorFps={4}
+            photo={true}
           />
 
           {renderOverlay()}
@@ -2015,6 +2334,16 @@ export const OCRReaderScreen = ({ navigation, route }) => {
         </View>
       )}
 
+      <View style={styles.controls}>
+        <TouchableOpacity
+          style={[styles.captureButton, isProcessing && styles.captureButtonDisabled]}
+          onPress={takePhotoAndProcess}
+          disabled={isProcessing}
+        >
+          <View style={styles.captureButtonInner} />
+        </TouchableOpacity>
+      </View>
+
       {renderCacheLog()}
     </View>
   );
@@ -2024,6 +2353,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  resultScreen: {
+    backgroundColor: '#F1F5F9',
   },
   header: {
     flexDirection: 'row',

@@ -7,6 +7,64 @@ const ImageResizer = ImageResizerModule.default || ImageResizerModule;
 const Logger = require("./logger");
 
 class ImageProcessor {
+  static getCacheDirectory() {
+    return (
+      RNFS.CachesDirectoryPath ||
+      RNFS.TemporaryDirectoryPath ||
+      RNFS.DocumentDirectoryPath
+    );
+  }
+
+  static async normalizeToNativePath(imageUri) {
+    if (!imageUri) {
+      return { nativePath: imageUri, tempPath: null };
+    }
+
+    if (imageUri.startsWith("content://")) {
+      const cacheDir = this.getCacheDirectory();
+      const targetPath = `${cacheDir}/imgproc_${Date.now()}_${Math.floor(
+        Math.random() * 100000
+      )}.jpg`;
+      try {
+        await RNFS.copyFile(imageUri, targetPath);
+        return { nativePath: targetPath, tempPath: targetPath };
+      } catch (error) {
+        Logger.error("Failed to copy content URI:", error.message);
+        throw new Error(
+          "Görüntü kaynağına erişilemedi. Lütfen depolama iznini kontrol edin."
+        );
+      }
+    }
+
+    if (imageUri.startsWith("file://")) {
+      return { nativePath: imageUri.replace("file://", ""), tempPath: null };
+    }
+
+    if (imageUri.startsWith("file:/")) {
+      return { nativePath: imageUri.replace("file:/", ""), tempPath: null };
+    }
+
+    if (imageUri.startsWith("/")) {
+      return { nativePath: imageUri, tempPath: null };
+    }
+
+    return { nativePath: imageUri, tempPath: null };
+  }
+
+  static async cleanupTempPath(tempPath) {
+    if (!tempPath) {
+      return;
+    }
+    try {
+      const exists = await RNFS.exists(tempPath);
+      if (exists) {
+        await RNFS.unlink(tempPath);
+      }
+    } catch (error) {
+      Logger.warn("Temp cleanup skipped:", error.message);
+    }
+  }
+
   /**
    * Crop image to specified dimensions
    * @param {string} imageUri - URI of the image to crop
@@ -14,6 +72,7 @@ class ImageProcessor {
    * @returns {Promise<string>} - URI of cropped image
    */
   static async cropImage(imageUri, cropData) {
+    const { nativePath, tempPath } = await this.normalizeToNativePath(imageUri);
     try {
       Logger.info("Starting image crop operation", { imageUri, cropData });
 
@@ -30,7 +89,7 @@ class ImageProcessor {
 
       // Use react-native-image-resizer for cropping
       const croppedImage = await ImageResizer.createResizedImage(
-        imageUri,
+        nativePath,
         cropParams.width,
         cropParams.height,
         "JPEG",
@@ -52,6 +111,8 @@ class ImageProcessor {
     } catch (error) {
       Logger.error("Image cropping failed:", error.message);
       throw new Error(`Image cropping failed: ${error.message}`);
+    } finally {
+      await this.cleanupTempPath(tempPath);
     }
   }
 
@@ -62,6 +123,7 @@ class ImageProcessor {
    * @returns {Promise<string>} - URI of resized image
    */
   static async resizeImage(imageUri, dimensions) {
+    const { nativePath, tempPath } = await this.normalizeToNativePath(imageUri);
     try {
       Logger.info("Resizing image for OCR optimization", {
         imageUri,
@@ -69,7 +131,7 @@ class ImageProcessor {
       });
 
       const resizedImage = await ImageResizer.createResizedImage(
-        imageUri,
+        nativePath,
         dimensions.width,
         dimensions.height,
         "JPEG",
@@ -91,6 +153,8 @@ class ImageProcessor {
     } catch (error) {
       Logger.error("Image resizing failed:", error.message);
       throw new Error(`Image resizing failed: ${error.message}`);
+    } finally {
+      await this.cleanupTempPath(tempPath);
     }
   }
 
@@ -100,17 +164,18 @@ class ImageProcessor {
    * @returns {Promise<string>} - URI of enhanced image
    */
   static async enhanceImage(imageUri) {
+    const { nativePath, tempPath } = await this.normalizeToNativePath(imageUri);
     try {
       Logger.info("Enhancing image for OCR", { imageUri });
 
       // First resize to optimal OCR dimensions if needed
-      const dimensions = await this.getImageDimensions(imageUri);
-      let enhancedUri = imageUri;
+      const dimensions = await this.getImageDimensions(nativePath);
+      let enhancedUri = nativePath;
 
       // Resize if image is too large (optimal OCR size is around 1600px width)
       if (dimensions.width > 1600) {
         const aspectRatio = dimensions.height / dimensions.width;
-        enhancedUri = await this.resizeImage(imageUri, {
+        enhancedUri = await this.resizeImage(nativePath, {
           width: 1600,
           height: Math.round(1600 * aspectRatio),
         });
@@ -142,6 +207,8 @@ class ImageProcessor {
     } catch (error) {
       Logger.error("Image enhancement failed:", error.message);
       throw new Error(`Image enhancement failed: ${error.message}`);
+    } finally {
+      await this.cleanupTempPath(tempPath);
     }
   }
 
@@ -166,15 +233,15 @@ class ImageProcessor {
    * @returns {Promise<string>} - Base64 encoded image
    */
   static async imageToBase64(imageUri) {
+    const { nativePath, tempPath } = await this.normalizeToNativePath(imageUri);
     try {
-      const base64 = await RNFS.readFile(
-        imageUri.replace("file://", ""),
-        "base64"
-      );
+      const base64 = await RNFS.readFile(nativePath, "base64");
       return `data:image/jpeg;base64,${base64}`;
     } catch (error) {
       Logger.error("Base64 conversion failed:", error.message);
       throw new Error(`Base64 conversion failed: ${error.message}`);
+    } finally {
+      await this.cleanupTempPath(tempPath);
     }
   }
 
@@ -185,11 +252,9 @@ class ImageProcessor {
    * @returns {Promise<string>} - URI of processed image optimized for MRZ
    */
   static async preprocessForMRZ(imageUri) {
+    const { nativePath, tempPath } = await this.normalizeToNativePath(imageUri);
     try {
       Logger.info('Preprocessing image for MRZ detection', { imageUri });
-
-      // Remove file:// prefix for processing
-      const nativePath = imageUri.replace('file://', '');
 
       // Step 1: Resize to optimal dimensions for MRZ (higher resolution)
       // MRZ text is small and requires more detail
@@ -212,8 +277,9 @@ class ImageProcessor {
 
       // Step 2: Apply high contrast enhancement
       // This helps with the MRZ zone which has high contrast black text on light background
+      const { nativePath: resizedNativePath, tempPath: resizedTemp } = await this.normalizeToNativePath(resized.uri);
       const enhanced = await ImageResizer.createResizedImage(
-        resized.uri.replace('file://', ''),
+        resizedNativePath,
         2400,
         1600,
         'JPEG',
@@ -233,6 +299,8 @@ class ImageProcessor {
       Logger.error('MRZ preprocessing failed:', error.message);
       Logger.warn('Falling back to original image');
       return imageUri;
+    } finally {
+      await this.cleanupTempPath(tempPath);
     }
   }
 
@@ -243,10 +311,9 @@ class ImageProcessor {
    * @returns {Promise<string>} - URI of processed image
    */
   static async preprocessBackSide(imageUri) {
+    const { nativePath, tempPath } = await this.normalizeToNativePath(imageUri);
     try {
       Logger.info('Preprocessing back side of ID card', { imageUri });
-
-      const nativePath = imageUri.replace('file://', '');
 
       // Use higher resolution and quality for back side
       // Back side has both regular text and MRZ which needs detail
@@ -270,6 +337,8 @@ class ImageProcessor {
     } catch (error) {
       Logger.error('Back side preprocessing failed:', error.message);
       return imageUri;
+    } finally {
+      await this.cleanupTempPath(tempPath);
     }
   }
 }
