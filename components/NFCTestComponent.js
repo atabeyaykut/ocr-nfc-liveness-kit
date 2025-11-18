@@ -1,9 +1,9 @@
 /**
- * NFC Test Component - Mock Environment
- * Tests NFC functionality without real device using mock data
+ * NFC Test Component - Real Device Flow
+ * Uses the actual NFCReaderModule for live NFC interactions
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,243 +11,243 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  ActivityIndicator,
+  Vibration,
 } from 'react-native';
-
-// Mock NFC function that simulates reading NFC data
-const handleNFCRead = async (mockDataType = 'default') => {
-  // Simulate NFC reading delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
-
-  // Import mock data
-  const mockNFCData = require('../mock/nfcData.js');
-
-  const selectedData = mockNFCData[mockDataType] || mockNFCData.default;
-
-  return {
-    success: true,
-    ...selectedData,
-    readTime: new Date().toISOString(),
-    processingTime: 2000,
-    mockRead: true
-  };
-};
+import NfcManager from 'react-native-nfc-manager';
+import { NFCReaderModule } from '../modules/nfc/NFCReaderModule';
 
 const NFCTestComponent = () => {
-  const [isReading, setIsReading] = useState(false);
-  const [nfcData, setNfcData] = useState(null);
-  const [selectedMockType, setSelectedMockType] = useState(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [nfcResult, setNfcResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [nfcSupported, setNfcSupported] = useState(true);
+  const [nfcEnabled, setNfcEnabled] = useState(true);
+  const [checkingNfc, setCheckingNfc] = useState(true);
 
-  const mockDataTypes = [
-    {
-      key: 'default',
-      title: 'Varsayılan Kimlik',
-      description: 'Standart Türk kimlik kartı verisi',
-      icon: '🆔'
-    },
-    {
-      key: 'sample1',
-      title: 'Örnek Kimlik 1',
-      description: 'Farklı kişi bilgileri',
-      icon: '👤'
-    },
-    {
-      key: 'sample2',
-      title: 'Örnek Kimlik 2',
-      description: 'Alternatif test verisi',
-      icon: '👥'
-    },
-    {
-      key: 'error',
-      title: 'Hata Simülasyonu',
-      description: 'NFC okuma hatası testi',
-      icon: '⚠️'
-    }
-  ];
+  const nfcModuleRef = useRef(null);
+  if (!nfcModuleRef.current) {
+    nfcModuleRef.current = new NFCReaderModule();
+  }
+  const nfcModule = nfcModuleRef.current;
 
-  const handleNFCTest = async (mockType) => {
+  const addLog = useCallback((message) => {
+    const timestamp = new Date().toLocaleTimeString('tr-TR');
+    setLogs((prev) => [`[${timestamp}] ${message}`, ...prev].slice(0, 50));
+    console.log('[NFC TEST]', message);
+  }, []);
+
+  const checkNfcStatus = useCallback(async () => {
+    setCheckingNfc(true);
     try {
-      setIsReading(true);
-      setSelectedMockType(mockType);
-      setNfcData(null);
+      const supported = await NfcManager.isSupported();
+      setNfcSupported(supported);
 
-      console.log('📡 NFC Test Started:', mockType);
-
-      // Simulate error for error mock type
-      if (mockType === 'error') {
-        throw new Error('NFC kartı okunamadı. Lütfen kartı doğru konumda tutun.');
+      if (!supported) {
+        setError('Bu cihaz NFC desteklemiyor.');
+        return;
       }
 
-      const result = await handleNFCRead(mockType);
+      const enabled = await NfcManager.isEnabled();
+      setNfcEnabled(enabled);
 
-      setNfcData(result);
-
-      console.log('✅ NFC Test Completed:', result);
-      console.log('📋 Card Data:', result.cardData);
-      console.log('🔐 Verification:', result.verification);
-
-      Alert.alert(
-        'NFC Test Tamamlandı',
-        `Kart türü: ${result.cardData?.cardType || 'Bilinmeyen'}\n\nVeriler konsola yazdırıldı.`,
-        [{ text: 'Tamam' }]
-      );
-
-    } catch (error) {
-      console.error('❌ NFC Test Error:', error);
-      Alert.alert('NFC Hatası', error.message);
+      if (!enabled) {
+        setError('NFC kapalı. Lütfen cihaz ayarlarından etkinleştirin.');
+      } else {
+        setError(null);
+      }
+    } catch (statusError) {
+      console.error('[NFC TEST] Status check failed:', statusError);
+      setError('NFC durumu kontrol edilirken bir hata oluştu.');
     } finally {
-      setIsReading(false);
+      setCheckingNfc(false);
     }
-  };
+  }, []);
 
-  const clearResults = () => {
-    setNfcData(null);
-    setSelectedMockType(null);
-  };
+  useEffect(() => {
+    checkNfcStatus();
+  }, [checkNfcStatus]);
 
-  const formatCardData = (data) => {
-    if (!data) return [];
+  useEffect(() => {
+    const module = nfcModule;
 
-    const fields = [];
+    module.onNFCResult((result) => {
+      setNfcResult(result);
+      setIsScanning(false);
+      addLog('NFC okuma başarıyla tamamlandı.');
+      Vibration.vibrate([80, 120, 80]);
+    });
 
-    if (data.firstName) fields.push({ label: 'Ad', value: data.firstName });
-    if (data.lastName) fields.push({ label: 'Soyad', value: data.lastName });
-    if (data.idNumber) fields.push({ label: 'T.C. No', value: data.idNumber });
-    if (data.birthDate) fields.push({ label: 'Doğum Tarihi', value: data.birthDate });
-    if (data.birthPlace) fields.push({ label: 'Doğum Yeri', value: data.birthPlace });
-    if (data.nationality) fields.push({ label: 'Uyruk', value: data.nationality });
-    if (data.gender) fields.push({ label: 'Cinsiyet', value: data.gender });
-    if (data.serialNumber) fields.push({ label: 'Seri No', value: data.serialNumber });
-    if (data.documentNumber) fields.push({ label: 'Belge No', value: data.documentNumber });
-    if (data.issueDate) fields.push({ label: 'Veriliş Tarihi', value: data.issueDate });
-    if (data.expiryDate) fields.push({ label: 'Son Geçerlilik', value: data.expiryDate });
+    module.onNFCError((errorResponse) => {
+      setError(errorResponse.error);
+      setIsScanning(false);
+      addLog(`Hata: ${errorResponse.error}`);
+      Alert.alert('NFC Hatası', errorResponse.error);
+    });
 
-    return fields;
-  };
+    module.onNFCStarted(() => {
+      setIsScanning(true);
+      addLog('NFC dinleme modu başlatıldı.');
+    });
+
+    module.onNFCStopped(() => {
+      setIsScanning(false);
+      addLog('NFC dinleme modu durduruldu.');
+    });
+
+    return () => {
+      module.stopNFC().catch(() => { });
+    };
+  }, [nfcModule, addLog]);
+
+  const startScanning = useCallback(async () => {
+    if (!nfcSupported) {
+      Alert.alert('NFC Desteklenmiyor', 'Bu cihazda NFC kullanılamıyor.');
+      return;
+    }
+
+    if (!nfcEnabled) {
+      Alert.alert('NFC Kapalı', 'Lütfen cihaz ayarlarından NFC\'yi etkinleştirin.');
+      return;
+    }
+
+    setNfcResult(null);
+    setError(null);
+    addLog('NFC okuma başlatılıyor...');
+
+    try {
+      await nfcModule.startNFC();
+    } catch (startError) {
+      console.error('[NFC TEST] start error:', startError);
+      setError(startError.message);
+      addLog(`Başlatma hatası: ${startError.message}`);
+    }
+  }, [nfcModule, nfcSupported, nfcEnabled, addLog]);
+
+  const stopScanning = useCallback(async () => {
+    addLog('NFC dinlemesi manuel olarak durduruluyor...');
+    try {
+      await nfcModule.stopNFC();
+    } catch (stopError) {
+      console.error('[NFC TEST] stop error:', stopError);
+      addLog(`Durdurma hatası: ${stopError.message}`);
+    }
+  }, [nfcModule, addLog]);
+
+  const parsedFields = Object.entries(nfcResult?.parsedFields || {});
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>📡 NFC Test Modülü</Text>
-      <Text style={styles.subtitle}>Mock verilerle NFC okuma testi</Text>
+      <Text style={styles.subtitle}>Gerçek cihaz üzerinden NFC okuma</Text>
 
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.mockGrid}>
-          {mockDataTypes.map((mockType, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.mockButton,
-                selectedMockType === mockType.key && styles.selectedMockButton
-              ]}
-              onPress={() => handleNFCTest(mockType.key)}
-              disabled={isReading}
-            >
-              <Text style={styles.mockIcon}>{mockType.icon}</Text>
-              <Text style={styles.mockTitle}>{mockType.title}</Text>
-              <Text style={styles.mockDescription}>{mockType.description}</Text>
-            </TouchableOpacity>
-          ))}
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.statusCard}>
+          <Text style={styles.sectionTitle}>Cihaz Durumu</Text>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>Destek:</Text>
+            <Text style={[styles.statusValue, nfcSupported ? styles.successText : styles.errorText]}>
+              {nfcSupported ? 'Destekleniyor' : 'Desteklenmiyor'}
+            </Text>
+          </View>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>NFC:</Text>
+            <Text style={[styles.statusValue, nfcEnabled ? styles.successText : styles.errorText]}>
+              {nfcEnabled ? 'Açık' : 'Kapalı'}
+            </Text>
+          </View>
+
+          {checkingNfc ? (
+            <ActivityIndicator style={styles.statusLoader} color="#0EA5E9" />
+          ) : (
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.actionButton, (!nfcSupported || isScanning) && styles.buttonDisabled]}
+                onPress={startScanning}
+                disabled={!nfcSupported || !nfcEnabled || isScanning}
+              >
+                <Text style={styles.actionButtonText}>Okumayı Başlat</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.secondaryButton, !isScanning && styles.buttonDisabled]}
+                onPress={stopScanning}
+                disabled={!isScanning}
+              >
+                <Text style={styles.secondaryButtonText}>Durdur</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.ghostButton} onPress={checkNfcStatus}>
+                <Text style={styles.ghostButtonText}>Durumu Yenile</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
-        {isReading && (
-          <View style={styles.readingContainer}>
-            <Text style={styles.readingText}>📡 NFC okuma devam ediyor...</Text>
-            <Text style={styles.readingSubtext}>Lütfen kartı telefonun arkasına yaklaştırın</Text>
-            <View style={styles.pulseContainer}>
-              <View style={styles.pulseCircle} />
-            </View>
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>⚠️ {error}</Text>
           </View>
         )}
 
-        {nfcData && (
+        {isScanning && (
+          <View style={styles.scanningCard}>
+            <Text style={styles.scanningTitle}>Kartı cihazın arkasına yaklaştırın</Text>
+            <Text style={styles.scanningHint}>Sabit tutun, titreşim hissettiğinizde kartı çekebilirsiniz.</Text>
+            <View style={styles.instructionsList}>
+              <Text style={styles.instructionItem}>• Telefonun NFC bobini genelde üst orta kısımdadır.</Text>
+              <Text style={styles.instructionItem}>• Kartı en az 2-3 saniye sabit tutun.</Text>
+              <Text style={styles.instructionItem}>• Kart ile cihaz arasında metal yüzeyler olmamasına dikkat edin.</Text>
+            </View>
+            <ActivityIndicator color="#2563EB" style={styles.scanningLoader} />
+          </View>
+        )}
+
+        {nfcResult && (
           <View style={styles.resultsContainer}>
-            <Text style={styles.resultsTitle}>📋 NFC Okuma Sonuçları</Text>
+            <Text style={styles.sectionTitle}>📋 NFC Okuma Sonuçları</Text>
 
-            <View style={styles.statusContainer}>
-              <View style={styles.statusItem}>
-                <Text style={styles.statusLabel}>Durum:</Text>
-                <Text style={[styles.statusValue, styles.successText]}>✅ Başarılı</Text>
+            <View style={styles.metaInfo}>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Kart Tipi:</Text>
+                <Text style={styles.metaValue}>{nfcResult.cardType || 'Bilinmiyor'}</Text>
               </View>
-
-              <View style={styles.statusItem}>
-                <Text style={styles.statusLabel}>Okuma Süresi:</Text>
-                <Text style={styles.statusValue}>{nfcData.processingTime}ms</Text>
-              </View>
-
-              <View style={styles.statusItem}>
-                <Text style={styles.statusLabel}>Kart Türü:</Text>
-                <Text style={styles.statusValue}>{nfcData.cardData?.cardType || 'Bilinmeyen'}</Text>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Okuma Zamanı:</Text>
+                <Text style={styles.metaValue}>
+                  {new Date(nfcResult.timestamp || Date.now()).toLocaleString('tr-TR')}
+                </Text>
               </View>
             </View>
 
-            {nfcData.cardData && (
-              <View style={styles.cardDataContainer}>
-                <Text style={styles.sectionTitle}>👤 Kişisel Bilgiler</Text>
-                {formatCardData(nfcData.cardData).map((field, index) => (
-                  <View key={index} style={styles.dataItem}>
-                    <Text style={styles.dataLabel}>{field.label}:</Text>
-                    <Text style={styles.dataValue}>{field.value}</Text>
-                  </View>
-                ))}
-              </View>
+            {parsedFields.length === 0 ? (
+              <Text style={styles.emptyState}>Karttan anlamlı veri dönmedi.</Text>
+            ) : (
+              parsedFields.map(([key, value]) => (
+                <View key={key} style={styles.dataItem}>
+                  <Text style={styles.dataLabel}>{key}:</Text>
+                  <Text style={styles.dataValue}>{String(value)}</Text>
+                </View>
+              ))
             )}
-
-            {nfcData.verification && (
-              <View style={styles.verificationContainer}>
-                <Text style={styles.sectionTitle}>🔐 Doğrulama Bilgileri</Text>
-
-                <View style={styles.dataItem}>
-                  <Text style={styles.dataLabel}>Geçerlilik:</Text>
-                  <Text style={[
-                    styles.dataValue,
-                    nfcData.verification.isValid ? styles.successText : styles.errorText
-                  ]}>
-                    {nfcData.verification.isValid ? '✅ Geçerli' : '❌ Geçersiz'}
-                  </Text>
-                </View>
-
-                <View style={styles.dataItem}>
-                  <Text style={styles.dataLabel}>Checksum:</Text>
-                  <Text style={styles.dataValue}>{nfcData.verification.checksum}</Text>
-                </View>
-
-                <View style={styles.dataItem}>
-                  <Text style={styles.dataLabel}>Dijital İmza:</Text>
-                  <Text style={styles.dataValue}>{nfcData.verification.digitalSignature}</Text>
-                </View>
-
-                <View style={styles.dataItem}>
-                  <Text style={styles.dataLabel}>Okuma Yöntemi:</Text>
-                  <Text style={styles.dataValue}>{nfcData.verification.readMethod}</Text>
-                </View>
-              </View>
-            )}
-
-            {nfcData.nfcData && (
-              <View style={styles.technicalContainer}>
-                <Text style={styles.sectionTitle}>🔧 Teknik Bilgiler</Text>
-
-                <View style={styles.dataItem}>
-                  <Text style={styles.dataLabel}>UID:</Text>
-                  <Text style={styles.dataValue}>{nfcData.nfcData.uid}</Text>
-                </View>
-
-                <View style={styles.dataItem}>
-                  <Text style={styles.dataLabel}>Teknoloji:</Text>
-                  <Text style={styles.dataValue}>{nfcData.nfcData.technology}</Text>
-                </View>
-
-                <View style={styles.dataItem}>
-                  <Text style={styles.dataLabel}>Okuma Zamanı:</Text>
-                  <Text style={styles.dataValue}>{new Date(nfcData.readTime).toLocaleString('tr-TR')}</Text>
-                </View>
-              </View>
-            )}
-
-            <TouchableOpacity style={styles.clearButton} onPress={clearResults}>
-              <Text style={styles.clearButtonText}>🗑️ Temizle</Text>
-            </TouchableOpacity>
           </View>
         )}
+
+        <View style={styles.logContainer}>
+          <Text style={styles.sectionTitle}>Debug Logları</Text>
+          {logs.length === 0 ? (
+            <Text style={styles.emptyState}>Henüz log yok.</Text>
+          ) : (
+            <ScrollView style={styles.logList}>
+              {logs.map((log, index) => (
+                <Text key={`${log}-${index}`} style={styles.logItem}>
+                  {log}
+                </Text>
+              ))}
+            </ScrollView>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -256,183 +256,217 @@ const NFCTestComponent = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8fafc',
     padding: 16,
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#0f172a',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 14,
-    color: '#666',
+    color: '#475569',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   scrollView: {
     flex: 1,
   },
-  mockGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    marginBottom: 20,
+  scrollContent: {
+    paddingBottom: 32,
   },
-  mockButton: {
+  statusCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    margin: 8,
-    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
-    elevation: 3,
-    minWidth: 140,
-  },
-  selectedMockButton: {
-    backgroundColor: '#e8f5e8',
-    borderColor: '#4caf50',
-    borderWidth: 2,
-  },
-  mockIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  mockTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  mockDescription: {
-    fontSize: 10,
-    color: '#666',
-    textAlign: 'center',
-  },
-  readingContainer: {
-    backgroundColor: '#fff3cd',
-    borderRadius: 12,
-    padding: 20,
-    marginVertical: 16,
-    alignItems: 'center',
-  },
-  readingText: {
-    fontSize: 16,
-    color: '#856404',
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  readingSubtext: {
-    fontSize: 14,
-    color: '#856404',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  pulseContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pulseCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#ffc107',
-    opacity: 0.6,
-  },
-  resultsContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  resultsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  statusContainer: {
-    marginBottom: 20,
-  },
-  statusItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-    paddingVertical: 4,
-  },
-  statusLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  statusValue: {
-    fontSize: 14,
-    color: '#666',
-  },
-  successText: {
-    color: '#28a745',
-  },
-  errorText: {
-    color: '#dc3545',
-  },
-  cardDataContainer: {
-    marginBottom: 20,
-  },
-  verificationContainer: {
-    marginBottom: 20,
-  },
-  technicalContainer: {
-    marginBottom: 20,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '600',
+    color: '#0f172a',
     marginBottom: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  statusLabel: {
+    fontSize: 14,
+    color: '#334155',
+  },
+  statusValue: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  actionButton: {
+    flexGrow: 1,
+    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+  },
+  secondaryButtonText: {
+    color: '#0f172a',
+    fontWeight: '600',
+  },
+  ghostButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  ghostButtonText: {
+    color: '#2563EB',
+    fontWeight: '600',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  statusLoader: {
+    marginTop: 12,
+  },
+  errorContainer: {
+    marginTop: 16,
+    backgroundColor: '#fff1f2',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+  },
+  errorText: {
+    color: '#b91c1c',
+    fontSize: 14,
+  },
+  scanningCard: {
+    marginTop: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  scanningTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
+  scanningHint: {
+    fontSize: 13,
+    color: '#475569',
+    marginBottom: 12,
+  },
+  instructionsList: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  instructionItem: {
+    fontSize: 13,
+    color: '#475569',
+    marginBottom: 6,
+  },
+  scanningLoader: {
+    marginTop: 8,
+  },
+  resultsContainer: {
+    marginTop: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  metaInfo: {
+    marginBottom: 12,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  metaLabel: {
+    fontSize: 13,
+    color: '#475569',
+  },
+  metaValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0f172a',
   },
   dataItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
-    paddingVertical: 4,
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e2e8f0',
   },
   dataLabel: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#333',
     flex: 1,
+    fontSize: 13,
+    color: '#475569',
   },
   dataValue: {
+    flex: 1,
     fontSize: 13,
-    color: '#666',
-    flex: 2,
+    fontWeight: '600',
+    color: '#0f172a',
     textAlign: 'right',
   },
-  clearButton: {
-    backgroundColor: '#dc3545',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
+  logContainer: {
+    marginTop: 16,
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    padding: 16,
   },
-  clearButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
+  logList: {
+    maxHeight: 160,
+    marginTop: 8,
+  },
+  logItem: {
+    color: '#e2e8f0',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  emptyState: {
+    fontSize: 13,
+    color: '#94a3b8',
+  },
+  successText: {
+    color: '#16a34a',
+  },
+  errorTextGeneral: {
+    color: '#dc2626',
   },
 });
 

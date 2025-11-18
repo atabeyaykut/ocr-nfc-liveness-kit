@@ -17,12 +17,13 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { Camera, useCameraDevice } from 'react-native-vision-camera';
+import { Camera, useCameraDevice, useFrameProcessor } from 'react-native-vision-camera';
 import RNFS from 'react-native-fs';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import ImageResizerModule from '@bam.tech/react-native-image-resizer';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
 import { NFCReaderModule } from '../nfc/NFCReaderModule';
+import { runOnJS, useSharedValue } from 'react-native-reanimated';
 
 const { ImageProcessor } = require('../../utils/imageProcessor');
 const ImageResizer = ImageResizerModule?.default ?? ImageResizerModule;
@@ -184,6 +185,11 @@ const appendLogEntryHelper = (setter, label, payload) => {
   const timestamp = new Date().toLocaleTimeString('tr-TR', { hour12: false });
   setter((prev) => [{ timestamp, label, payload }, ...prev].slice(0, 20));
 };
+
+const MRZ_SCORE_THRESHOLD = 0.18;
+const STABILITY_THRESHOLD = 0.8;
+const STABILITY_STICKY_MS = 600;
+const FRAME_REPORT_THROTTLE_NS = 180 * 1000 * 1000; // 180ms
 
 // OCR Field Patterns for Turkish ID Card - Enhanced
 const ID_PATTERNS = {
@@ -1575,6 +1581,8 @@ export const OCRReaderScreen = ({ navigation, route }) => {
   const [nfcLogs, setNfcLogs] = useState([]);
   const [nfcPhase, setNfcPhase] = useState('pending');
   const [nfcError, setNfcError] = useState(null);
+  const [mrzReady, setMrzReady] = useState(false);
+  const [deviceStable, setDeviceStable] = useState(false);
   const cameraRef = useRef(null);
   const device = useCameraDevice('back');
   const ocrModule = useRef(new OCRReaderModule()).current;
@@ -1590,6 +1598,10 @@ export const OCRReaderScreen = ({ navigation, route }) => {
   const CAPTURE_DELAY_MS = 350;
   const AUTO_CAPTURE_DELAY_MS = 1200;
   const autoCaptureTimeoutRef = useRef(null);
+  const detectionScoresRef = useRef({ mrzScore: 0, stabilityScore: 0 });
+  const lastStableAtRef = useRef(Date.now());
+  const previousBottomLuma = useSharedValue(0);
+  const lastFrameReportNs = useSharedValue(0);
 
   useEffect(() => {
     if (!NFCReaderModule) {
@@ -1634,6 +1646,80 @@ export const OCRReaderScreen = ({ navigation, route }) => {
       moduleInstance.stopNFC().catch(() => { });
     };
   }, []);
+
+  const reportFrameMetrics = useCallback(({ mrzScore, stabilityScore }) => {
+    detectionScoresRef.current = { mrzScore, stabilityScore };
+    setMrzReady(mrzScore >= MRZ_SCORE_THRESHOLD);
+    const now = Date.now();
+    if (stabilityScore >= STABILITY_THRESHOLD) {
+      lastStableAtRef.current = now;
+    }
+    const isStable = now - lastStableAtRef.current <= STABILITY_STICKY_MS;
+    setDeviceStable(isStable);
+  }, []);
+
+  const frameProcessor = useFrameProcessor((frame) => {
+    'worklet';
+
+    if (!frame || frame.width === 0 || frame.height === 0) {
+      return;
+    }
+
+    const width = frame.width;
+    const height = frame.height;
+    const bytesPerRow = frame.bytesPerRow ?? width;
+    const buffer = frame.toArrayBuffer();
+
+    if (!buffer) {
+      return;
+    }
+
+    const luminance = new Uint8Array(buffer, 0, bytesPerRow * height);
+    const regionStartY = Math.max(0, Math.floor(height * 0.65));
+    const regionEndY = height - 2;
+    const regionStartX = Math.floor(width * 0.1);
+    const regionEndX = Math.floor(width * 0.9);
+    const stepY = Math.max(2, Math.floor((regionEndY - regionStartY) / 40));
+    const stepX = Math.max(2, Math.floor((regionEndX - regionStartX) / 80));
+
+    let sampleCount = 0;
+    let darkCount = 0;
+    let brightCount = 0;
+    let sum = 0;
+
+    for (let y = regionStartY; y < regionEndY; y += stepY) {
+      const rowOffset = y * bytesPerRow;
+      for (let x = regionStartX; x < regionEndX; x += stepX) {
+        const value = luminance[rowOffset + x];
+        sum += value;
+        if (value < 90) {
+          darkCount += 1;
+        } else if (value > 185) {
+          brightCount += 1;
+        }
+        sampleCount += 1;
+      }
+    }
+
+    if (sampleCount === 0) {
+      return;
+    }
+
+    const avg = sum / sampleCount;
+    const contrastRatio = darkCount / sampleCount;
+    const brightRatio = brightCount / sampleCount;
+    const mrzScore = contrastRatio * (brightRatio > 0.12 ? 1 : 0.7);
+
+    const delta = Math.abs(avg - previousBottomLuma.value);
+    previousBottomLuma.value = avg;
+    const stabilityScore = Math.max(0, 1 - Math.min(1, delta / 18));
+
+    const timestampNs = frame.timestamp ?? 0;
+    if (timestampNs - lastFrameReportNs.value > FRAME_REPORT_THROTTLE_NS) {
+      lastFrameReportNs.value = timestampNs;
+      runOnJS(reportFrameMetrics)({ mrzScore, stabilityScore });
+    }
+  }, [lastFrameReportNs, previousBottomLuma, reportFrameMetrics]);
 
   const startNfcFlow = useCallback((mrzFields = {}) => {
     if (!nfcModuleRef.current) {
@@ -1974,7 +2060,7 @@ export const OCRReaderScreen = ({ navigation, route }) => {
   }, [CAPTURE_DELAY_MS, CAPTURE_SEQUENCE_COUNT, captureSingleMrz, finalizeResult, isProcessing]);
 
   useEffect(() => {
-    if (!isCameraActive || isProcessing || pendingCaptures > 0 || !!ocrResult) {
+    if (!isCameraActive || isProcessing || pendingCaptures > 0 || !!ocrResult || !mrzReady || !deviceStable) {
       if (autoCaptureTimeoutRef.current) {
         clearTimeout(autoCaptureTimeoutRef.current);
         autoCaptureTimeoutRef.current = null;
@@ -1993,7 +2079,25 @@ export const OCRReaderScreen = ({ navigation, route }) => {
         autoCaptureTimeoutRef.current = null;
       }
     };
-  }, [AUTO_CAPTURE_DELAY_MS, isCameraActive, isProcessing, pendingCaptures, ocrResult, takePhotoAndProcess]);
+  }, [AUTO_CAPTURE_DELAY_MS, deviceStable, isCameraActive, isProcessing, mrzReady, pendingCaptures, ocrResult, takePhotoAndProcess]);
+
+  useEffect(() => {
+    if (!isCameraActive || ocrResult || isProcessing) {
+      return;
+    }
+
+    if (!mrzReady) {
+      setDetectionHint('Kart algılanamadı. MRZ satırlarını çerçeveye hizalayın.');
+      return;
+    }
+
+    if (!deviceStable) {
+      setDetectionHint('Kart algılandı, lütfen telefonu sabit tutun.');
+      return;
+    }
+
+    setDetectionHint('Kart algılandı. Otomatik çekim başlamak üzere.');
+  }, [deviceStable, isCameraActive, isProcessing, mrzReady, ocrResult]);
 
   // Setup callbacks
   React.useEffect(() => {
@@ -2294,6 +2398,8 @@ export const OCRReaderScreen = ({ navigation, route }) => {
             videoStabilizationMode="off"
             enableAutoStabilization={false}
             photo={true}
+            frameProcessor={frameProcessor}
+            frameProcessorFps={5}
           />
 
           {renderOverlay()}
@@ -2342,6 +2448,11 @@ export const OCRReaderScreen = ({ navigation, route }) => {
         >
           <View style={styles.captureButtonInner} />
         </TouchableOpacity>
+        <View style={[styles.detectionStatus, (!mrzReady || !deviceStable) && styles.detectionStatusInactive]}>
+          <Text style={styles.detectionStatusText}>
+            MRZ: {mrzReady ? 'Algılandı' : 'Aranıyor'} • Stabilite: {deviceStable ? 'Sabit' : 'Hareketli'}
+          </Text>
+        </View>
       </View>
 
       {renderCacheLog()}
@@ -2514,7 +2625,7 @@ const styles = StyleSheet.create({
     borderColor: '#DDD',
   },
   captureButtonDisabled: {
-    backgroundColor: '#AAA',
+    opacity: 0.4,
   },
   captureButtonInner: {
     width: 50,

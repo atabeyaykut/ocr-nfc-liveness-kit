@@ -38,6 +38,7 @@ android {
 
   buildFeatures {
     buildConfig true  // Enable BuildConfig generation
+    prefab true       // Required for fbjni prefab package used by native modules
   }
 
   compileOptions {
@@ -146,6 +147,9 @@ dependencies {
 
   // Bundle on-device text recognition model so it works on devices/emulators without Play Services downloads
   implementation "com.google.android.gms:play-services-mlkit-text-recognition:18.0.2"
+
+  // fbjni prefab (needed for react-native-worklets-core native build)
+  implementation "com.facebook.fbjni:fbjni:0.6.0"
   
   // Eski versiyon (bundled - react-native-text-recognition ile uyumlu değil)
   // implementation "com.google.android.gms:play-services-mlkit-text-recognition:19.0.0"
