@@ -18,7 +18,7 @@ ext {
   targetSdkVersion = 34
   kotlinVersion = "1.9.24"
   javaVersion = JavaVersion.VERSION_17
-  ndkVersion = "26.1.10909125"
+  ndkVersion = "25.1.8937393"
   // Explicitly set React Native version to resolve dynamic version issues
   reactNativeVersion = "0.74.7"
 }
@@ -45,7 +45,7 @@ allprojects {
   afterEvaluate { project ->
     if (project.hasProperty("android")) {
       project.android {
-        ndkVersion "26.1.10909125"
+        ndkVersion "25.1.8937393"
         buildFeatures {
           buildConfig true
         }

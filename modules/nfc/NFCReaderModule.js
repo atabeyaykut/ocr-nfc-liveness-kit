@@ -99,17 +99,25 @@ class NFCReaderModule {
   };
 
   stopNFC = async () => {
+    this.isReading = false;
     try {
-      this.isReading = false;
-      await NfcManager.unregisterTagEvent();
-      await NfcManager.stopTechnology();
+      if (typeof NfcManager.unregisterTagEvent === 'function') {
+        await NfcManager.unregisterTagEvent();
+      }
+
+      if (typeof NfcManager.stopTechnology === 'function') {
+        await NfcManager.stopTechnology();
+      } else if (typeof NfcManager.cancelTechnologyRequest === 'function') {
+        await NfcManager.cancelTechnologyRequest();
+      }
+    } catch (error) {
+      console.warn('NFC stop error:', error);
+    } finally {
       this.removeDiscoverTagListener();
 
       if (this.callbacks.onStopped) {
         this.callbacks.onStopped();
       }
-    } catch (error) {
-      console.warn('NFC stop error:', error);
     }
   };
 
@@ -157,24 +165,32 @@ class NFCReaderModule {
 
   // Private Methods
   registerNfcDiscovery = async () => {
-    await NfcManager.registerTagEvent(
-      async (tag) => {
-        if (this.options.enableVibration) {
-          Vibration.vibrate(100);
-        }
+    console.log('[NFC] registerNfcDiscovery invoked');
+    try {
+      await NfcManager.registerTagEvent(
+        async (tag) => {
+          console.log('[NFC] registerTagEvent callback fired');
+          if (this.options.enableVibration) {
+            Vibration.vibrate(100);
+          }
 
-        await this.handleTag(tag);
-      },
-      'Hold your ID card to the back of your phone',
-      {
-        readerModeFlags:
-          NfcManager.FLAG_READER_NFC_A |
-          NfcManager.FLAG_READER_NFC_B |
-          NfcManager.FLAG_READER_NFC_F |
-          NfcManager.FLAG_READER_NFC_V |
-          NfcManager.FLAG_READER_SKIP_NDEF_CHECK,
-      }
-    );
+          await this.handleTag(tag);
+        },
+        'Hold your ID card to the back of your phone',
+        {
+          readerModeFlags:
+            NfcManager.FLAG_READER_NFC_A |
+            NfcManager.FLAG_READER_NFC_B |
+            NfcManager.FLAG_READER_NFC_F |
+            NfcManager.FLAG_READER_NFC_V |
+            NfcManager.FLAG_READER_SKIP_NDEF_CHECK,
+        }
+      );
+      console.log('[NFC] registerTagEvent registered successfully');
+    } catch (error) {
+      console.error('[NFC] registerTagEvent failed:', error);
+      throw error;
+    }
   };
 
   handleTag = async (tag) => {
@@ -184,6 +200,8 @@ class NFCReaderModule {
         : Array.isArray(tag?.techTypes)
           ? tag.techTypes
           : [];
+
+      console.log('[NFC] handleTag techList:', techList);
 
       if (techList.length === 0) {
         throw new Error('Kart teknolojisi algılanamadı. Lütfen kartı yeniden konumlandırın.');
@@ -231,6 +249,7 @@ class NFCReaderModule {
           this.callbacks.onResult(response);
         }
       } else {
+        console.warn('[NFC] No meaningful data parsed from tag');
         throw new Error('Kart verisi okunamadı. Desteklenmeyen kart tipi olabilir.');
       }
 
@@ -247,6 +266,7 @@ class NFCReaderModule {
 
       // Select application
       const selectResponse = await NfcManager.transceive(NFC_COMMANDS.SELECT_APP);
+      console.log('[NFC][IsoDep] SELECT_APP response:', selectResponse);
 
       if (!this.isSuccessResponse(selectResponse)) {
         throw new Error('Kart uygulaması seçilemedi');
@@ -254,8 +274,11 @@ class NFCReaderModule {
 
       // Read personal data
       const personalData = await NfcManager.transceive(NFC_COMMANDS.READ_PERSONAL);
+      console.log('[NFC][IsoDep] READ_PERSONAL response length:', personalData?.length);
       const idData = await NfcManager.transceive(NFC_COMMANDS.READ_ID);
+      console.log('[NFC][IsoDep] READ_ID response length:', idData?.length);
       const birthData = await NfcManager.transceive(NFC_COMMANDS.READ_BIRTH);
+      console.log('[NFC][IsoDep] READ_BIRTH response length:', birthData?.length);
 
       // Parse data
       const parsed = this.parseCardData({
@@ -263,6 +286,8 @@ class NFCReaderModule {
         id: idData,
         birth: birthData,
       });
+
+      console.log('[NFC][IsoDep] Parsed card data keys:', Object.keys(parsed));
 
       return parsed;
 
