@@ -206,13 +206,19 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
 
     private void readPassportWithBAC(Tag tag, ReadableMap mrzSeed) throws IOException {
         Log.d(TAG, "Reading passport with BAC authentication");
+        Log.d(TAG, "mrzSeed keys: " + (mrzSeed != null ? mrzSeed.toString() : "NULL"));
 
         try {
             // Extract MRZ components
             String documentNo = mrzSeed.hasKey("documentNo") ? mrzSeed.getString("documentNo") : "";
+            Log.d(TAG, "✓ documentNo extracted: '" + documentNo + "'");
+
             String birthDate = mrzSeed.hasKey("birthDate") ? mrzSeed.getString("birthDate") : "";
+            Log.d(TAG, "✓ birthDate extracted: '" + birthDate + "'");
+
             String expiryDate = mrzSeed.hasKey("validUntil") ? mrzSeed.getString("validUntil")
                     : (mrzSeed.hasKey("expiryDate") ? mrzSeed.getString("expiryDate") : "");
+            Log.d(TAG, "✓ expiryDate extracted: '" + expiryDate + "'");
 
             Log.d(TAG, "BAC params - Doc: " + documentNo + ", Birth: " + birthDate + ", Expiry: " + expiryDate);
 
@@ -247,8 +253,13 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
             }
 
         } catch (Exception e) {
-            Log.e(TAG, "BAC authentication failed", e);
-            sendErrorEvent("BAC kimlik doğrulaması başarısız. OCR verilerini kontrol edin.");
+            Log.e(TAG, "❌ BAC authentication failed", e);
+            Log.e(TAG, "Exception type: " + e.getClass().getName());
+            Log.e(TAG, "Exception message: " + e.getMessage());
+            e.printStackTrace();
+
+            String errorDetail = e.getMessage() != null ? e.getMessage() : "Unknown error";
+            sendErrorEvent("BAC kimlik doğrulaması başarısız: " + errorDetail);
         }
     }
 
