@@ -1,0 +1,36 @@
+# Example
+example/
+
+# Tests
+__tests__/
+*.test.ts
+*.test.tsx
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Build
+*.log
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# CI
+.github/
+.travis.yml
+.gitlab-ci.yml
+
+# Misc
+coverage/
+.nyc_output/
