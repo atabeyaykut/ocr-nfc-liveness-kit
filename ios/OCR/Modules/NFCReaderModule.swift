@@ -1,6 +1,7 @@
 import Foundation
 import React
 import CoreNFC
+import NFCPassportReader
 
 /**
  * NFC Reader Module - Turkish ID Card reading with ISO-DEP protocol
@@ -22,6 +23,11 @@ class NFCReaderModule: RCTEventEmitter {
     private var timeoutSeconds: TimeInterval = 60
     private var totalBytesRead: Int = 0
     private var completedSuccessfully: Bool = false
+    
+    // NFCPassportReader components
+    private var passportReader: PassportReader?
+    private var mrzKey: String?
+    private var canNumber: String?
     
     override static func moduleName() -> String! {
         return "NFCReaderModule"
@@ -59,7 +65,7 @@ class NFCReaderModule: RCTEventEmitter {
     }
     
     /**
-     * Start NFC reading session for Turkish ID card
+     * Start NFC reading session for Turkish ID card with BAC/PACE support
      */
     @objc func startReading(
         _ options: [String: Any],
@@ -81,6 +87,16 @@ class NFCReaderModule: RCTEventEmitter {
                 return
             }
             
+            // Extract MRZ data for BAC authentication
+            if let mrzSeed = options["mrzSeed"] as? [String: Any] {
+                self.mrzKey = self.buildMRZKey(from: mrzSeed)
+            }
+            
+            // Extract CAN number for PACE authentication
+            if let can = options["canNumber"] as? String {
+                self.canNumber = can
+            }
+            
             // Create NFC session
             let alertMessage = options["alertMessage"] as? String ?? "Kimlik kartınızı cihazınızın arkasına yaklaştırın"
             if let t = options["timeoutSeconds"] as? Double, t > 0 {
@@ -95,14 +111,8 @@ class NFCReaderModule: RCTEventEmitter {
                 self.timeoutSeconds = max(self.timeoutSeconds, tMsNum.doubleValue / 1000.0)
             }
             
-            self.nfcSession = NFCTagReaderSession(
-                pollingOption: [.iso14443],
-                delegate: self,
-                queue: DispatchQueue.main
-            )
-            
-            self.nfcSession?.alertMessage = alertMessage
-            self.nfcSession?.begin()
+            // Initialize PassportReader with logging
+            self.passportReader = PassportReader(logLevel: .info)
             
             self.isReading = true
             self.completedSuccessfully = false
@@ -117,9 +127,13 @@ class NFCReaderModule: RCTEventEmitter {
                 withName: "NFC_SCAN_STARTED",
                 body: [
                     "timestamp": Date().timeIntervalSince1970,
-                    "message": alertMessage
+                    "message": alertMessage,
+                    "hasAuthentication": self.mrzKey != nil || self.canNumber != nil
                 ]
             )
+            
+            // Start reading with NFCPassportReader
+            self.startPassportReading(alertMessage: alertMessage)
             
             resolve([
                 "status": "STARTED",
@@ -165,7 +179,220 @@ class NFCReaderModule: RCTEventEmitter {
         ])
     }
     
-    // MARK: - NFC Data Processing
+    // MARK: - Helper Methods
+    
+    /**
+     * Build MRZ key for BAC authentication from OCR data
+     * Format: <passport number><check digit><birth date><check digit><expiry date><check digit>
+     */
+    private func buildMRZKey(from mrzSeed: [String: Any]) -> String? {
+        guard let documentNo = mrzSeed["documentNo"] as? String,
+              let birthDate = mrzSeed["birthDate"] as? String,
+              let expiryDate = (mrzSeed["validUntil"] as? String) ?? (mrzSeed["expiryDate"] as? String) else {
+            print("[NFC] Missing required MRZ data for BAC")
+            return nil
+        }
+        
+        // Convert dates to YYMMDD format if needed
+        let birthYYMMDD = convertToYYMMDD(birthDate)
+        let expiryYYMMDD = convertToYYMMDD(expiryDate)
+        
+        // Get check digits from OCR if available
+        var mrzKey = documentNo
+        
+        if let checkDigits = mrzSeed["mrzCheckDigits"] as? [String: String] {
+            // Use OCR-provided check digits (most reliable)
+            let docCheck = checkDigits["documentNo"] ?? calculateCheckDigit(documentNo)
+            let birthCheck = checkDigits["birthDate"] ?? calculateCheckDigit(birthYYMMDD)
+            let expiryCheck = checkDigits["expiryDate"] ?? calculateCheckDigit(expiryYYMMDD)
+            
+            mrzKey = "\(documentNo)\(docCheck)\(birthYYMMDD)\(birthCheck)\(expiryYYMMDD)\(expiryCheck)"
+        } else {
+            // Calculate check digits
+            let docCheck = calculateCheckDigit(documentNo)
+            let birthCheck = calculateCheckDigit(birthYYMMDD)
+            let expiryCheck = calculateCheckDigit(expiryYYMMDD)
+            
+            mrzKey = "\(documentNo)\(docCheck)\(birthYYMMDD)\(birthCheck)\(expiryYYMMDD)\(expiryCheck)"
+        }
+        
+        print("[NFC] MRZ Key built: \(mrzKey.prefix(10))***")
+        return mrzKey
+    }
+    
+    private func convertToYYMMDD(_ dateStr: String) -> String {
+        // Handle DD.MM.YYYY or DD/MM/YYYY format
+        if dateStr.contains(".") || dateStr.contains("/") {
+            let components = dateStr.components(separatedBy: CharacterSet(charactersIn: "./"))
+            if components.count == 3 {
+                let day = components[0]
+                let month = components[1]
+                let year = components[2]
+                let yy = year.count == 4 ? String(year.suffix(2)) : year
+                return "\(yy)\(month)\(day)"
+            }
+        }
+        // Already in YYMMDD format
+        return dateStr
+    }
+    
+    private func calculateCheckDigit(_ input: String) -> String {
+        let weights = [7, 3, 1]
+        var sum = 0
+        
+        for (index, char) in input.enumerated() {
+            let value: Int
+            if let digit = Int(String(char)) {
+                value = digit
+            } else if char == "<" {
+                value = 0
+            } else {
+                // A=10, B=11, ... Z=35
+                value = Int(char.asciiValue ?? 0) - 55
+            }
+            sum += value * weights[index % 3]
+        }
+        
+        return String(sum % 10)
+    }
+    
+    /**
+     * Start passport reading using NFCPassportReader library
+     */
+    private func startPassportReading(alertMessage: String) {
+        guard let reader = passportReader else {
+            sendNFCError("PassportReader not initialized")
+            return
+        }
+        
+        // Determine which authentication method to use
+        let authMethod: String
+        if let can = canNumber {
+            authMethod = "PACE (CAN: \(can.prefix(2))****)"
+        } else if let mrz = mrzKey {
+            authMethod = "BAC (MRZ: \(mrz.prefix(10))***)"
+        } else {
+            authMethod = "None (may fail on modern cards)"
+        }
+        
+        print("[NFC] Starting passport read with authentication: \(authMethod)")
+        
+        // Data groups to read
+        let dataGroups: [DataGroupId] = [.COM, .DG1, .DG2]
+        
+        Task {
+            do {
+                // Read passport with BAC/PACE authentication
+                let key = mrzKey ?? "" // Empty string if no MRZ provided
+                
+                try await reader.readPassport(
+                    mrzKey: key,
+                    tags: dataGroups,
+                    customDisplayMessage: { [weak self] message in
+                        // Customize NFC dialog messages
+                        switch message {
+                        case .requestPresentPassport:
+                            return alertMessage
+                        default:
+                            return nil
+                        }
+                    },
+                    completed: { [weak self] error in
+                        DispatchQueue.main.async {
+                            self?.handlePassportReadCompletion(error: error)
+                        }
+                    }
+                )
+            } catch {
+                DispatchQueue.main.async { [weak self] in
+                    self?.handlePassportReadError(error)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Handle passport reading completion
+     */
+    private func handlePassportReadCompletion(error: TagError?) {
+        timeoutTimer?.invalidate()
+        timeoutTimer = nil
+        
+        if let error = error {
+            sendNFCError("Passport read failed: \(error.value)")
+            completedSuccessfully = false
+            isReading = false
+            return
+        }
+        
+        guard let reader = passportReader,
+              let passport = reader.passportMRZ else {
+            sendNFCError("No passport data available")
+            completedSuccessfully = false
+            isReading = false
+            return
+        }
+        
+        // Extract passport data
+        var cardData: [String: Any] = [:]
+        cardData["documentNo"] = passport.documentNumber
+        cardData["name"] = passport.firstName
+        cardData["surname"] = passport.lastName
+        cardData["nationality"] = passport.nationality
+        cardData["birthDate"] = passport.dateOfBirth
+        cardData["validUntil"] = passport.documentExpiryDate
+        cardData["gender"] = passport.gender
+        
+        // Add image if available
+        if let image = reader.passportImage {
+            if let imageData = image.jpegData(compressionQuality: 0.8) {
+                cardData["photoBase64"] = imageData.base64EncodedString()
+            }
+        }
+        
+        // Metadata
+        cardData["source"] = "NFC"
+        cardData["readDate"] = ISO8601DateFormatter().string(from: Date())
+        cardData["isReal"] = true
+        cardData["authenticationMethod"] = canNumber != nil ? "PACE" : "BAC"
+        
+        completedSuccessfully = true
+        isReading = false
+        
+        sendEvent(
+            withName: "NFC_SCAN_COMPLETED",
+            body: [
+                "status": "SUCCESS",
+                "data": cardData,
+                "timestamp": Date().timeIntervalSince1970
+            ]
+        )
+    }
+    
+    /**
+     * Handle passport reading error
+     */
+    private func handlePassportReadError(_ error: Error) {
+        timeoutTimer?.invalidate()
+        timeoutTimer = nil
+        
+        var errorMessage = error.localizedDescription
+        
+        // Provide helpful error messages
+        if errorMessage.contains("BAC") {
+            errorMessage = "BAC kimlik doğrulaması başarısız. OCR verilerini kontrol edin."
+        } else if errorMessage.contains("PACE") {
+            errorMessage = "PACE kimlik doğrulaması başarısız. CAN numarasını kontrol edin."
+        } else if errorMessage.contains("6982") {
+            errorMessage = "Güvenlik şartı sağlanmadı. BAC/PACE kimlik doğrulaması gerekli."
+        }
+        
+        sendNFCError(errorMessage)
+        completedSuccessfully = false
+        isReading = false
+    }
+    
+    // MARK: - NFC Data Processing (Legacy - kept for fallback)
     
     private func processTag(_ tag: NFCTag) {
         // Extract ISO-DEP tag
@@ -200,6 +427,9 @@ class NFCReaderModule: RCTEventEmitter {
     }
     
     private func readCardData(from tag: NFCISO7816Tag) {
+        // NOTE: This method is kept for backward compatibility
+        // NFCPassportReader is now the primary reading method
+        
         // Step 1: Select Turkish ID Card Application
         // Turkish ID Card AID: A0 00 00 02 47 10 01
         let turkishIDCardAID = Data([0xA0, 0x00, 0x00, 0x02, 0x47, 0x10, 0x01])

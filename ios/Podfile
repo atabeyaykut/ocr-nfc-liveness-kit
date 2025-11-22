@@ -13,6 +13,9 @@ target 'OCRMobileSDK' do
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
+  # NFC Passport Reader for passport/ID card reading with BAC/PACE support
+  pod 'NFCPassportReader', :git => 'https://github.com/AndyQ/NFCPassportReader.git'
+
   post_install do |installer|
     react_native_post_install(
       installer,
