@@ -80,3 +80,20 @@ temp/
 # Keystore & secrets - DO NOT COMMIT
 /android/ocr-release-key.keystore
 /android/keystore.properties
+
+# APK and binary files
+*.apk
+*.zip
+*.xz
+
+# Decompiled/Reverse engineered code
+base_jadx/
+base_patched.apk
+frida-server-*
+
+# Temporary build/output directories
+android/base/
+android/ede_out/
+android/out/
+temp_edevlet_apk/
+temp_edevlet_jadx/
