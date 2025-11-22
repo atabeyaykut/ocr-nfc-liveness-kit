@@ -22,7 +22,7 @@ module.exports = {
       platforms: {
         android: {
           packageImportPath:
-            'import com.reactnativemlkit.textrecognition.TextRecognitionPackage;',
+            'import com.rnmlkit.textrecognition.TextRecognitionPackage;',
           packageInstance: 'new TextRecognitionPackage()',
         },
         ios: null,

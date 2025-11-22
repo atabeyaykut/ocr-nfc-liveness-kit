@@ -1,6 +1,10 @@
 // Mobile SDK - Main Entry Point
 // React Native SDK for OCR, NFC and Liveness Detection
 
+// 🔐 CRITICAL: Import crypto shims FIRST (before any other imports)
+// Required for BAC cryptography (3DES, SHA-1)
+import './shim';
+
 import { AppRegistry } from 'react-native';
 import App from './App';
 
@@ -13,7 +17,7 @@ ErrorUtils.setGlobalHandler((error, isFatal) => {
     console.log('[App] TTS error suppressed:', error.message);
     return;
   }
-  
+
   // For other errors, use original handler
   if (originalHandler) {
     originalHandler(error, isFatal);
