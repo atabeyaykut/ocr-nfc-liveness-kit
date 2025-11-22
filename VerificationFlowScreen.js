@@ -340,6 +340,83 @@ const VerificationFlowScreen = ({ navigation }) => {
         }
     }, [addLog]);
 
+    // Test NFC only (without OCR)
+    const testNFCOnly = useCallback(async () => {
+        try {
+            setCurrentPhase('nfc');
+            addLog('🧪 NFC TEST MODU - Sadece NFC okuma');
+
+            const isSupported = await NfcManager.isSupported();
+            if (!isSupported) {
+                addLog('❌ NFC desteklenmiyor');
+                Alert.alert('NFC Desteklenmiyor', 'Bu cihaz NFC desteklemiyor.');
+                return;
+            }
+
+            const isEnabled = await NfcManager.isEnabled();
+            if (!isEnabled) {
+                addLog('⚠️ NFC kapalı');
+                Alert.alert('NFC Kapalı', 'NFC ayarlardan açılmalı.',
+                    [
+                        { text: 'İptal', style: 'cancel' },
+                        { text: 'Ayarlar', onPress: () => NfcManager.goToNfcSetting() }
+                    ]
+                );
+                return;
+            }
+
+            nfcModuleRef.current.onNFCResult((result) => {
+                addLog('✅ NFC TEST BAŞARILI!');
+                addLog('📋 NFC Sonuçları:');
+                console.log('[NFC TEST] Full Result:', JSON.stringify(result, null, 2));
+
+                // Log all fields
+                if (result.documentNo) addLog(`  • Document No: ${result.documentNo}`);
+                if (result.name) addLog(`  • Ad: ${result.name}`);
+                if (result.surname) addLog(`  • Soyad: ${result.surname}`);
+                if (result.birthDate) addLog(`  • Doğum: ${result.birthDate}`);
+                if (result.nationality) addLog(`  • Uyruk: ${result.nationality}`);
+                if (result.gender) addLog(`  • Cinsiyet: ${result.gender}`);
+                if (result.validUntil) addLog(`  • Geçerlilik: ${result.validUntil}`);
+
+                setNfcResult(result);
+                nfcModuleRef.current.stopNFC();
+
+                Alert.alert(
+                    '✅ NFC Okuma Başarılı',
+                    `Ad Soyad: ${result.name} ${result.surname}\nTC No: ${result.documentNo || 'N/A'}\nDoğum: ${result.birthDate || 'N/A'}`,
+                    [{ text: 'Tamam', onPress: () => setCurrentPhase('idle') }]
+                );
+            });
+
+            nfcModuleRef.current.onNFCError((error) => {
+                addLog(`❌ NFC TEST HATASI: ${error.error}`);
+                console.error('[NFC TEST] Error:', error);
+                Alert.alert('NFC Hatası', error.error, [
+                    { text: 'Tamam', onPress: () => setCurrentPhase('idle') }
+                ]);
+            });
+
+            nfcModuleRef.current.onNFCStarted(() => {
+                addLog('📱 NFC dinleniyor - kartı yaklaştırın');
+                setDetectionHint('Kartı telefonun arkasına yaklaştırın...');
+            });
+
+            // Test için dummy MRZ data (gerçek kart okuma yapacak ama OCR olmadan)
+            await nfcModuleRef.current.startNFC({
+                cardType: 'tc_kimlik',
+                readTimeout: 60000,
+                mrzSeed: {}, // Boş - kart kendi MRZ'sini okuyacak
+            });
+        } catch (error) {
+            console.error('[NFC TEST] Error:', error);
+            addLog(`❌ NFC TEST hatası: ${error.message}`);
+            Alert.alert('NFC Hatası', error.message, [
+                { text: 'Tamam', onPress: () => setCurrentPhase('idle') }
+            ]);
+        }
+    }, [addLog]);
+
     // Start liveness flow
     const startLivenessFlow = useCallback(() => {
         setCurrentPhase('liveness');
@@ -428,6 +505,15 @@ const VerificationFlowScreen = ({ navigation }) => {
             <TouchableOpacity style={styles.primaryButton} onPress={startVerification}>
                 <Text style={styles.primaryButtonText}>Doğrulamayı Başlat</Text>
             </TouchableOpacity>
+
+            {/* NFC Test Button */}
+            <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: '#3B82F6', marginTop: 12 }]}
+                onPress={testNFCOnly}
+            >
+                <Text style={styles.primaryButtonText}>🧪 Sadece NFC Test Et</Text>
+            </TouchableOpacity>
+
             <View style={styles.infoBox}>
                 <Text style={styles.infoText}>
                     1️⃣ MRZ Okuma: Arka yüz OCR (otomatik){'\n'}
