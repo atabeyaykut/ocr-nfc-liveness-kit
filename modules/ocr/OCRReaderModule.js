@@ -1386,16 +1386,21 @@ class OCRReaderModule {
   };
 
   /**
-   * Process both front and back sides of ID card
-   * @param {string} frontImagePath - Path to front side image
-   * @param {string} backImagePath - Path to back side image
+   * Process both front and back sides of ID card with multi-frame capture
+   * @param {string|Array<string>} frontImagePath - Path(s) to front side image(s)
+   * @param {string|Array<string>} backImagePath - Path(s) to back side image(s)
    * @returns {Promise<object>} - Merged and validated OCR results
    */
   processBothSides = async (frontImagePath, backImagePath) => {
     try {
-      console.log('[OCR] Starting dual-side processing...');
-      console.log('[OCR] Front image:', frontImagePath);
-      console.log('[OCR] Back image:', backImagePath);
+      console.log('[OCR] Starting dual-side processing with multi-frame support...');
+
+      // Normalize inputs to arrays
+      const frontPaths = Array.isArray(frontImagePath) ? frontImagePath : [frontImagePath];
+      const backPaths = Array.isArray(backImagePath) ? backImagePath : [backImagePath];
+
+      console.log('[OCR] Front frames:', frontPaths.length);
+      console.log('[OCR] Back frames:', backPaths.length);
 
       // Ensure options exists
       if (!this.options) {
@@ -1406,8 +1411,8 @@ class OCRReaderModule {
         };
       }
 
-      // ⚡ OPTIMIZATION: Parallel Processing (50% faster!)
-      // Process both sides simultaneously instead of sequentially
+      // ⚡ OPTIMIZATION: Parallel Processing with Multi-Frame Support
+      // Process both sides simultaneously, with multi-frame merging when available
       console.log('[OCR] Processing both sides in parallel...');
 
       const [frontResult, backResult] = await Promise.all([
@@ -1417,7 +1422,10 @@ class OCRReaderModule {
           const originalCardSide = this.options.cardSide;
           this.options.cardSide = 'front';
           try {
-            const result = await this.processImage(frontImagePath);
+            // Use multi-frame if available, otherwise single image
+            const result = frontPaths.length > 1
+              ? await this.processMultiFrameImage(frontPaths)
+              : await this.processImage(frontPaths[0]);
             console.log('[OCR] Front side results:', result.fields || {});
             return result;
           } finally {
@@ -1426,12 +1434,15 @@ class OCRReaderModule {
         })(),
 
         (async () => {
-          console.log('[OCR] Processing back side...');
+          console.log('[OCR] Processing back side (full card photo)...');
           // Create separate options for back side (avoid race condition)
           const originalCardSide = this.options.cardSide;
           this.options.cardSide = 'back';
           try {
-            const result = await this.processImage(backImagePath);
+            // Use multi-frame if available, otherwise single image
+            const result = backPaths.length > 1
+              ? await this.processMultiFrameImage(backPaths)
+              : await this.processImage(backPaths[0]);
             console.log('[OCR] Back side results:', result.fields || {});
             return result;
           } finally {
