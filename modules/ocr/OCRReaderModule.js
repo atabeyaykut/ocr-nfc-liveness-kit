@@ -1460,6 +1460,22 @@ class OCRReaderModule {
 
       console.log('[OCR] Merged and validated results:', mergedData);
 
+      // Extract biometric photo from front side for liveness test
+      let biometricPhotoUri = null;
+      try {
+        console.log('[OCR] Extracting biometric photo from front side...');
+        const frontPath = Array.isArray(frontImagePath) ? frontImagePath[0] : frontImagePath;
+        biometricPhotoUri = await ImageProcessor.extractBiometricPhoto(frontPath);
+
+        if (biometricPhotoUri) {
+          console.log('[OCR] ✓ Biometric photo extracted:', biometricPhotoUri);
+        } else {
+          console.warn('[OCR] ⚠ Biometric photo extraction failed or no face detected');
+        }
+      } catch (bioError) {
+        console.warn('[OCR] Biometric photo extraction error:', bioError.message);
+      }
+
       // 💾 OPTIMIZATION: Cleanup old temp files (non-blocking)
       this.cleanupTempFiles().catch(() => {
         // Silent fail - cleanup is not critical
@@ -1470,6 +1486,7 @@ class OCRReaderModule {
         data: mergedData,
         frontSide: frontFields,
         backSide: backFields,
+        biometricPhoto: biometricPhotoUri, // For liveness test
         timestamp: new Date().toISOString(),
       };
     } catch (error) {

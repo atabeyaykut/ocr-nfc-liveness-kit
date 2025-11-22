@@ -400,6 +400,79 @@ class ImageProcessor {
   }
 
   /**
+   * Extract biometric photo from ID card front side
+   * Uses face detection to locate and crop the photo area
+   * @param {string} imageUri - URI of the front side image
+   * @returns {Promise<string|null>} - URI of cropped biometric photo or null
+   */
+  static async extractBiometricPhoto(imageUri) {
+    const { nativePath, tempPath } = await this.normalizeToNativePath(imageUri);
+    try {
+      Logger.info('Extracting biometric photo from ID card front side', { imageUri });
+
+      // Use ML Kit Face Detection to find face
+      const FaceDetection = require('@react-native-ml-kit/face-detection').default;
+
+      const faces = await FaceDetection.detect(nativePath, {
+        performanceMode: 'accurate',
+        contourMode: 'none',
+        classificationMode: 'none',
+      });
+
+      if (!faces || faces.length === 0) {
+        Logger.warn('No face detected on ID card');
+        return null;
+      }
+
+      // Get the first (and typically only) face
+      const face = faces[0];
+      const bounds = face.frame;
+
+      Logger.info('Face detected', {
+        x: bounds.left,
+        y: bounds.top,
+        width: bounds.width,
+        height: bounds.height
+      });
+
+      // Add padding around face for better crop
+      const padding = 20;
+      const cropX = Math.max(0, bounds.left - padding);
+      const cropY = Math.max(0, bounds.top - padding);
+      const cropWidth = bounds.width + (padding * 2);
+      const cropHeight = bounds.height + (padding * 2);
+
+      // Crop the face area
+      const croppedImage = await ImageResizer.createResizedImage(
+        nativePath,
+        cropWidth,
+        cropHeight,
+        'JPEG',
+        90,
+        0,
+        null,
+        false,
+        {
+          mode: 'cover',
+          onlyScaleDown: false,
+        }
+      );
+
+      Logger.info('Biometric photo extracted successfully', {
+        croppedUri: croppedImage.uri
+      });
+
+      return croppedImage.uri;
+    } catch (error) {
+      Logger.error('Biometric photo extraction failed:', error.message);
+      Logger.warn('Continuing without biometric photo');
+      return null;
+    } finally {
+      await this.cleanupTempPath(tempPath);
+    }
+  }
+
+  /**
    * Process multiple frames and merge them for enhanced quality
    * This simulates frame stacking by selecting the sharpest frame
    * and applying enhanced preprocessing
