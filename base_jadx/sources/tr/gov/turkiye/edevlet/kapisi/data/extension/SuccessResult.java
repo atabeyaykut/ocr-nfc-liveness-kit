@@ -1,0 +1,60 @@
+package tr.gov.turkiye.edevlet.kapisi.data.extension;
+
+import androidx.exifinterface.media.ExifInterface;
+import kotlin.Metadata;
+import kotlin.jvm.internal.h;
+
+@Metadata(d1 = {"\u0000(\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0002\b\t\n\u0002\u0010\u000b\n\u0000\n\u0002\u0010\u0000\n\u0002\b\u0002\n\u0002\u0010\b\n\u0000\n\u0002\u0010\u000e\n\u0000\b\u0086\b\u0018\u0000*\u0004\b\u0000\u0010\u00012\b\u0012\u0004\u0012\u0002H\u00010\u0002B\r\u0012\u0006\u0010\u0003\u001a\u00028\u0000¢\u0006\u0002\u0010\u0004J\u000e\u0010\b\u001a\u00028\u0000HÆ\u0003¢\u0006\u0002\u0010\u0006J\u001e\u0010\t\u001a\b\u0012\u0004\u0012\u00028\u00000\u00002\b\b\u0002\u0010\u0003\u001a\u00028\u0000HÆ\u0001¢\u0006\u0002\u0010\nJ\u0013\u0010\u000b\u001a\u00020\f2\b\u0010\r\u001a\u0004\u0018\u00010\u000eHÖ\u0003J\r\u0010\u000f\u001a\u00028\u0000H\u0016¢\u0006\u0002\u0010\u0006J\t\u0010\u0010\u001a\u00020\u0011HÖ\u0001J\t\u0010\u0012\u001a\u00020\u0013HÖ\u0001R\u0013\u0010\u0003\u001a\u00028\u0000¢\u0006\n\n\u0002\u0010\u0007\u001a\u0004\b\u0005\u0010\u0006¨\u0006\u0014"}, d2 = {"Ltr/gov/turkiye/edevlet/kapisi/data/extension/SuccessResult;", ExifInterface.GPS_DIRECTION_TRUE, "Ltr/gov/turkiye/edevlet/kapisi/data/extension/ServiceResult;", "data", "(Ljava/lang/Object;)V", "getData", "()Ljava/lang/Object;", "Ljava/lang/Object;", "component1", "copy", "(Ljava/lang/Object;)Ltr/gov/turkiye/edevlet/kapisi/data/extension/SuccessResult;", "equals", "", "other", "", "get", "hashCode", "", "toString", "", "data_release"}, k = 1, mv = {1, 8, 0}, xi = 48)
+/* loaded from: classes3.dex */
+public final /* data */ class SuccessResult<T> extends ServiceResult<T> {
+    private final T data;
+
+    public SuccessResult(T t10) {
+        super(null);
+        this.data = t10;
+    }
+
+    /* JADX WARN: Multi-variable type inference failed */
+    public static /* synthetic */ SuccessResult copy$default(SuccessResult successResult, Object obj, int r22, Object obj2) {
+        if ((r22 & 1) != 0) {
+            obj = successResult.data;
+        }
+        return successResult.copy(obj);
+    }
+
+    public final T component1() {
+        return this.data;
+    }
+
+    public final SuccessResult<T> copy(T data) {
+        return new SuccessResult<>(data);
+    }
+
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        return (other instanceof SuccessResult) && h.a(this.data, ((SuccessResult) other).data);
+    }
+
+    @Override // tr.gov.turkiye.edevlet.kapisi.data.extension.ServiceResult
+    public T get() {
+        return this.data;
+    }
+
+    public final T getData() {
+        return this.data;
+    }
+
+    public int hashCode() {
+        T t10 = this.data;
+        if (t10 == null) {
+            return 0;
+        }
+        return t10.hashCode();
+    }
+
+    public String toString() {
+        return "SuccessResult(data=" + this.data + ')';
+    }
+}

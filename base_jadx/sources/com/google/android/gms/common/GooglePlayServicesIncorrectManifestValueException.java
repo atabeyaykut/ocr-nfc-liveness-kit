@@ -1,0 +1,12 @@
+package com.google.android.gms.common;
+
+import com.google.android.gms.common.annotation.KeepName;
+import m3.f;
+
+@KeepName
+/* loaded from: classes.dex */
+public final class GooglePlayServicesIncorrectManifestValueException extends GooglePlayServicesManifestException {
+    public GooglePlayServicesIncorrectManifestValueException(int r42) {
+        super("The meta-data tag in your app's AndroidManifest.xml does not have the right value.  Expected " + f.f9945a + " but found " + r42 + ".  You must have the following declaration within the <application> element:     <meta-data android:name=\"com.google.android.gms.version\" android:value=\"@integer/google_play_services_version\" />");
+    }
+}

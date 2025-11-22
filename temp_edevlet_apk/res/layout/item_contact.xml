@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout android:layout_width="fill_parent" android:layout_height="wrap_content"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <LinearLayout android:orientation="horizontal" android:id="@id/institution_contact_address_container" android:layout_width="0.0dip" android:layout_height="wrap_content" android:layout_marginTop="@dimen/spacing_medium" android:layout_marginStart="@dimen/spacing_medium" android:layout_marginEnd="@dimen/spacing_medium" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintTop_toTopOf="parent">
+        <ImageView android:layout_gravity="center" android:layout_width="wrap_content" android:layout_height="wrap_content" android:src="@drawable/contact_location" android:importantForAccessibility="no" />
+        <LinearLayout android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/spacing_micro" android:layout_marginStart="@dimen/spacing_major">
+            <androidx.appcompat.widget.AppCompatTextView android:textAppearance="?textAppearanceSubtitle2" android:textStyle="bold" android:id="@id/institution_contact_address" android:layout_width="fill_parent" android:layout_height="wrap_content" android:fontFamily="@font/arimo_bold" />
+            <View android:layout_gravity="center" android:layout_width="fill_parent" android:layout_height="1.0dip" android:layout_marginTop="@dimen/spacing_minor" android:layout_marginBottom="@dimen/spacing_minor" style="@style/Divider" />
+        </LinearLayout>
+    </LinearLayout>
+    <LinearLayout android:orientation="horizontal" android:id="@id/institution_contact_phone_container" android:layout_width="0.0dip" android:layout_height="wrap_content" android:layout_marginTop="@dimen/spacing_medium" android:layout_weight="4.0" android:layout_marginStart="@dimen/spacing_medium" android:layout_marginEnd="@dimen/spacing_medium" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintTop_toBottomOf="@id/institution_contact_address_container">
+        <ImageView android:layout_gravity="center" android:layout_width="wrap_content" android:layout_height="wrap_content" android:src="@drawable/contact_phone" android:importantForAccessibility="no" />
+        <LinearLayout android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/spacing_micro" android:layout_marginStart="@dimen/spacing_major">
+            <androidx.appcompat.widget.AppCompatTextView android:textAppearance="?textAppearanceSubtitle2" android:textStyle="bold" android:id="@id/institution_contact_phone" android:layout_width="fill_parent" android:layout_height="wrap_content" android:fontFamily="@font/arimo_bold" />
+            <View android:layout_gravity="center" android:layout_width="fill_parent" android:layout_height="1.0dip" android:layout_marginTop="@dimen/spacing_minor" android:layout_marginBottom="@dimen/spacing_minor" style="@style/Divider" />
+        </LinearLayout>
+    </LinearLayout>
+    <LinearLayout android:orientation="horizontal" android:id="@id/institution_contact_website_container" android:layout_width="0.0dip" android:layout_height="wrap_content" android:layout_marginTop="@dimen/spacing_medium" android:layout_marginStart="@dimen/spacing_medium" android:layout_marginEnd="@dimen/spacing_medium" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintTop_toBottomOf="@id/institution_contact_phone_container">
+        <ImageView android:layout_gravity="center" android:layout_width="wrap_content" android:layout_height="wrap_content" android:src="@drawable/contact_website" android:importantForAccessibility="no" />
+        <LinearLayout android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/spacing_micro" android:layout_marginStart="@dimen/spacing_major">
+            <androidx.appcompat.widget.AppCompatTextView android:textAppearance="?textAppearanceSubtitle2" android:textStyle="bold" android:id="@id/institution_contact_website" android:layout_width="fill_parent" android:layout_height="wrap_content" android:fontFamily="@font/arimo_bold" />
+            <View android:layout_gravity="center" android:layout_width="fill_parent" android:layout_height="1.0dip" android:layout_marginTop="@dimen/spacing_minor" android:layout_marginBottom="@dimen/spacing_minor" style="@style/Divider" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

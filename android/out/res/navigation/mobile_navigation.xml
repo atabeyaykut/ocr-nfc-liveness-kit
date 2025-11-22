@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation android:id="@id/mobile_navigation" app:startDestination="@id/navigation_home"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <fragment android:label="@string/title_home" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.DashboardFragment" android:id="@id/navigation_home">
+        <action android:id="@id/action_navigation_home_to_navigation_services" app:destination="@id/navigation_services" app:launchSingleTop="true" />
+        <action android:id="@id/action_navigation_home_to_favorite_services" app:destination="@id/favoriteServiceListFragment" />
+        <action android:id="@id/action_navigation_home_to_most_used_services" app:destination="@id/mostUsedServiceListFragment" />
+        <action android:id="@id/action_navigation_home_to_newest_services" app:destination="@id/newestServiceListFragment" />
+        <action android:id="@id/action_navigation_home_to_barcode_services" app:destination="@id/barcodeServiceListFragment" />
+        <action android:id="@id/action_navigation_home_to_wonder_services" app:destination="@id/wonderServiceListFragment" />
+        <action android:id="@id/action_navigation_home_to_ebys_services" app:destination="@id/electronicDosServiceListFragment" />
+        <action android:id="@id/action_navigation_home_to_about_pages" app:destination="@id/aboutPageFragment" />
+        <action android:id="@id/action_navigation_home_to_my_city_list" app:destination="@id/myCityListFragment" />
+        <action android:id="@id/action_navigation_home_to_navigation_search" app:destination="@id/navigation_search" />
+        <action android:id="@id/action_navigation_home_to_barco_verify" app:destination="@id/barcodeVerifyFragment" />
+        <action android:id="@id/action_navigation_home_to_editor_services" app:destination="@id/editorChoiceListFragment" />
+        <action android:id="@id/action_navigation_home_to_concept_services" app:destination="@id/conceptListFragment" />
+    </fragment>
+    <fragment android:label="@string/title_search" android:name="tr.gov.turkiye.edevlet.kapisi.search.SearchFragment" android:id="@id/navigation_search" />
+    <fragment android:label="@string/title_services" android:name="tr.gov.turkiye.edevlet.kapisi.services.institution.InstitutionFragment" android:id="@id/navigation_services">
+        <action android:id="@id/action_navigation_services_to_institutionListFragment" app:destination="@id/institutionListFragment" />
+        <action android:id="@id/action_navigation_services_to_cityListFragment" app:destination="@id/institutionCityListFragment" />
+        <action android:id="@id/action_navigation_services_to_firmCategoryListFragment" app:destination="@id/firmCategoryListFragment" />
+    </fragment>
+    <fragment android:label="@string/title_profile" android:name="tr.gov.turkiye.edevlet.kapisi.profile.ProfileFragment" android:id="@id/navigation_profile">
+        <action android:id="@id/action_navigation_settings_to_navigation_profile" app:destination="@id/settingsFragment" />
+    </fragment>
+    <fragment android:label="@string/title_settings" android:name="tr.gov.turkiye.edevlet.kapisi.profile.settings.SettingsFragment" android:id="@id/settingsFragment" />
+    <fragment android:label="@string/title_contact_information" android:name="tr.gov.turkiye.edevlet.kapisi.profile.contact.ContactInfoFragment" android:id="@id/contactInfoFragment" />
+    <fragment android:label="@string/title_personal_information" android:name="tr.gov.turkiye.edevlet.kapisi.profile.personal.PersonalInfoFragment" android:id="@id/personalInfoFragment" />
+    <fragment android:label="@string/title_favorite_services_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.favorite.FavoriteServicesFragment" android:id="@id/favoriteServiceListFragment" />
+    <fragment android:label="@string/title_most_used_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.mostused.MostUsedServicesFragment" android:id="@id/mostUsedServiceListFragment" />
+    <fragment android:label="@string/title_newest_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.newest.NewestServicesFragment" android:id="@id/newestServiceListFragment" />
+    <fragment android:label="@string/title_barcode_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.barcode.BarcodeServicesFragment" android:id="@id/barcodeServiceListFragment" />
+    <fragment android:label="@string/title_newest_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.newest.NewestServicesFragment" android:id="@id/newestServiceListFragment" />
+    <fragment android:label="@string/title_wonder_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.wonder.WonderServicesFragment" android:id="@id/wonderServiceListFragment" />
+    <fragment android:label="@string/title_electronic_doc_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.ebys.ElectronicDocServicesFragment" android:id="@id/electronicDosServiceListFragment" />
+    <fragment android:label="@string/title_editor_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.editor.EditorServicesFragment" android:id="@id/editorChoiceListFragment" />
+    <fragment android:label="@string/title_concept_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.concept.ConceptServicesFragment" android:id="@id/conceptListFragment" />
+    <fragment android:label="@string/title_about_page_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.about.AboutPageFragment" android:id="@id/aboutPageFragment" />
+    <fragment android:label="@string/title_institution_city_list_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.mycity.city.MyCityListFragment" android:id="@id/myCityListFragment" />
+    <fragment android:label="@string/title_my_city_list_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.dashboard.mycity.page.MyCityFragment" android:id="@id/myCityDetailFragment" />
+    <fragment android:label="@string/title_institution_city_list_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.services.city.InstitutionCityListFragment" android:id="@id/institutionCityListFragment">
+        <action android:id="@id/action_cityListFragment_to_institutionListFragment" app:destination="@id/institutionListFragment" />
+    </fragment>
+    <fragment android:label="@string/title_firm_category_list_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.services.firm.FirmCategoryListFragment" android:id="@id/firmCategoryListFragment" />
+    <fragment android:label="{title}" android:name="tr.gov.turkiye.edevlet.kapisi.services.list.InstitutionListFragment" android:id="@id/institutionListFragment">
+        <argument android:name="title" app:argType="string" />
+        <action android:id="@id/action_institutionListFragment_to_institutionDetailFragment" app:destination="@id/institutionDetailFragment" />
+    </fragment>
+    <fragment android:label="{title}" android:name="tr.gov.turkiye.edevlet.kapisi.services.municipality.MunicipalityListFragment" android:id="@id/municipalityListFragment">
+        <argument android:name="title" app:argType="string" />
+        <action android:id="@id/action_institutionListFragment_to_institutionDetailFragment" app:destination="@id/institutionDetailFragment" />
+    </fragment>
+    <fragment android:label="@string/title_institution_detail_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.institution.InstitutionDetailFragment" android:id="@id/institutionDetailFragment" />
+    <fragment android:label="@string/title_institution_contact_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.services.contact.InstitutionContactFragment" android:id="@id/institutionContactFragment" />
+    <fragment android:label="@string/title_barcode_verify_fragment" android:name="tr.gov.turkiye.edevlet.kapisi.barcode.BarcodeVerifyFragment" android:id="@id/barcodeVerifyFragment" />
+    <fragment android:label="@string/title_barcode_verify_fragment_manual" android:name="tr.gov.turkiye.edevlet.kapisi.barcode.manual.ManualInputBarcodeFragment" android:id="@id/barcodeManualVerifyFirstFragment" />
+    <fragment android:label="@string/title_barcode_verify_fragment_manual" android:name="tr.gov.turkiye.edevlet.kapisi.barcode.manual.dynamic.ManualDynamicFieldFragment" android:id="@id/barcodeManualDynamicFieldFragment" />
+</navigation>

@@ -1,0 +1,189 @@
+.class Landroidx/camera/view/PreviewViewMeteringPointFactory;
+.super Landroidx/camera/core/MeteringPointFactory;
+.source "SourceFile"
+
+
+# annotations
+.annotation build Landroidx/annotation/RequiresApi;
+    value = 0x15
+.end annotation
+
+.annotation build Landroidx/annotation/RestrictTo;
+    value = {
+        .enum Landroidx/annotation/RestrictTo$Scope;->LIBRARY_GROUP:Landroidx/annotation/RestrictTo$Scope;
+    }
+.end annotation
+
+
+# static fields
+.field static final INVALID_POINT:Landroid/graphics/PointF;
+
+
+# instance fields
+.field private mMatrix:Landroid/graphics/Matrix;
+    .annotation build Landroidx/annotation/GuardedBy;
+        value = "this"
+    .end annotation
+
+    .annotation build Landroidx/annotation/Nullable;
+    .end annotation
+.end field
+
+.field private final mPreviewTransformation:Landroidx/camera/view/PreviewTransformation;
+    .annotation build Landroidx/annotation/NonNull;
+    .end annotation
+.end field
+
+
+# direct methods
+.method public static constructor <clinit>()V
+    .locals 2
+
+    new-instance v0, Landroid/graphics/PointF;
+
+    const/high16 v1, 0x40000000    # 2.0f
+
+    invoke-direct {v0, v1, v1}, Landroid/graphics/PointF;-><init>(FF)V
+
+    sput-object v0, Landroidx/camera/view/PreviewViewMeteringPointFactory;->INVALID_POINT:Landroid/graphics/PointF;
+
+    return-void
+.end method
+
+.method public constructor <init>(Landroidx/camera/view/PreviewTransformation;)V
+    .locals 0
+    .param p1    # Landroidx/camera/view/PreviewTransformation;
+        .annotation build Landroidx/annotation/NonNull;
+        .end annotation
+    .end param
+
+    invoke-direct {p0}, Landroidx/camera/core/MeteringPointFactory;-><init>()V
+
+    iput-object p1, p0, Landroidx/camera/view/PreviewViewMeteringPointFactory;->mPreviewTransformation:Landroidx/camera/view/PreviewTransformation;
+
+    return-void
+.end method
+
+
+# virtual methods
+.method public convertPoint(FF)Landroid/graphics/PointF;
+    .locals 2
+    .annotation build Landroidx/annotation/AnyThread;
+    .end annotation
+
+    .annotation build Landroidx/annotation/NonNull;
+    .end annotation
+
+    const/4 v0, 0x2
+
+    new-array v0, v0, [F
+
+    const/4 v1, 0x0
+
+    aput p1, v0, v1
+
+    const/4 p1, 0x1
+
+    aput p2, v0, p1
+
+    monitor-enter p0
+
+    :try_start_0
+    iget-object p2, p0, Landroidx/camera/view/PreviewViewMeteringPointFactory;->mMatrix:Landroid/graphics/Matrix;
+
+    if-nez p2, :cond_0
+
+    sget-object p1, Landroidx/camera/view/PreviewViewMeteringPointFactory;->INVALID_POINT:Landroid/graphics/PointF;
+
+    monitor-exit p0
+
+    return-object p1
+
+    :cond_0
+    invoke-virtual {p2, v0}, Landroid/graphics/Matrix;->mapPoints([F)V
+
+    monitor-exit p0
+    :try_end_0
+    .catchall {:try_start_0 .. :try_end_0} :catchall_0
+
+    new-instance p2, Landroid/graphics/PointF;
+
+    aget v1, v0, v1
+
+    aget p1, v0, p1
+
+    invoke-direct {p2, v1, p1}, Landroid/graphics/PointF;-><init>(FF)V
+
+    return-object p2
+
+    :catchall_0
+    move-exception p1
+
+    :try_start_1
+    monitor-exit p0
+    :try_end_1
+    .catchall {:try_start_1 .. :try_end_1} :catchall_0
+
+    throw p1
+.end method
+
+.method public recalculate(Landroid/util/Size;I)V
+    .locals 1
+    .param p1    # Landroid/util/Size;
+        .annotation build Landroidx/annotation/NonNull;
+        .end annotation
+    .end param
+    .annotation build Landroidx/annotation/UiThread;
+    .end annotation
+
+    invoke-static {}, Landroidx/camera/core/impl/utils/Threads;->checkMainThread()V
+
+    monitor-enter p0
+
+    :try_start_0
+    invoke-virtual {p1}, Landroid/util/Size;->getWidth()I
+
+    move-result v0
+
+    if-eqz v0, :cond_1
+
+    invoke-virtual {p1}, Landroid/util/Size;->getHeight()I
+
+    move-result v0
+
+    if-nez v0, :cond_0
+
+    goto :goto_0
+
+    :cond_0
+    iget-object v0, p0, Landroidx/camera/view/PreviewViewMeteringPointFactory;->mPreviewTransformation:Landroidx/camera/view/PreviewTransformation;
+
+    invoke-virtual {v0, p1, p2}, Landroidx/camera/view/PreviewTransformation;->getPreviewViewToNormalizedSurfaceMatrix(Landroid/util/Size;I)Landroid/graphics/Matrix;
+
+    move-result-object p1
+
+    iput-object p1, p0, Landroidx/camera/view/PreviewViewMeteringPointFactory;->mMatrix:Landroid/graphics/Matrix;
+
+    monitor-exit p0
+
+    return-void
+
+    :cond_1
+    :goto_0
+    const/4 p1, 0x0
+
+    iput-object p1, p0, Landroidx/camera/view/PreviewViewMeteringPointFactory;->mMatrix:Landroid/graphics/Matrix;
+
+    monitor-exit p0
+
+    return-void
+
+    :catchall_0
+    move-exception p1
+
+    monitor-exit p0
+    :try_end_0
+    .catchall {:try_start_0 .. :try_end_0} :catchall_0
+
+    throw p1
+.end method

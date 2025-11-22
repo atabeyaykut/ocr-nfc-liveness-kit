@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="@dimen/spacing_minor"
+    android:layout_marginStart="@dimen/spacing_minor">
+    <androidx.appcompat.widget.AppCompatTextView
+        android:textAppearance="?attr/textAppearanceHeadline6"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:id="@+id/header_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_medium"
+        android:lineSpacingExtra="2sp"
+        android:fontFamily="@font/arimo_bold"
+        android:layout_marginStart="@dimen/spacing_minor"
+        android:layout_marginEnd="@dimen/spacing_micro"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/header_more"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+    <androidx.appcompat.widget.AppCompatTextView
+        android:textAppearance="?attr/textAppearanceHeadline6"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="#4284be"
+        android:id="@+id/header_more"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_medium"
+        android:drawablePadding="@dimen/spacing_micro"
+        android:lineSpacingExtra="2sp"
+        android:drawableEnd="@drawable/arrow_show_all"
+        android:fontFamily="@font/arimo_bold"
+        android:layout_marginEnd="@dimen/spacing_minor"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+</androidx.constraintlayout.widget.ConstraintLayout>

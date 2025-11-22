@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout android:layout_width="fill_parent" android:layout_height="wrap_content"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <androidx.appcompat.widget.AppCompatTextView android:textAppearance="?textAppearanceSubtitle2" android:textStyle="bold" android:id="@id/txt_cityName" android:layout_width="0.0dip" android:layout_height="fill_parent" android:layout_margin="@dimen/spacing_large" android:fontFamily="@font/arimo_bold" app:layout_constraintBottom_toBottomOf="parent" app:layout_constraintEnd_toStartOf="@id/img_check" app:layout_constraintStart_toStartOf="parent" app:layout_constraintTop_toTopOf="parent" />
+    <ImageView android:id="@id/img_check" android:layout_width="16.0dip" android:layout_height="16.0dip" android:src="@drawable/icon_city_check" android:layout_marginEnd="@dimen/spacing_medium" app:layout_constraintBottom_toBottomOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toEndOf="@id/txt_cityName" app:layout_constraintTop_toTopOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>
