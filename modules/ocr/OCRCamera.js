@@ -23,11 +23,15 @@ const OCRCamera = ({
   onCropAreaSelected,
   style,
   guidanceText = 'Kimliğinizi çerçeve içine hizalayın',
+  multiFrameMode = true, // Enable multi-frame capture by default
+  frameCount = 3, // Number of frames to capture
 }) => {
   const [cameraStatus, setCameraStatus] = useState(OCR_STATUS.IDLE);
   const [hasPermission, setHasPermission] = useState(null);
   const [showCropOverlay, setShowCropOverlay] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
+  const [capturedFrames, setCapturedFrames] = useState([]); // Store multiple frames
+  const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [flashMode, setFlashMode] = useState('off');
   const [cropArea, setCropArea] = useState({
@@ -99,24 +103,68 @@ const OCRCamera = ({
       }
 
       setCameraStatus(OCR_STATUS.PROCESSING);
-      Logger.info('Taking photo...');
 
-      const photo = await cameraRef.current.takePhoto({
-        quality: 0.8,
-        skipMetadata: true,
-        flash: flashMode,
-      });
+      if (multiFrameMode) {
+        // Multi-frame mode: Capture multiple photos sequentially
+        Logger.info(`Starting multi-frame capture (${frameCount} frames)...`);
+        const frames = [];
 
-      const photoUri = `file://${photo.path}`;
-      Logger.info('Photo captured successfully', { uri: photoUri });
+        for (let i = 0; i < frameCount; i++) {
+          setCurrentFrameIndex(i + 1);
+          Logger.info(`Capturing frame ${i + 1}/${frameCount}...`);
 
-      // Show crop selection UI
-      setCapturedImage(photoUri);
-      setShowCropOverlay(true);
-      setCameraStatus(OCR_STATUS.READY);
+          const photo = await cameraRef.current.takePhoto({
+            quality: 0.9, // Higher quality for multi-frame
+            skipMetadata: true,
+            flash: i === 0 ? flashMode : 'off', // Only use flash on first frame
+          });
+
+          const photoUri = `file://${photo.path}`;
+          frames.push(photoUri);
+          Logger.info(`Frame ${i + 1} captured:`, photoUri);
+
+          // Small delay between captures for stability
+          if (i < frameCount - 1) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        }
+
+        Logger.info(`All ${frameCount} frames captured successfully`);
+        setCapturedFrames(frames);
+
+        // Return all frames to parent component
+        if (onImageCaptured) {
+          onImageCaptured({
+            type: 'multi-frame',
+            frames: frames,
+            frameCount: frames.length
+          });
+        }
+
+        setCurrentFrameIndex(0);
+        setCameraStatus(OCR_STATUS.READY);
+      } else {
+        // Single frame mode (original behavior)
+        Logger.info('Taking single photo...');
+
+        const photo = await cameraRef.current.takePhoto({
+          quality: 0.8,
+          skipMetadata: true,
+          flash: flashMode,
+        });
+
+        const photoUri = `file://${photo.path}`;
+        Logger.info('Photo captured successfully', { uri: photoUri });
+
+        // Show crop selection UI
+        setCapturedImage(photoUri);
+        setShowCropOverlay(true);
+        setCameraStatus(OCR_STATUS.READY);
+      }
     } catch (error) {
       Logger.error('Photo capture failed:', error.message);
       setCameraStatus(OCR_STATUS.ERROR);
+      setCurrentFrameIndex(0);
 
       if (onError) {
         onError(new Error(`Fotoğraf çekme hatası: ${error.message}`));
@@ -145,28 +193,43 @@ const OCRCamera = ({
     setCameraStatus(OCR_STATUS.READY);
   };
 
-  const renderGuidanceOverlay = () => (
-    <View style={styles.guidanceOverlay}>
-      <View style={styles.guidanceTop}>
-        <Text style={styles.guidanceText}>{guidanceText}</Text>
-      </View>
+  const renderGuidanceOverlay = () => {
+    const displayText = multiFrameMode && currentFrameIndex > 0
+      ? `Fotoğraf ${currentFrameIndex}/${frameCount} çekiliyor...`
+      : guidanceText;
 
-      <Animated.View
-        style={[styles.guidanceFrame, animatedFrameStyle]}
-      >
-        <View style={styles.frameCorner} />
-        <View style={[styles.frameCorner, styles.topRight]} />
-        <View style={[styles.frameCorner, styles.bottomLeft]} />
-        <View style={[styles.frameCorner, styles.bottomRight]} />
-      </Animated.View>
+    const subText = multiFrameMode && cameraStatus !== OCR_STATUS.PROCESSING
+      ? `${frameCount} fotoğraf çekilecek ve birleştirilecek`
+      : 'Belgeyi çerçeve içine yerleştirin ve net bir fotoğraf çekin';
 
-      <View style={styles.guidanceBottom}>
-        <Text style={styles.guidanceSubText}>
-          Belgeyi çerçeve içine yerleştirin ve net bir fotoğraf çekin
-        </Text>
+    return (
+      <View style={styles.guidanceOverlay}>
+        <View style={styles.guidanceTop}>
+          <Text style={styles.guidanceText}>{displayText}</Text>
+          {multiFrameMode && cameraStatus === OCR_STATUS.PROCESSING && (
+            <Text style={styles.frameCounter}>
+              📸 {currentFrameIndex}/{frameCount}
+            </Text>
+          )}
+        </View>
+
+        <Animated.View
+          style={[styles.guidanceFrame, animatedFrameStyle]}
+        >
+          <View style={styles.frameCorner} />
+          <View style={[styles.frameCorner, styles.topRight]} />
+          <View style={[styles.frameCorner, styles.bottomLeft]} />
+          <View style={[styles.frameCorner, styles.bottomRight]} />
+        </Animated.View>
+
+        <View style={styles.guidanceBottom}>
+          <Text style={styles.guidanceSubText}>
+            {subText}
+          </Text>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderCropOverlay = () => (
     <View style={styles.cropOverlay}>
@@ -401,6 +464,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
+  },
+  frameCounter: {
+    color: '#FFD700',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 15,
+    marginTop: 10,
   },
   guidanceFrame: {
     position: 'absolute',

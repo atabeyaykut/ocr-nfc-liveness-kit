@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.chip.Chip android:textAppearance="?textAppearanceSubtitle2" android:gravity="center" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ankara" android:fontFamily="@font/arimo" android:layout_marginStart="@dimen/spacing_minor" android:layout_marginEnd="@dimen/spacing_minor" app:closeIconEnabled="false" style="@style/Widget.App.ChoiceChip"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" />

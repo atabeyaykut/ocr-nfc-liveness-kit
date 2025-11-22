@@ -749,6 +749,53 @@ class OCRReaderModule {
     }
   };
 
+  /**
+   * Process multiple frames for enhanced OCR quality
+   * @param {Array<string>} imagePaths - Array of image paths (frames)
+   * @returns {Promise<object>} - OCR result
+   */
+  processMultiFrameImage = async (imagePaths) => {
+    const tempFiles = [];
+    try {
+      console.log('[OCR] processMultiFrameImage called with', imagePaths.length, 'frames');
+      console.log('[OCR] Card side:', this.options.cardSide);
+
+      if (!imagePaths || imagePaths.length === 0) {
+        throw new Error('No images provided for processing');
+      }
+
+      // Step 1: Merge multiple frames for enhanced quality
+      console.log('[OCR] Merging', imagePaths.length, 'frames...');
+      const mergedImagePath = await ImageProcessor.mergeMultipleFrames(imagePaths);
+      console.log('[OCR] Frames merged successfully:', mergedImagePath);
+
+      // Step 2: Process the merged image using standard OCR pipeline
+      console.log('[OCR] Processing merged image...');
+      const result = await this.processImage(mergedImagePath);
+
+      console.log('[OCR] Multi-frame processing completed successfully');
+      return result;
+
+    } catch (error) {
+      console.error('[OCR] processMultiFrameImage ERROR:', error);
+      console.error('[OCR] Error message:', error.message);
+
+      const errorResponse = {
+        success: false,
+        error: error.message,
+        code: 'OCR_MULTI_FRAME_ERROR',
+      };
+
+      if (this.callbacks.onError) {
+        this.callbacks.onError(errorResponse);
+      }
+
+      throw error;
+    } finally {
+      // Cleanup will be handled by processImage
+    }
+  };
+
   // Processing Methods with multi-attempt
   processImage = async (imagePath) => {
     const tempFiles = [];

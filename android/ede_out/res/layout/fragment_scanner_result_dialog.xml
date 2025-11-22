@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="wrap_content"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <com.google.android.material.textfield.TextInputLayout android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_margin="16.0dip" android:hint="@string/barcode_result" app:boxStrokeColor="@android:color/black" app:hintTextColor="@android:color/black" style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <com.google.android.material.textfield.TextInputEditText android:enabled="false" android:textColor="@android:color/black" android:id="@id/edtResult" android:layout_width="fill_parent" android:layout_height="wrap_content" />
+    </com.google.android.material.textfield.TextInputLayout>
+    <com.google.android.material.button.MaterialButton android:id="@id/btnCopy" android:layout_width="fill_parent" android:layout_height="wrap_content" android:text="@string/barcode_copy" android:insetTop="0.0dip" android:insetBottom="0.0dip" app:backgroundTint="@color/colorPrimary" app:cornerRadius="0.0dip" app:icon="@drawable/ic_copy" app:iconGravity="textStart" style="@style/Widget.MaterialComponents.Button.UnelevatedButton" />
+</LinearLayout>

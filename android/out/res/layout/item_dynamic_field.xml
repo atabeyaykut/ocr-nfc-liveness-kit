@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout android:layout_width="fill_parent" android:layout_height="fill_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <com.google.android.material.textfield.TextInputLayout android:id="@id/txt_input_manual" android:layout_width="0.0dip" android:layout_height="wrap_content" android:layout_marginTop="@dimen/spacing_medium" android:layout_marginStart="@dimen/spacing_major" android:layout_marginEnd="@dimen/spacing_major" app:errorEnabled="true" app:errorTextAppearance="@style/Manual_Error_Appearance" app:hintTextAppearance="?textAppearanceCaption" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintTop_toTopOf="parent" style="@style/Widget.App.TextInputLayout">
+        <com.google.android.material.textfield.TextInputEditText android:textAppearance="?textAppearanceSubtitle1" android:id="@id/edit_manual" android:layout_width="fill_parent" android:layout_height="wrap_content" android:maxLines="1" android:maxLength="100" android:inputType="textNoSuggestions" />
+    </com.google.android.material.textfield.TextInputLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

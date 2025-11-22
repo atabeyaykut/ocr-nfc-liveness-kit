@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/toast_container"
+    android:layout_width="match_parent"
+    android:layout_height="96dp"
+    app:cardBackgroundColor="@color/error_toast"
+    app:cardCornerRadius="@dimen/radius_large"
+    app:cardUseCompatPadding="true">
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/toast_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <ImageView
+            android:id="@+id/toast_image"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:src="@drawable/toast_error"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="@dimen/spacing_normal"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"/>
+        <TextView
+            android:textColor="@android:color/white"
+            android:id="@+id/toast_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Toast Message oast Message oast Message oast Message"
+            android:fontFamily="@font/arimo"
+            android:layout_marginEnd="@dimen/spacing_medium"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/toast_image"
+            app:layout_constraintTop_toTopOf="parent"/>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.cardview.widget.CardView>

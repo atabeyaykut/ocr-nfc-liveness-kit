@@ -1,0 +1,45 @@
+.class public final Lga/j;
+.super Lkotlin/jvm/internal/j;
+.source "SourceFile"
+
+# interfaces
+.implements Lx9/a;
+
+
+# annotations
+.annotation system Ldalvik/annotation/Signature;
+    value = {
+        "Lkotlin/jvm/internal/j;",
+        "Lx9/a<",
+        "Lma/j0;",
+        ">;"
+    }
+.end annotation
+
+
+# instance fields
+.field public final synthetic a:Lma/o0;
+
+
+# direct methods
+.method public constructor <init>(Lma/o0;)V
+    .locals 0
+
+    iput-object p1, p0, Lga/j;->a:Lma/o0;
+
+    const/4 p1, 0x0
+
+    invoke-direct {p0, p1}, Lkotlin/jvm/internal/j;-><init>(I)V
+
+    return-void
+.end method
+
+
+# virtual methods
+.method public final invoke()Ljava/lang/Object;
+    .locals 1
+
+    iget-object v0, p0, Lga/j;->a:Lma/o0;
+
+    return-object v0
+.end method

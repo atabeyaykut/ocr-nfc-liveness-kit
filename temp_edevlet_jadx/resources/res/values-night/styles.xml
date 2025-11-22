@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Button_Document_Info" parent="">
+        <item name="android:textAppearance">?attr/textAppearanceButton</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:backgroundTint">@color/buttonSurfaceDark</item>
+    </style>
+    <style name="CustomBottomSheetDialog" parent="@style/ThemeOverlay.MaterialComponents.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/CustomBottomSheet</item>
+        <item name="colorSurface">@color/bottom_sheet_night_bg</item>
+    </style>
+    <style name="Divider" parent="">
+        <item name="android:background">@color/divider_color_dark</item>
+    </style>
+    <style name="EDevlet.Blue" parent="@style/EDevlet">
+        <item name="android:colorBackground">@color/backgroundSurfaceDark</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/navigationBarBackgroundDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="colorOnSurface">@color/backgroundSurfaceDark</item>
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorSurface">@color/backgroundSurfaceDark</item>
+    </style>
+    <style name="EDevlet.Login" parent="@style/EDevlet">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowContentTransitions">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/backgroundSurfaceDark</item>
+        <item name="android:windowActivityTransitions">true</item>
+    </style>
+    <style name="EDevlet.Service" parent="@style/EDevlet">
+        <item name="android:colorBackground">@color/backgroundSurfaceDark</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/backgroundSurfaceDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="colorOnSurface">@color/backgroundSurfaceDark</item>
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorSurface">@color/backgroundSurfaceDark</item>
+    </style>
+    <style name="EDevlet.Splash" parent="@style/EDevlet">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowContentTransitions">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/backgroundSurfaceDark</item>
+        <item name="android:windowActivityTransitions">true</item>
+    </style>
+    <style name="HeaderLogo" parent="">
+        <item name="android:src">@drawable/toolbar_header_logo_dark</item>
+    </style>
+    <style name="Item_Subtitle_1" parent="">
+        <item name="android:textColor">@color/item_subtitle_dark</item>
+    </style>
+    <style name="Item_Subtitle_2" parent="">
+        <item name="android:textColor">@color/item_subtitle_dark</item>
+    </style>
+    <style name="Item_Subtitle_3" parent="">
+        <item name="android:textColor">@color/subtitleTextColorDark</item>
+    </style>
+    <style name="Item_Subtitle_4" parent="">
+        <item name="android:textColor">@color/white</item>
+    </style>
+    <style name="NameSurnameContent" parent="">
+        <item name="android:textAppearance">?attr/textAppearanceSubtitle1</item>
+        <item name="android:textStyle">0x1</item>
+        <item name="android:textColor">@color/item_name_surname_content_dark</item>
+        <item name="android:fontFamily">@font/arimo_bold</item>
+    </style>
+    <style name="NameSurnameTitle" parent="">
+        <item name="android:textAppearance">?attr/textAppearanceSubtitle1</item>
+        <item name="android:textStyle">0x0</item>
+        <item name="android:textColor">@color/item_name_surname_title_dark</item>
+    </style>
+    <style name="SectionTitle" parent="">
+        <item name="android:textAppearance">?attr/textAppearanceHeadline6</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">0x0</item>
+        <item name="android:textColor">@color/item_section_title_dark</item>
+        <item name="android:lineSpacingExtra">2sp</item>
+        <item name="android:fontFamily">@font/arimo</item>
+    </style>
+    <style name="Splash_Logo_Government" parent="">
+        <item name="android:src">@drawable/logo_splash_edevlet_dark</item>
+    </style>
+    <style name="Splash_Logo_ddo" parent="">
+        <item name="android:src">@drawable/logo_splash_ddo_dark</item>
+    </style>
+    <style name="Theme.AppCompat.DayNight" parent="@style/Theme.AppCompat">
+    </style>
+    <style name="Theme.AppCompat.DayNight.DarkActionBar" parent="@style/Theme.AppCompat">
+    </style>
+    <style name="Theme.AppCompat.DayNight.Dialog" parent="@style/Theme.AppCompat.Dialog">
+    </style>
+    <style name="Theme.AppCompat.DayNight.Dialog.Alert" parent="@style/Theme.AppCompat.Dialog.Alert">
+    </style>
+    <style name="Theme.AppCompat.DayNight.Dialog.MinWidth" parent="@style/Theme.AppCompat.Dialog.MinWidth">
+    </style>
+    <style name="Theme.AppCompat.DayNight.DialogWhenLarge" parent="@style/Theme.AppCompat.DialogWhenLarge">
+    </style>
+    <style name="Theme.AppCompat.DayNight.NoActionBar" parent="@style/Theme.AppCompat.NoActionBar">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight" parent="@style/Theme.MaterialComponents">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.BottomSheetDialog" parent="@style/Theme.MaterialComponents.BottomSheetDialog">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.Bridge" parent="@style/Theme.MaterialComponents.Bridge">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.DarkActionBar" parent="@style/Theme.MaterialComponents">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.DarkActionBar.Bridge" parent="@style/Theme.MaterialComponents.Bridge">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.Dialog" parent="@style/Theme.MaterialComponents.Dialog">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.Dialog.Alert" parent="@style/Theme.MaterialComponents.Dialog.Alert">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.Dialog.Alert.Bridge" parent="@style/Theme.MaterialComponents.Dialog.Alert.Bridge">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.Dialog.Bridge" parent="@style/Theme.MaterialComponents.Dialog.Bridge">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.Dialog.FixedSize" parent="@style/Theme.MaterialComponents.Dialog.FixedSize">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.Dialog.FixedSize.Bridge" parent="@style/Theme.MaterialComponents.Dialog.FixedSize.Bridge">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.Dialog.MinWidth" parent="@style/Theme.MaterialComponents.Dialog.MinWidth">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.Dialog.MinWidth.Bridge" parent="@style/Theme.MaterialComponents.Dialog.MinWidth.Bridge">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.DialogWhenLarge" parent="@style/Theme.MaterialComponents.DialogWhenLarge">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.NoActionBar" parent="@style/Theme.MaterialComponents.NoActionBar">
+    </style>
+    <style name="Theme.MaterialComponents.DayNight.NoActionBar.Bridge" parent="@style/Theme.MaterialComponents.NoActionBar.Bridge">
+    </style>
+    <style name="ThemeOverlay.App.BottomNavigationView" parent="">
+        <item name="colorOnSurface">@color/toolbarTextDark</item>
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorSurface">@color/toolbarBackgroundDark</item>
+    </style>
+    <style name="ThemeOverlay.App.Card" parent="">
+        <item name="colorSurface">@color/cardViewSurfaceDark</item>
+    </style>
+    <style name="ThemeOverlay.App.TextInputLayout" parent="@style/ThemeOverlay.MaterialComponents.TextInputEditText.OutlinedBox">
+        <item name="colorOnSurface">@color/colorAccent</item>
+    </style>
+    <style name="ThemeOverlay.AppCompat.DayNight" parent="@style/ThemeOverlay.AppCompat.Dark">
+    </style>
+    <style name="ThemeOverlay.Catalog.MaterialCalendar.Custom" parent="@style/ThemeOverlay.MaterialComponents.MaterialCalendar">
+        <item name="colorOnPrimary">@color/toolbarTextDark</item>
+        <item name="colorOnSurface">@color/toolbarTextDark</item>
+        <item name="textInputStyle">@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox</item>
+    </style>
+    <style name="Toolbar.TextAppearance" parent="@style/TextAppearance.MaterialComponents.Headline6">
+        <item name="android:textColorPrimary">@color/toolbarTextDark</item>
+        <item name="android:textStyle">0x1</item>
+        <item name="android:textColor">@color/toolbarTextDark</item>
+        <item name="android:fontFamily">@font/arimo_bold</item>
+        <item name="fontFamily">@font/arimo_bold</item>
+    </style>
+    <style name="Widget.App.BottomNavigationView" parent="@style/Widget.MaterialComponents.BottomNavigationView.PrimarySurface">
+        <item name="materialThemeOverlay">@style/ThemeOverlay.App.BottomNavigationView</item>
+    </style>
+    <style name="Widget.App.ChoiceChip" parent="@style/Widget.MaterialComponents.Chip.Choice">
+        <item name="android:textColor">@color/chip_text_color</item>
+        <item name="chipBackgroundColor">@color/chip_background_dark</item>
+        <item name="shapeAppearanceOverlay">@style/ThemeOverlay.App.Choice.ChipShape</item>
+    </style>
+    <style name="Widget.App.TextInputLayout" parent="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <item name="helperTextTextColor">@color/white</item>
+        <item name="materialThemeOverlay">@style/ThemeOverlay.App.TextInputLayout</item>
+        <item name="strokeColor">@color/colorAccent</item>
+    </style>
+    <style name="Widget.App.Toolbar" parent="@style/Widget.MaterialComponents.Toolbar">
+        <item name="android:textAppearance">@style/Toolbar.TextAppearance</item>
+        <item name="android:background">@color/toolbarBackgroundDark</item>
+        <item name="android:navigationIcon">@drawable/toolbar_back</item>
+        <item name="backgroundColor">@color/toolbarBackgroundDark</item>
+        <item name="navigationIcon">@drawable/toolbar_back</item>
+        <item name="titleTextAppearance">@style/Toolbar.TextAppearance</item>
+    </style>
+    <style name="Widget.MaterialComponents.ActionBar.PrimarySurface" parent="@style/Widget.MaterialComponents.ActionBar.Surface">
+    </style>
+    <style name="Widget.MaterialComponents.AppBarLayout.PrimarySurface" parent="@style/Widget.MaterialComponents.AppBarLayout.Surface">
+    </style>
+    <style name="Widget.MaterialComponents.BottomAppBar.PrimarySurface" parent="@style/Widget.MaterialComponents.BottomAppBar">
+    </style>
+    <style name="Widget.MaterialComponents.BottomNavigationView.PrimarySurface" parent="@style/Widget.MaterialComponents.BottomNavigationView">
+    </style>
+    <style name="Widget.MaterialComponents.NavigationRailView.PrimarySurface" parent="@style/Widget.MaterialComponents.NavigationRailView">
+    </style>
+    <style name="Widget.MaterialComponents.TabLayout.PrimarySurface" parent="@style/Widget.MaterialComponents.TabLayout">
+    </style>
+    <style name="Widget.MaterialComponents.Toolbar.PrimarySurface" parent="@style/Widget.MaterialComponents.Toolbar.Surface">
+    </style>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout android:id="@id/color_toast_view" android:layout_width="fill_parent" android:layout_height="100.0dip"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <ImageView android:id="@id/toast_image" android:layout_width="64.0dip" android:layout_height="64.0dip" android:layout_centerVertical="true" android:layout_marginStart="@dimen/spacing_major" />
+    <LinearLayout android:gravity="start" android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="wrap_content" android:layout_centerVertical="true" android:layout_marginStart="@dimen/spacing_minor" android:layout_marginEnd="@dimen/spacing_minor" android:layout_toEndOf="@id/toast_image">
+        <TextView android:textAppearance="@style/TextAppearance.MaterialComponents.Body2" android:textStyle="bold" android:textColor="@android:color/white" android:ellipsize="marquee" android:id="@id/toast_text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/spacing_minor" android:layout_marginBottom="@dimen/spacing_major" android:maxLines="2" android:fontFamily="@font/arimo_bold" android:textAlignment="textStart" android:layout_marginStart="@dimen/spacing_major" android:layout_marginEnd="@dimen/spacing_major" />
+    </LinearLayout>
+</RelativeLayout>

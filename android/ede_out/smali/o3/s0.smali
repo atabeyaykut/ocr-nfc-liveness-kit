@@ -1,0 +1,3 @@
+.class public final Lo3/s0;
+.super Ljava/lang/Object;
+.source "SourceFile"

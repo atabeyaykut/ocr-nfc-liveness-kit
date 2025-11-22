@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main_container"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/title_history_delete"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_minor"
+        android:text="@string/title_search_history"
+        android:drawablePadding="@dimen/spacing_minor"
+        android:lineSpacingExtra="2sp"
+        android:drawableStart="@drawable/title_history_icon"
+        android:layout_marginStart="@dimen/spacing_major"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        style="@style/HistoryDeleteTitle"/>
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/btn_delete_history"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_minor"
+        android:src="@drawable/btn_history_icon"
+        android:contentDescription="@string/cd_button_delete_history"
+        android:layout_marginStart="@dimen/spacing_minor"
+        android:layout_marginEnd="@dimen/spacing_major"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+</androidx.constraintlayout.widget.ConstraintLayout>

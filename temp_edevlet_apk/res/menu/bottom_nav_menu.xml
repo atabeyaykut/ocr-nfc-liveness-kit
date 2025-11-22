@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:icon="@drawable/menu_dashboard" android:enabled="true" android:id="@id/navigation_home" android:title="@string/title_home" android:contentDescription="@string/cd_title_home" />
+    <item android:icon="@drawable/menu_search" android:enabled="true" android:id="@id/navigation_search" android:title="@string/title_search" android:contentDescription="@string/cd_title_search" />
+    <item android:icon="@drawable/menu_list" android:enabled="true" android:id="@id/navigation_services" android:title="@string/title_services" android:contentDescription="@string/cd_title_services" />
+    <item android:icon="@drawable/menu_profile" android:enabled="true" android:id="@id/navigation_profile" android:title="@string/title_profile" android:contentDescription="@string/cd_title_profile" />
+</menu>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout android:padding="@dimen/spacing_xmajor" android:layout_width="fill_parent" android:layout_height="fill_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <ProgressBar android:layout_gravity="center" android:id="@id/mkt_fragment_progressBar" android:layout_width="48.0dip" android:layout_height="48.0dip" android:indeterminateTint="@color/colorPrimary" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintTop_toTopOf="parent" />
+    <TextView android:textAppearance="?textAppearanceBody2" android:textSize="14.0sp" android:id="@id/mkt_progress_content" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/spacing_major" android:text="@string/mkt_page_progress_text" android:fontFamily="@font/arimo" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintTop_toBottomOf="@id/mkt_fragment_progressBar" />
+</androidx.constraintlayout.widget.ConstraintLayout>
