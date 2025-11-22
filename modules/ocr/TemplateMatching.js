@@ -5,7 +5,7 @@
  */
 
 const Logger = require('../../utils/logger');
-const ImageProcessor = require('../../utils/imageProcessor');
+const { ImageProcessor } = require('../../utils/imageProcessor');
 
 class TemplateMatching {
     constructor(templateName = 'tc_kimlik_2021') {
