@@ -217,17 +217,16 @@ const VerificationFlowScreen = ({ navigation }) => {
         try {
             setDetectionHint('Fotoğraflar işleniyor...');
 
-            // NFC varsa sadece arka yüz
-            const hasNFC = frontPaths.length === 0;
-            if (hasNFC) {
-                addLog('🔄 OCR işlemi başlıyor (sadece arka yüz - NFC var)...');
+            // Sadece arka yüz varsa frontPaths boş array
+            const isSingleSide = frontPaths.length === 0;
+            if (isSingleSide) {
+                addLog('🔄 OCR işlemi başlıyor (sadece arka yüz MRZ)...');
             } else {
                 addLog('🔄 OCR işlemi başlıyor (ön + arka)...');
             }
 
-            const result = hasNFC
-                ? await ocrModuleRef.current.processImages(backPaths) // Sadece arka yüz
-                : await ocrModuleRef.current.processBothSides(frontPaths, backPaths); // Her ikisi
+            // processBothSides boş frontPaths ile çalışabilir
+            const result = await ocrModuleRef.current.processBothSides(frontPaths, backPaths);
 
             addLog('✅ OCR tamamlandı');
             console.log('[OCR] Result:', result);
