@@ -252,12 +252,17 @@ const VerificationFlowScreen = ({ navigation }) => {
 
             setOcrResult(result);
 
-            // Save biometric photo for liveness
-            if (result.biometricPhoto) {
-                setBiometricPhotoUri(result.biometricPhoto);
-                addLog('✅ Biyometrik fotoğraf kaydedildi');
-            } else {
-                addLog('⚠️ Biyometrik fotoğraf bulunamadı');
+            // Log OCR data for NFC debugging
+            addLog('📋 OCR Verileri (NFC için):');
+            const ocrData = result.data || {};
+            addLog(`  • TC No: ${ocrData.tcNo || 'YOK'}`);
+            addLog(`  • Belge No: ${ocrData.documentNo || ocrData.serialNo || 'YOK'}`);
+            addLog(`  • Doğum: ${ocrData.birthDate || 'YOK'}`);
+            addLog(`  • Geçerlilik: ${ocrData.validUntil || 'YOK'}`);
+            addLog(`  • Ad: ${ocrData.name || 'YOK'}`);
+            addLog(`  • Soyad: ${ocrData.surname || 'YOK'}`);
+            if (ocrData.mrzCheckDigits) {
+                addLog(`  • Check Digits: ${JSON.stringify(ocrData.mrzCheckDigits)}`);
             }
 
             addLog('➡️ NFC başlatılıyor...');
@@ -318,19 +323,27 @@ const VerificationFlowScreen = ({ navigation }) => {
                 setDetectionHint('Kartı telefonun arkasına yaklaştırın...');
             });
 
+            const mrzSeed = {
+                tcNo: ocrData.tcNo,
+                name: ocrData.name,
+                surname: ocrData.surname,
+                birthDate: ocrData.birthDate,
+                documentNo: ocrData.documentNo || ocrData.serialNo,
+                serialNo: ocrData.serialNo,
+                validUntil: ocrData.validUntil,
+                mrzCheckDigits: ocrData.mrzCheckDigits,
+            };
+
+            addLog('🔐 BAC için gönderilen veriler:');
+            addLog(`  • tcNo: ${mrzSeed.tcNo || '❌ EKSİK'}`);
+            addLog(`  • birthDate: ${mrzSeed.birthDate || '❌ EKSİK'}`);
+            addLog(`  • validUntil: ${mrzSeed.validUntil || '❌ EKSİK'}`);
+            addLog(`  • documentNo: ${mrzSeed.documentNo || '❌ EKSİK'}`);
+
             await nfcModuleRef.current.startNFC({
                 cardType: 'tc_kimlik',
                 readTimeout: 60000,
-                mrzSeed: {
-                    tcNo: ocrData.tcNo,
-                    name: ocrData.name,
-                    surname: ocrData.surname,
-                    birthDate: ocrData.birthDate,
-                    documentNo: ocrData.documentNo || ocrData.serialNo,
-                    serialNo: ocrData.serialNo,
-                    validUntil: ocrData.validUntil,
-                    mrzCheckDigits: ocrData.mrzCheckDigits,
-                },
+                mrzSeed: mrzSeed,
             });
         } catch (error) {
             console.error('[NFC] Error:', error);
