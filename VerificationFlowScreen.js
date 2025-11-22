@@ -20,6 +20,7 @@ import {
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import NfcManager from 'react-native-nfc-manager';
+import LivenessModule from './modules/liveness/LivenessModule';
 
 const OCRReaderModule = require('./modules/ocr/OCRReaderModule').default || require('./modules/ocr/OCRReaderModule');
 const { NFCReaderModule } = require('./modules/nfc/NFCReaderModule');
@@ -39,6 +40,7 @@ const VerificationFlowScreen = ({ navigation }) => {
     const [logs, setLogs] = useState([]);
     const [frontFrames, setFrontFrames] = useState([]);
     const [backFrames, setBackFrames] = useState([]);
+    const [biometricPhotoUri, setBiometricPhotoUri] = useState(null);
     const [ocrResult, setOcrResult] = useState(null);
     const [nfcResult, setNfcResult] = useState(null);
     const [livenessResult, setLivenessResult] = useState(null);
@@ -202,6 +204,15 @@ const VerificationFlowScreen = ({ navigation }) => {
             }
 
             setOcrResult(result);
+
+            // Save biometric photo for liveness
+            if (result.biometricPhoto) {
+                setBiometricPhotoUri(result.biometricPhoto);
+                addLog('✅ Biyometrik fotoğraf kaydedildi');
+            } else {
+                addLog('⚠️ Biyometrik fotoğraf bulunamadı');
+            }
+
             addLog('➡️ NFC başlatılıyor...');
 
             // Start NFC flow
@@ -286,14 +297,38 @@ const VerificationFlowScreen = ({ navigation }) => {
     const startLivenessFlow = useCallback(() => {
         setCurrentPhase('liveness');
         addLog('👤 Liveness başlatılıyor...');
-        setDetectionHint('Liveness kontrolü başlatılıyor...');
+        setDetectionHint('Canlılık testi başlıyor...');
 
-        // TODO: Implement liveness detection
-        setTimeout(() => {
-            addLog('✅ Liveness tamamlandı (placeholder)');
-            setLivenessResult({ success: true, placeholder: true });
-            setCurrentPhase('completed');
-        }, 2000);
+        if (!biometricPhotoUri) {
+            addLog('⚠️ Biyometrik fotoğraf yok, liveness atlanıyor');
+            Alert.alert('Uyarı', 'Biyometrik fotoğraf bulunamadı, liveness testi atlanıyor.');
+            setTimeout(() => {
+                setLivenessResult({ success: false, skipped: true });
+                setCurrentPhase('completed');
+            }, 1000);
+        }
+    }, [addLog, biometricPhotoUri]);
+
+    // Liveness success handler
+    const handleLivenessSuccess = useCallback((result) => {
+        addLog(`✅ Liveness başarılı! Benzerlik: %${result.similarity}`);
+        setLivenessResult(result);
+        setCurrentPhase('completed');
+    }, [addLog]);
+
+    // Liveness error handler
+    const handleLivenessError = useCallback((error) => {
+        addLog(`❌ Liveness hatası: ${error.message}`);
+        Alert.alert('Liveness Hatası', error.message, [
+            { text: 'Tekrar Dene', onPress: () => setCurrentPhase('liveness') },
+            { text: 'Atla', onPress: () => setCurrentPhase('completed') }
+        ]);
+    }, [addLog]);
+
+    // Liveness cancel handler
+    const handleLivenessCancel = useCallback(() => {
+        addLog('Liveness iptal edildi');
+        setCurrentPhase('completed');
     }, [addLog]);
 
     // Start verification
@@ -304,6 +339,7 @@ const VerificationFlowScreen = ({ navigation }) => {
         setOcrResult(null);
         setNfcResult(null);
         setLivenessResult(null);
+        setBiometricPhotoUri(null); // added this line
         addLog('🚀 Doğrulama başlatıldı');
         startFrontCapture();
     }, [addLog, startFrontCapture]);
@@ -314,6 +350,7 @@ const VerificationFlowScreen = ({ navigation }) => {
         setIsCameraActive(false);
         setFrontFrames([]);
         setBackFrames([]);
+        setBiometricPhotoUri(null); // added this line
         setOcrResult(null);
         setNfcResult(null);
         setLivenessResult(null);
@@ -440,14 +477,32 @@ const VerificationFlowScreen = ({ navigation }) => {
     );
 
     // Render liveness
-    const renderLiveness = () => (
-        <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#2196F3" />
-            <Text style={styles.title}>👤 Liveness</Text>
-            <Text style={styles.subtitle}>{detectionHint}</Text>
-            <Text style={styles.infoText}>(Placeholder - yakında eklenecek)</Text>
-        </View>
-    );
+    const renderLiveness = () => {
+        if (!biometricPhotoUri) {
+            return (
+                <View style={styles.centerContainer}>
+                    <Text style={styles.errorText}>
+                        Biyometrik fotoğraf bulunamadı
+                    </Text>
+                    <TouchableOpacity
+                        style={styles.secondaryButton}
+                        onPress={() => setCurrentPhase('completed')}
+                    >
+                        <Text style={styles.secondaryButtonText}>Atla</Text>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+
+        return (
+            <LivenessModule
+                referencePhotoUri={biometricPhotoUri}
+                onSuccess={handleLivenessSuccess}
+                onError={handleLivenessError}
+                onCancel={handleLivenessCancel}
+            />
+        );
+    };
 
     // Render completed
     const renderCompletedScreen = () => (
@@ -488,9 +543,23 @@ const VerificationFlowScreen = ({ navigation }) => {
             {livenessResult && (
                 <View style={styles.resultCard}>
                     <Text style={styles.resultCardTitle}>👤 Liveness Sonucu</Text>
-                    <Text style={styles.resultText}>
-                        {livenessResult.placeholder ? '(Placeholder)' : 'Canlılık doğrulandı'}
-                    </Text>
+                    {livenessResult.skipped ? (
+                        <Text style={styles.warningText}>Atlandı</Text>
+                    ) : livenessResult.success ? (
+                        <>
+                            <Text style={styles.resultText}>
+                                ✅ Canlılık doğrulandı
+                            </Text>
+                            <Text style={styles.resultText}>
+                                Benzerlik: %{livenessResult.similarity}
+                            </Text>
+                            <Text style={styles.resultText}>
+                                Komut sayısı: {livenessResult.commands}
+                            </Text>
+                        </>
+                    ) : (
+                        <Text style={styles.warningText}>Başarısız</Text>
+                    )}
                 </View>
             )}
 
