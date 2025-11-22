@@ -11,6 +11,10 @@ import android.content.Intent;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
 import android.app.PendingIntent;
+import android.util.Log;
+import com.facebook.react.bridge.ReactContext;
+import com.facebook.react.ReactInstanceManager;
+import com.sdk.nfc.NFCPassportReaderModule;
 
 public class MainActivity extends ReactActivity {
   private NfcAdapter nfcAdapter;
@@ -56,7 +60,23 @@ public class MainActivity extends ReactActivity {
         NfcAdapter.ACTION_TAG_DISCOVERED.equals(intent.getAction())) {
       Tag tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
       if (tag != null) {
-        // NFC tag detected - this will be handled by the React Native NFC manager
+        Log.d("MainActivity", "NFC Tag detected: " + tag.toString());
+
+        // Pass tag to native module
+        ReactInstanceManager reactInstanceManager = getReactNativeHost().getReactInstanceManager();
+        ReactContext reactContext = reactInstanceManager.getCurrentReactContext();
+
+        if (reactContext != null) {
+          NFCPassportReaderModule nfcModule = reactContext.getNativeModule(NFCPassportReaderModule.class);
+          if (nfcModule != null) {
+            nfcModule.setTag(tag);
+            Log.d("MainActivity", "Tag passed to NFCPassportReaderModule");
+          } else {
+            Log.w("MainActivity", "NFCPassportReaderModule not found");
+          }
+        } else {
+          Log.w("MainActivity", "ReactContext not ready yet");
+        }
       }
     }
   }
