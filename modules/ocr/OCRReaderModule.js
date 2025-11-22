@@ -1418,6 +1418,12 @@ class OCRReaderModule {
 
       const [frontResult, backResult] = await Promise.all([
         (async () => {
+          // Skip front side if no images provided
+          if (!frontPaths || frontPaths.length === 0 || !frontPaths[0]) {
+            console.log('[OCR] Skipping front side (no images)');
+            return { success: true, fields: {}, confidence: 0, text: '' };
+          }
+
           console.log('[OCR] Processing front side...');
           // Create separate options for front side (avoid race condition)
           const originalCardSide = this.options.cardSide;
@@ -1435,6 +1441,12 @@ class OCRReaderModule {
         })(),
 
         (async () => {
+          // Skip back side if no images provided
+          if (!backPaths || backPaths.length === 0 || !backPaths[0]) {
+            console.log('[OCR] Skipping back side (no images)');
+            return { success: true, fields: {}, confidence: 0, text: '' };
+          }
+
           console.log('[OCR] Processing back side (full card photo)...');
           // Create separate options for back side (avoid race condition)
           const originalCardSide = this.options.cardSide;
