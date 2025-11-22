@@ -22,7 +22,7 @@ const OCRCamera = ({
   onError,
   onCropAreaSelected,
   style,
-  guidanceText = 'Kimliğinizi çerçeve içine hizalayın',
+  guidanceText = 'Kartın tamamını çerçeve içine hizalayın',
   multiFrameMode = true, // Enable multi-frame capture by default
   frameCount = 3, // Number of frames to capture
 }) => {
@@ -200,7 +200,7 @@ const OCRCamera = ({
 
     const subText = multiFrameMode && cameraStatus !== OCR_STATUS.PROCESSING
       ? `${frameCount} fotoğraf çekilecek ve birleştirilecek`
-      : 'Belgeyi çerçeve içine yerleştirin ve net bir fotoğraf çekin';
+      : 'Kartın tamamını çerçeve içine yerleştirin';
 
     return (
       <View style={styles.guidanceOverlay}>
