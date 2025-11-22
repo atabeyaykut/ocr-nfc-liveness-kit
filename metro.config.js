@@ -4,7 +4,7 @@
  * @format
  */
 
-const {getDefaultConfig, mergeConfig} = require('@react-native/metro-config');
+const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
 
 /**
  * Metro configuration
@@ -14,6 +14,13 @@ const {getDefaultConfig, mergeConfig} = require('@react-native/metro-config');
  */
 const config = {
   resolver: {
+    // Node.js polyfills for crypto operations (BAC implementation)
+    extraNodeModules: {
+      crypto: require.resolve('crypto-js'),
+      buffer: require.resolve('buffer'),
+      process: require.resolve('process/browser'),
+      stream: require.resolve('readable-stream'),
+    },
     assetExts: [
       ...require('@react-native/metro-config').getDefaultConfig(__dirname).resolver.assetExts,
       // Text and data files
