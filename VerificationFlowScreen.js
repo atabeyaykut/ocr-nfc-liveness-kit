@@ -1,7 +1,7 @@
 /**
- * Verification Flow Screen - Basitleştirilmiş versiyon
- * OCR -> NFC akışını tek sayfada yönetir
- * Frame processor kullanmaz, basit timer ile çalışır
+ * Verification Flow Screen - Tam Doğrulama Akışı
+ * OCR (Ön+Arka Yüz Multi-Frame) → NFC → Liveness
+ * Ön ve arka yüz ayrı çekiliyor, MRZ karşılaştırması yapılıyor
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -27,38 +27,35 @@ const { NFCReaderModule } = require('./modules/nfc/NFCReaderModule');
 const { width: screenWidth } = Dimensions.get('window');
 
 const CAPTURE_SEQUENCE_COUNT = 3;
-const CAPTURE_DELAY_MS = 400;
-const MRZ_CHECK_INTERVAL_MS = 500; // Her 500ms'de bir MRZ kontrolü yap
+const CAPTURE_DELAY_MS = 200;
+const SIDE = {
+    FRONT: 'front',
+    BACK: 'back'
+};
 
 const VerificationFlowScreen = ({ navigation }) => {
-    const [currentPhase, setCurrentPhase] = useState('idle');
-    const [ocrLogs, setOcrLogs] = useState([]);
-    const [nfcLogs, setNfcLogs] = useState([]);
+    const [currentPhase, setCurrentPhase] = useState('idle'); // idle, ocr_front, ocr_back, processing, nfc, liveness, completed
+    const [currentSide, setCurrentSide] = useState(SIDE.FRONT);
+    const [logs, setLogs] = useState([]);
+    const [frontFrames, setFrontFrames] = useState([]);
+    const [backFrames, setBackFrames] = useState([]);
     const [ocrResult, setOcrResult] = useState(null);
     const [nfcResult, setNfcResult] = useState(null);
+    const [livenessResult, setLivenessResult] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isCameraActive, setIsCameraActive] = useState(false);
-    const [pendingCaptures, setPendingCaptures] = useState(0);
+    const [captureCount, setCaptureCount] = useState(0);
     const [detectionHint, setDetectionHint] = useState('');
-    const [torchEnabled, setTorchEnabled] = useState(false);
 
     const cameraRef = useRef(null);
     const ocrModuleRef = useRef(new OCRReaderModule());
     const nfcModuleRef = useRef(new NFCReaderModule());
-    const mrzCheckIntervalRef = useRef(null);
-    const isCheckingMrzRef = useRef(false);
 
     const device = useCameraDevice('back');
 
-    const addLog = useCallback((type, message, data = null) => {
+    const addLog = useCallback((message, data = null) => {
         const timestamp = new Date().toLocaleTimeString('tr-TR');
-        const logEntry = { timestamp, message, data };
-
-        if (type === 'ocr') {
-            setOcrLogs((prev) => [logEntry, ...prev].slice(0, 20));
-        } else if (type === 'nfc') {
-            setNfcLogs((prev) => [logEntry, ...prev].slice(0, 20));
-        }
+        setLogs((prev) => [{ timestamp, message, data }, ...prev].slice(0, 30));
     }, []);
 
     const checkCameraPermission = useCallback(async () => {
@@ -70,335 +67,300 @@ const VerificationFlowScreen = ({ navigation }) => {
             const newStatus = await request(permissionType);
             if (newStatus === RESULTS.GRANTED) return true;
 
-            Alert.alert('Kamera İzni Gerekli', 'OCR işlemi için kamera izni vermeniz gerekiyor.');
+            Alert.alert('Kamera İzni Gerekli', 'Doğrulama için kamera izni vermeniz gerekiyor.');
             return false;
         } catch (err) {
-            console.error('[Verification] Kamera izni kontrolü başarısız:', err);
+            console.error('[Verification] Kamera izni hatası:', err);
             return false;
         }
     }, []);
 
-    const captureSingleMrz = useCallback(async (captureNumber) => {
-        const photo = await cameraRef.current.takePhoto({
-            qualityPrioritization: 'speed',
-            flash: torchEnabled ? 'on' : 'off',
-            skipMetadata: true,
-        });
-
-        const photoPath = photo?.path || photo?.uri;
-        if (!photoPath) throw new Error('Fotoğraf alınamadı');
-
-        // Dosya yolunu normalize et (file:// prefix'i ekle)
-        const normalizedPath = photoPath.startsWith('file://')
-            ? photoPath
-            : `file://${photoPath}`;
-
-        addLog('ocr', `Fotoğraf ${captureNumber} çekildi`);
-
-        ocrModuleRef.current.options = { ...(ocrModuleRef.current.options || {}), cardSide: 'back' };
-        const result = await ocrModuleRef.current.processImage(normalizedPath);
-
-        if (!result?.success) throw new Error(result?.error || 'OCR işlemi başarısız');
-
-        addLog('ocr', `İşlendi. Güven: %${result.confidence || 0}`, result.fields);
-        return result;
-    }, [addLog, torchEnabled]);
-
-    const takePhotoAndProcess = useCallback(async () => {
-        if (!cameraRef.current || isProcessing) return;
-
+    // Multi-frame capture
+    const captureMultipleFrames = useCallback(async (side) => {
         try {
+            addLog(`${side === SIDE.FRONT ? 'Ön' : 'Arka'} yüz: ${CAPTURE_SEQUENCE_COUNT} fotoğraf çekiliyor...`);
             setIsProcessing(true);
-            setPendingCaptures(CAPTURE_SEQUENCE_COUNT);
-            setDetectionHint('Fotoğraflar çekiliyor...');
-            addLog('ocr', `${CAPTURE_SEQUENCE_COUNT} fotoğraf çekilecek...`);
 
-            const successfulCaptures = [];
+            const frames = [];
             for (let i = 0; i < CAPTURE_SEQUENCE_COUNT; i++) {
-                try {
-                    const result = await captureSingleMrz(i + 1);
-                    successfulCaptures.push(result);
-                } catch (error) {
-                    addLog('ocr', `Fotoğraf ${i + 1} başarısız: ${error?.message}`);
-                }
-                setPendingCaptures(CAPTURE_SEQUENCE_COUNT - (i + 1));
+                setCaptureCount(i + 1);
+
+                const photo = await cameraRef.current.takePhoto({
+                    quality: 0.9,
+                    skipMetadata: true,
+                });
+
+                const photoPath = photo?.path || photo?.uri;
+                if (!photoPath) throw new Error('Fotoğraf alınamadı');
+
+                const normalizedPath = photoPath.startsWith('file://')
+                    ? photoPath
+                    : `file://${photoPath}`;
+
+                frames.push(normalizedPath);
+                addLog(`Fotoğraf ${i + 1}/${CAPTURE_SEQUENCE_COUNT} çekildi`);
+
                 if (i < CAPTURE_SEQUENCE_COUNT - 1) {
-                    await new Promise((resolve) => setTimeout(resolve, CAPTURE_DELAY_MS));
+                    await new Promise(resolve => setTimeout(resolve, CAPTURE_DELAY_MS));
                 }
             }
 
-            setPendingCaptures(0);
+            addLog(`✅ ${frames.length} fotoğraf başarıyla çekildi`);
+            return frames;
+        } catch (error) {
+            addLog(`❌ Hata: ${error.message}`);
+            throw error;
+        } finally {
+            setCaptureCount(0);
+            setIsProcessing(false);
+        }
+    }, [addLog]);
 
-            if (successfulCaptures.length === 0) {
-                throw new Error('Hiçbir çekimden MRZ verisi elde edilemedi.');
-            }
+    // Start front side capture
+    const startFrontCapture = useCallback(async () => {
+        const hasPermission = await checkCameraPermission();
+        if (!hasPermission) return;
 
-            const bestResult = successfulCaptures.reduce((best, current) => {
-                return (current?.confidence ?? 0) > (best?.confidence ?? 0) ? current : best;
-            }, successfulCaptures[0]);
+        setCurrentPhase('ocr_front');
+        setCurrentSide(SIDE.FRONT);
+        setIsCameraActive(true);
+        setDetectionHint('Ön yüzü gösterin - Butona basın');
+        addLog('📸 Ön yüz çekimi başlıyor...');
+    }, [addLog, checkCameraPermission]);
 
-            console.log('[OCR] === OCR TAMAMLANDI ===');
-            console.log('[OCR] Başarılı çekim sayısı:', successfulCaptures.length);
-            console.log('[OCR] En iyi sonuç:', JSON.stringify(bestResult.fields, null, 2));
-
-            addLog('ocr', `${successfulCaptures.length} başarılı çekim. En iyi: %${bestResult.confidence}`, bestResult.fields);
-
-            setOcrResult(bestResult);
+    // Capture front side frames
+    const captureFront = useCallback(async () => {
+        try {
+            setDetectionHint('Ön yüz çekiliyor...');
+            const frames = await captureMultipleFrames(SIDE.FRONT);
+            setFrontFrames(frames);
             setIsCameraActive(false);
-            setDetectionHint('OCR tamamlandı, NFC başlatılıyor...');
-            addLog('ocr', 'OCR tamamlandı', bestResult.fields);
 
-            console.log('[OCR] NFC flow 1 saniye sonra başlatılacak...');
+            addLog('✅ Ön yüz tamamlandı, arka yüz başlatılıyor...');
+
+            // Auto-start back side after 1 second
             setTimeout(() => {
-                console.log('[OCR] Timeout tamamlandı, startNfcFlow çağrılıyor...');
-                startNfcFlow(bestResult.fields);
+                setCurrentPhase('ocr_back');
+                setCurrentSide(SIDE.BACK);
+                setIsCameraActive(true);
+                setDetectionHint('Arka yüzü gösterin - Butona basın');
+                addLog('📸 Arka yüz çekimi başlıyor...');
             }, 1000);
         } catch (error) {
-            console.error('[Verification] Hata:', error);
             Alert.alert('Hata', error.message);
-            setIsProcessing(false);
-            addLog('ocr', `Hata: ${error.message}`);
+            setIsCameraActive(false);
         }
-    }, [addLog, isProcessing, torchEnabled, captureSingleMrz]);
+    }, [addLog, captureMultipleFrames]);
 
-    // MRZ algılama - periyodik snapshot kontrolü
-    const checkForMrz = useCallback(async () => {
-        if (isCheckingMrzRef.current || !cameraRef.current || isProcessing) return;
-
+    // Capture back side frames
+    const captureBack = useCallback(async () => {
         try {
-            isCheckingMrzRef.current = true;
+            setDetectionHint('Arka yüz çekiliyor...');
+            const frames = await captureMultipleFrames(SIDE.BACK);
+            setBackFrames(frames);
+            setIsCameraActive(false);
 
-            // Küçük bir snapshot çek
-            const snapshot = await cameraRef.current.takeSnapshot({
-                quality: 50,
-                skipMetadata: true,
-            });
+            addLog('✅ Her iki taraf çekildi, işleniyor...');
+            setCurrentPhase('processing');
 
-            const snapshotPath = snapshot?.path || snapshot?.uri;
-            if (!snapshotPath) {
-                isCheckingMrzRef.current = false;
-                return;
-            }
-
-            // Dosya yolunu normalize et (file:// prefix'i ekle)
-            const normalizedPath = snapshotPath.startsWith('file://')
-                ? snapshotPath
-                : `file://${snapshotPath}`;
-
-            // Hızlı MRZ kontrolü
-            const TextRecognition = require('@react-native-ml-kit/text-recognition').default;
-            const result = await TextRecognition.recognize(normalizedPath);
-
-            // MRZ pattern kontrolü (2 satır, her biri 30+ karakter)
-            const lines = result?.text?.split('\n').filter(line => line.length > 20) || [];
-            const hasMrzPattern = lines.some(line =>
-                /^[A-Z0-9<]{25,}$/.test(line.replace(/\s/g, ''))
-            );
-
-            console.log('[MRZ Check] Kontrol edildi. MRZ bulundu mu?', hasMrzPattern);
-            if (lines.length > 0) {
-                console.log('[MRZ Check] Bulunan satırlar:', lines.slice(0, 3));
-            }
-
-            if (hasMrzPattern) {
-                console.log('[MRZ Check] ✅ MRZ ALGILANDI! Fotoğraf çekimi başlatılıyor...');
-                addLog('ocr', 'Kart algılandı! Fotoğraflar çekiliyor...');
-                setDetectionHint('✓ Kart algılandı! Çekim başlıyor...');
-
-                // Interval'i durdur
-                if (mrzCheckIntervalRef.current) {
-                    clearInterval(mrzCheckIntervalRef.current);
-                    mrzCheckIntervalRef.current = null;
-                }
-
-                // 3 fotoğraf çekimi başlat
-                console.log('[MRZ Check] takePhotoAndProcess 200ms sonra çağrılacak...');
-                setTimeout(() => {
-                    console.log('[MRZ Check] takePhotoAndProcess çağrılıyor...');
-                    takePhotoAndProcess();
-                }, 200);
-            } else {
-                setDetectionHint('Kartın arka yüzünü gösterin...');
-            }
-
-            isCheckingMrzRef.current = false;
+            // Process both sides
+            await processOCR(frontFrames, frames);
         } catch (error) {
-            console.error('[MRZ Check] Hata:', error);
-            isCheckingMrzRef.current = false;
+            Alert.alert('Hata', error.message);
+            setIsCameraActive(false);
         }
-    }, [isProcessing, addLog, takePhotoAndProcess]);
+    }, [addLog, captureMultipleFrames, frontFrames]);
 
-    // Periyodik MRZ kontrolü başlat
-    useEffect(() => {
-        if (currentPhase === 'ocr' && isCameraActive && !isProcessing && !ocrResult) {
-            setDetectionHint('Kartın arka yüzünü gösterin...');
-
-            // Her 500ms'de bir kontrol et
-            mrzCheckIntervalRef.current = setInterval(() => {
-                checkForMrz();
-            }, MRZ_CHECK_INTERVAL_MS);
-
-            return () => {
-                if (mrzCheckIntervalRef.current) {
-                    clearInterval(mrzCheckIntervalRef.current);
-                    mrzCheckIntervalRef.current = null;
-                }
-            };
-        }
-    }, [currentPhase, isCameraActive, isProcessing, ocrResult, checkForMrz]);
-
-    const startNfcFlow = useCallback(async (ocrFields = {}) => {
+    // Process OCR with both sides
+    const processOCR = useCallback(async (frontPaths, backPaths) => {
         try {
-            console.log('[NFC Flow] === NFC FLOW BAŞLADI ===');
-            console.log('[NFC Flow] OCR Fields:', JSON.stringify(ocrFields, null, 2));
+            setDetectionHint('Fotoğraflar işleniyor...');
+            addLog('🔄 OCR işlemi başlıyor (ön + arka)...');
 
+            const result = await ocrModuleRef.current.processBothSides(frontPaths, backPaths);
+
+            addLog('✅ OCR tamamlandı');
+            console.log('[OCR] Result:', result);
+
+            // Check conflicts
+            if (result.data?.conflicts && result.data.conflicts.length > 0) {
+                addLog(`⚠️ ${result.data.conflicts.length} çelişki tespit edildi`);
+                result.data.conflicts.forEach(conflict => {
+                    addLog(`  - ${conflict.field}: Ön="${conflict.frontValue}" vs Arka="${conflict.backValue}"`);
+                });
+            }
+
+            // Show comparison
+            if (result.frontSide && result.backSide) {
+                addLog('📊 Karşılaştırma:');
+                ['tcNo', 'name', 'surname', 'birthDate'].forEach(field => {
+                    const frontVal = result.frontSide[field] || '-';
+                    const backVal = result.backSide[field] || '-';
+                    const match = frontVal === backVal ? '✓' : '✗';
+                    addLog(`  ${match} ${field}: Ön="${frontVal}" Arka="${backVal}"`);
+                });
+            }
+
+            setOcrResult(result);
+            addLog('➡️ NFC başlatılıyor...');
+
+            // Start NFC flow
+            setTimeout(() => {
+                startNfcFlow(result.data);
+            }, 1500);
+        } catch (error) {
+            console.error('[OCR] Error:', error);
+            addLog(`❌ OCR hatası: ${error.message}`);
+            Alert.alert('OCR Hatası', error.message);
+            setCurrentPhase('completed');
+        }
+    }, [addLog]);
+
+    // Start NFC flow
+    const startNfcFlow = useCallback(async (ocrData = {}) => {
+        try {
             setCurrentPhase('nfc');
-            addLog('nfc', 'NFC başlatılıyor...', ocrFields);
+            addLog('📡 NFC başlatılıyor...');
 
-            console.log('[NFC Flow] Checking NFC support...');
             const isSupported = await NfcManager.isSupported();
-            console.log('[NFC Flow] NFC Supported:', isSupported);
-
             if (!isSupported) {
-                console.error('[NFC Flow] ❌ NFC desteklenmiyor!');
-                addLog('nfc', 'NFC desteklenmiyor');
+                addLog('❌ NFC desteklenmiyor');
                 Alert.alert('NFC Desteklenmiyor', 'Bu cihaz NFC desteklemiyor.');
-                setCurrentPhase('completed');
+                startLivenessFlow();
                 return;
             }
 
-            console.log('[NFC Flow] Checking NFC enabled status...');
             const isEnabled = await NfcManager.isEnabled();
-            console.log('[NFC Flow] NFC Enabled:', isEnabled);
-
             if (!isEnabled) {
-                console.error('[NFC Flow] ❌ NFC kapalı!');
-                addLog('nfc', 'NFC kapalı');
+                addLog('⚠️ NFC kapalı');
                 Alert.alert('NFC Kapalı', 'NFC ayarlardan açılmalı.',
                     [
-                        { text: 'İptal', onPress: () => setCurrentPhase('completed') },
+                        { text: 'İptal', onPress: () => startLivenessFlow() },
                         { text: 'Ayarlar', onPress: () => NfcManager.goToNfcSetting() }
                     ]
                 );
                 return;
             }
 
-            console.log('[NFC Flow] ✅ NFC hazır, callbacks kuruluyor...');
-
             nfcModuleRef.current.onNFCResult((result) => {
-                addLog('nfc', 'NFC başarılı', result.parsedFields);
+                addLog('✅ NFC başarılı');
                 setNfcResult(result);
-                setCurrentPhase('completed');
                 nfcModuleRef.current.stopNFC();
+                startLivenessFlow();
             });
 
             nfcModuleRef.current.onNFCError((error) => {
-                addLog('nfc', `Hata: ${error.error}`, error);
+                addLog(`❌ NFC hatası: ${error.error}`);
                 Alert.alert('NFC Hatası', error.error);
-                setCurrentPhase('completed');
+                startLivenessFlow();
             });
 
             nfcModuleRef.current.onNFCStarted(() => {
-                console.log('[NFC Flow] ✅ NFC Started callback çağrıldı!');
-                addLog('nfc', 'NFC dinleniyor');
+                addLog('📱 NFC dinleniyor - kartı yaklaştırın');
                 setDetectionHint('Kartı telefonun arkasına yaklaştırın...');
-            });
-
-            const expiryDate = ocrFields?.validUntil || ocrFields?.expiryDate;
-            const serialNo = ocrFields?.serialNo;
-
-            console.log('[NFC Flow] startNFC çağrılıyor...');
-            console.log('[NFC Flow] MRZ Seed:', {
-                tcNo: ocrFields.tcNo ? '***' + ocrFields.tcNo.slice(-4) : 'YOK',
-                birthDate: ocrFields.birthDate || 'YOK',
-                documentNo: ocrFields.documentNo || serialNo || 'YOK',
-                expiryDate: expiryDate || 'YOK'
             });
 
             await nfcModuleRef.current.startNFC({
                 cardType: 'tc_kimlik',
-                readTimeout: 60000, // 60 saniye (BAC işlemleri için daha uzun)
+                readTimeout: 60000,
                 mrzSeed: {
-                    tcNo: ocrFields.tcNo,
-                    name: ocrFields.name,
-                    surname: ocrFields.surname,
-                    birthDate: ocrFields.birthDate,
-                    documentNo: ocrFields.documentNo || serialNo,
-                    serialNo,
-                    validUntil: expiryDate,
-                    // CRITICAL: Pass MRZ check digits for BAC
-                    mrzCheckDigits: ocrFields.mrzCheckDigits,
+                    tcNo: ocrData.tcNo,
+                    name: ocrData.name,
+                    surname: ocrData.surname,
+                    birthDate: ocrData.birthDate,
+                    documentNo: ocrData.documentNo || ocrData.serialNo,
+                    serialNo: ocrData.serialNo,
+                    validUntil: ocrData.validUntil,
+                    mrzCheckDigits: ocrData.mrzCheckDigits,
                 },
             });
-
-            console.log('[NFC Flow] ✅ startNFC çağrısı tamamlandı');
         } catch (error) {
-            console.error('[NFC Flow] ❌ HATA:', error);
-            console.error('[NFC Flow] Hata detayı:', error.message);
-            console.error('[NFC Flow] Stack:', error.stack);
-            addLog('nfc', `Hata: ${error.message}`);
+            console.error('[NFC] Error:', error);
+            addLog(`❌ NFC hatası: ${error.message}`);
             Alert.alert('NFC Hatası', error.message);
-            setCurrentPhase('completed');
+            startLivenessFlow();
         }
     }, [addLog]);
 
-    const startVerification = useCallback(async () => {
-        const hasPermission = await checkCameraPermission();
-        if (!hasPermission) return;
+    // Start liveness flow
+    const startLivenessFlow = useCallback(() => {
+        setCurrentPhase('liveness');
+        addLog('👤 Liveness başlatılıyor...');
+        setDetectionHint('Liveness kontrolü başlatılıyor...');
 
-        setCurrentPhase('ocr');
-        setIsCameraActive(true);
+        // TODO: Implement liveness detection
+        setTimeout(() => {
+            addLog('✅ Liveness tamamlandı (placeholder)');
+            setLivenessResult({ success: true, placeholder: true });
+            setCurrentPhase('completed');
+        }, 2000);
+    }, [addLog]);
+
+    // Start verification
+    const startVerification = useCallback(async () => {
+        setLogs([]);
+        setFrontFrames([]);
+        setBackFrames([]);
         setOcrResult(null);
         setNfcResult(null);
-        setOcrLogs([]);
-        setNfcLogs([]);
-        addLog('ocr', 'OCR başlatıldı');
-    }, [addLog, checkCameraPermission]);
+        setLivenessResult(null);
+        addLog('🚀 Doğrulama başlatıldı');
+        startFrontCapture();
+    }, [addLog, startFrontCapture]);
 
+    // Reset verification
     const resetVerification = useCallback(() => {
         setCurrentPhase('idle');
         setIsCameraActive(false);
+        setFrontFrames([]);
+        setBackFrames([]);
         setOcrResult(null);
         setNfcResult(null);
+        setLivenessResult(null);
         setIsProcessing(false);
-        setPendingCaptures(0);
+        setCaptureCount(0);
         setDetectionHint('');
-        setOcrLogs([]);
-        setNfcLogs([]);
+        setLogs([]);
         if (nfcModuleRef.current) nfcModuleRef.current.stopNFC().catch(() => { });
-        if (mrzCheckIntervalRef.current) {
-            clearInterval(mrzCheckIntervalRef.current);
-            mrzCheckIntervalRef.current = null;
-        }
     }, []);
 
     useEffect(() => {
         return () => {
             setIsCameraActive(false);
             if (nfcModuleRef.current) nfcModuleRef.current.stopNFC().catch(() => { });
-            if (mrzCheckIntervalRef.current) clearInterval(mrzCheckIntervalRef.current);
         };
     }, []);
 
+    // Render idle screen
     const renderIdleScreen = () => (
         <View style={styles.centerContainer}>
             <Text style={styles.title}>📱 Kimlik Doğrulama</Text>
-            <Text style={styles.subtitle}>OCR ve NFC ile doğrulama yapın</Text>
+            <Text style={styles.subtitle}>
+                Tam doğrulama: OCR (Ön+Arka) → NFC → Liveness
+            </Text>
             <TouchableOpacity style={styles.primaryButton} onPress={startVerification}>
                 <Text style={styles.primaryButtonText}>Doğrulamayı Başlat</Text>
             </TouchableOpacity>
-            <Text style={styles.infoText}>
-                • Kart otomatik algılanır{'\n'}
-                • 3 fotoğraf otomatik çekilir{'\n'}
-                • Optimize edilir ve NFC başlatılır
-            </Text>
+            <View style={styles.infoBox}>
+                <Text style={styles.infoText}>
+                    1️⃣ Ön yüz: 3 fotoğraf çekilir{'\n'}
+                    2️⃣ Arka yüz: 3 fotoğraf çekilir{'\n'}
+                    3️⃣ Karşılaştırma: MRZ ile doğrulama{'\n'}
+                    4️⃣ NFC: Kart okuma (sadece titreşim){'\n'}
+                    5️⃣ Liveness: Canlılık tespiti
+                </Text>
+            </View>
         </View>
     );
 
-    const renderOcrCamera = () => {
+    // Render camera
+    const renderCamera = () => {
         if (!device) {
             return <View style={styles.centerContainer}><Text style={styles.errorText}>Kamera yok</Text></View>;
         }
+
+        const sideText = currentSide === SIDE.FRONT ? 'ÖN YÜZ' : 'ARKA YÜZ';
+        const buttonText = currentPhase === 'ocr_front' ? 'Ön Yüzü Çek' : 'Arka Yüzü Çek';
 
         return (
             <View style={styles.cameraContainer}>
@@ -408,15 +370,15 @@ const VerificationFlowScreen = ({ navigation }) => {
                     device={device}
                     isActive={isCameraActive}
                     photo={true}
-                    torch={torchEnabled ? 'on' : 'off'}
                 />
 
                 <View style={styles.overlay}>
-                    <View style={styles.mrzGuide}>
+                    <View style={styles.cardGuide}>
                         <View style={[styles.corner, styles.topLeft]} />
                         <View style={[styles.corner, styles.topRight]} />
                         <View style={[styles.corner, styles.bottomLeft]} />
                         <View style={[styles.corner, styles.bottomRight]} />
+                        <Text style={styles.sideLabel}>{sideText}</Text>
                     </View>
                 </View>
 
@@ -424,19 +386,41 @@ const VerificationFlowScreen = ({ navigation }) => {
                     <Text style={styles.hintText}>{detectionHint}</Text>
                 </View>
 
-                {pendingCaptures > 0 && (
+                {captureCount > 0 && (
                     <View style={styles.captureCounter}>
-                        <Text style={styles.captureCounterText}>{CAPTURE_SEQUENCE_COUNT - pendingCaptures}/{CAPTURE_SEQUENCE_COUNT}</Text>
+                        <Text style={styles.captureCounterText}>
+                            📸 {captureCount}/{CAPTURE_SEQUENCE_COUNT}
+                        </Text>
                     </View>
                 )}
 
-                <TouchableOpacity style={styles.torchButton} onPress={() => setTorchEnabled(!torchEnabled)}>
-                    <Text style={styles.torchButtonText}>{torchEnabled ? '🔦' : '💡'}</Text>
-                </TouchableOpacity>
+                {!isProcessing && (
+                    <TouchableOpacity
+                        style={styles.captureButton}
+                        onPress={currentPhase === 'ocr_front' ? captureFront : captureBack}
+                    >
+                        <Text style={styles.captureButtonText}>{buttonText}</Text>
+                    </TouchableOpacity>
+                )}
             </View>
         );
     };
 
+    // Render processing
+    const renderProcessing = () => (
+        <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#2196F3" />
+            <Text style={styles.title}>İşleniyor...</Text>
+            <Text style={styles.subtitle}>{detectionHint}</Text>
+            <Text style={styles.infoText}>
+                Ön yüz: {frontFrames.length} fotoğraf{'\n'}
+                Arka yüz: {backFrames.length} fotoğraf{'\n'}
+                Birleştiriliyor ve karşılaştırılıyor...
+            </Text>
+        </View>
+    );
+
+    // Render NFC waiting
     const renderNfcWaiting = () => (
         <View style={styles.centerContainer}>
             <ActivityIndicator size="large" color="#2196F3" />
@@ -444,82 +428,107 @@ const VerificationFlowScreen = ({ navigation }) => {
             <Text style={styles.subtitle}>{detectionHint}</Text>
             <View style={styles.nfcInstructions}>
                 <Text style={styles.instructionText}>📱 Kartı arkaya yaklaştırın</Text>
-                <Text style={styles.instructionText}>↕️ Üst-orta kısma denk getirin</Text>
                 <Text style={styles.instructionText}>⏱️ 2-3 saniye tutun</Text>
             </View>
+            <TouchableOpacity
+                style={styles.skipButton}
+                onPress={startLivenessFlow}
+            >
+                <Text style={styles.skipButtonText}>NFC'yi Atla →</Text>
+            </TouchableOpacity>
         </View>
     );
 
-    const renderCompletedScreen = () => (
+    // Render liveness
+    const renderLiveness = () => (
         <View style={styles.centerContainer}>
-            <Text style={styles.title}>✅ Tamamlandı</Text>
+            <ActivityIndicator size="large" color="#2196F3" />
+            <Text style={styles.title}>👤 Liveness</Text>
+            <Text style={styles.subtitle}>{detectionHint}</Text>
+            <Text style={styles.infoText}>(Placeholder - yakında eklenecek)</Text>
+        </View>
+    );
+
+    // Render completed
+    const renderCompletedScreen = () => (
+        <ScrollView style={styles.completedContainer}>
+            <Text style={styles.title}>✅ Doğrulama Tamamlandı</Text>
 
             {ocrResult && (
                 <View style={styles.resultCard}>
-                    <Text style={styles.resultCardTitle}>OCR Sonuçları</Text>
-                    <Text style={styles.resultText}>TC: {ocrResult.fields?.tcNo || '-'}</Text>
-                    <Text style={styles.resultText}>Ad: {ocrResult.fields?.name || '-'}</Text>
-                    <Text style={styles.resultText}>Soyad: {ocrResult.fields?.surname || '-'}</Text>
-                    <Text style={styles.resultText}>Güven: %{ocrResult.confidence || 0}</Text>
+                    <Text style={styles.resultCardTitle}>📸 OCR Sonuçları</Text>
+                    <Text style={styles.resultText}>TC: {ocrResult.data?.tcNo || '-'}</Text>
+                    <Text style={styles.resultText}>Ad: {ocrResult.data?.name || '-'}</Text>
+                    <Text style={styles.resultText}>Soyad: {ocrResult.data?.surname || '-'}</Text>
+                    <Text style={styles.resultText}>Doğum: {ocrResult.data?.birthDate || '-'}</Text>
+                    <Text style={styles.resultText}>
+                        Güven: %{ocrResult.data?.confidence || 0} |
+                        Tamamlanma: %{ocrResult.data?.completeness || 0}
+                    </Text>
+                    {ocrResult.data?.conflicts && ocrResult.data.conflicts.length > 0 && (
+                        <Text style={styles.warningText}>
+                            ⚠️ {ocrResult.data.conflicts.length} çelişki bulundu
+                        </Text>
+                    )}
                 </View>
             )}
 
             {nfcResult && (
                 <View style={styles.resultCard}>
-                    <Text style={styles.resultCardTitle}>NFC Sonuçları</Text>
-                    <Text style={styles.resultText}>TC: {nfcResult.parsedFields?.tcNo || '-'}</Text>
-                    <Text style={styles.resultText}>Ad Soyad: {nfcResult.parsedFields?.fullName || '-'}</Text>
+                    <Text style={styles.resultCardTitle}>📡 NFC Sonuçları</Text>
+                    <Text style={styles.resultText}>
+                        TC: {nfcResult.parsedFields?.tcNo || '-'}
+                    </Text>
+                    <Text style={styles.resultText}>
+                        Ad Soyad: {nfcResult.parsedFields?.fullName || '-'}
+                    </Text>
+                </View>
+            )}
+
+            {livenessResult && (
+                <View style={styles.resultCard}>
+                    <Text style={styles.resultCardTitle}>👤 Liveness Sonucu</Text>
+                    <Text style={styles.resultText}>
+                        {livenessResult.placeholder ? '(Placeholder)' : 'Canlılık doğrulandı'}
+                    </Text>
                 </View>
             )}
 
             <TouchableOpacity style={styles.secondaryButton} onPress={resetVerification}>
                 <Text style={styles.secondaryButtonText}>Yeniden Başlat</Text>
             </TouchableOpacity>
-        </View>
+        </ScrollView>
     );
 
+    // Render logs
     const renderLogs = () => (
         <ScrollView style={styles.logsContainer}>
-            <View style={styles.logSection}>
-                <Text style={styles.logSectionTitle}>📸 OCR Logları</Text>
-                {ocrLogs.length === 0 ? (
-                    <Text style={styles.logEmpty}>Henüz log yok</Text>
-                ) : (
-                    ocrLogs.map((log, i) => (
-                        <View key={`ocr-${i}`} style={styles.logItem}>
-                            <Text style={styles.logTime}>[{log.timestamp}]</Text>
-                            <Text style={styles.logMessage}>{log.message}</Text>
-                        </View>
-                    ))
-                )}
-            </View>
-
-            <View style={styles.logSection}>
-                <Text style={styles.logSectionTitle}>📡 NFC Logları</Text>
-                {nfcLogs.length === 0 ? (
-                    <Text style={styles.logEmpty}>Henüz log yok</Text>
-                ) : (
-                    nfcLogs.map((log, i) => (
-                        <View key={`nfc-${i}`} style={styles.logItem}>
-                            <Text style={styles.logTime}>[{log.timestamp}]</Text>
-                            <Text style={styles.logMessage}>{log.message}</Text>
-                        </View>
-                    ))
-                )}
-            </View>
+            <Text style={styles.logTitle}>📋 İşlem Logları</Text>
+            {logs.length === 0 ? (
+                <Text style={styles.logEmpty}>Henüz log yok</Text>
+            ) : (
+                logs.map((log, i) => (
+                    <View key={i} style={styles.logItem}>
+                        <Text style={styles.logTime}>[{log.timestamp}]</Text>
+                        <Text style={styles.logMessage}>{log.message}</Text>
+                    </View>
+                ))
+            )}
         </ScrollView>
     );
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={currentPhase === 'ocr' ? 'light-content' : 'dark-content'} />
+            <StatusBar barStyle={currentPhase.startsWith('ocr') ? 'light-content' : 'dark-content'} />
 
             {currentPhase === 'idle' && renderIdleScreen()}
-            {currentPhase === 'ocr' && !ocrResult && renderOcrCamera()}
-            {currentPhase === 'nfc' && !nfcResult && renderNfcWaiting()}
+            {(currentPhase === 'ocr_front' || currentPhase === 'ocr_back') && renderCamera()}
+            {currentPhase === 'processing' && renderProcessing()}
+            {currentPhase === 'nfc' && renderNfcWaiting()}
+            {currentPhase === 'liveness' && renderLiveness()}
             {currentPhase === 'completed' && renderCompletedScreen()}
 
-            {currentPhase !== 'idle' && renderLogs()}
+            {currentPhase !== 'idle' && currentPhase !== 'completed' && renderLogs()}
 
             {currentPhase !== 'idle' && (
                 <TouchableOpacity style={styles.backButton} onPress={resetVerification}>
@@ -533,40 +542,131 @@ const VerificationFlowScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#0F172A' },
     centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+    completedContainer: { flex: 1, padding: 20 },
     cameraContainer: { flex: 1 },
     overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-    mrzGuide: { width: screenWidth * 0.85, height: 120, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)', borderRadius: 8 },
+    cardGuide: {
+        width: screenWidth * 0.85,
+        height: 200,
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.5)',
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
     corner: { position: 'absolute', width: 20, height: 20, borderColor: '#00FF00' },
     topLeft: { top: -2, left: -2, borderTopWidth: 4, borderLeftWidth: 4 },
     topRight: { top: -2, right: -2, borderTopWidth: 4, borderRightWidth: 4 },
     bottomLeft: { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4 },
     bottomRight: { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4 },
-    hintBar: { position: 'absolute', bottom: 120, left: 20, right: 20, backgroundColor: 'rgba(0,0,0,0.7)', padding: 12, borderRadius: 8 },
+    sideLabel: { color: '#00FF00', fontSize: 24, fontWeight: 'bold' },
+    hintBar: {
+        position: 'absolute',
+        top: 60,
+        left: 20,
+        right: 20,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        padding: 12,
+        borderRadius: 8
+    },
     hintText: { color: '#FFF', textAlign: 'center', fontSize: 14 },
-    captureCounter: { position: 'absolute', top: 120, right: 20, backgroundColor: '#2196F3', padding: 12, borderRadius: 20 },
+    captureCounter: {
+        position: 'absolute',
+        top: 140,
+        right: 20,
+        backgroundColor: '#2196F3',
+        padding: 12,
+        borderRadius: 20
+    },
     captureCounterText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
-    torchButton: { position: 'absolute', bottom: 40, right: 20, backgroundColor: 'rgba(0,0,0,0.7)', padding: 15, borderRadius: 30 },
-    torchButtonText: { fontSize: 24 },
+    captureButton: {
+        position: 'absolute',
+        bottom: 40,
+        left: 40,
+        right: 40,
+        backgroundColor: '#2196F3',
+        paddingVertical: 18,
+        borderRadius: 30,
+        alignItems: 'center'
+    },
+    captureButtonText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
     title: { fontSize: 24, fontWeight: 'bold', color: '#E2E8F0', marginBottom: 10, textAlign: 'center' },
     subtitle: { fontSize: 14, color: '#CBD5E0', marginBottom: 20, textAlign: 'center' },
-    primaryButton: { backgroundColor: '#2563EB', paddingVertical: 15, paddingHorizontal: 40, borderRadius: 25, marginBottom: 20 },
+    primaryButton: {
+        backgroundColor: '#2563EB',
+        paddingVertical: 15,
+        paddingHorizontal: 40,
+        borderRadius: 25,
+        marginBottom: 20
+    },
     primaryButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-    secondaryButton: { backgroundColor: '#475569', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 20, marginTop: 20 },
+    secondaryButton: {
+        backgroundColor: '#475569',
+        paddingVertical: 12,
+        paddingHorizontal: 30,
+        borderRadius: 20,
+        marginTop: 20,
+        alignSelf: 'center'
+    },
     secondaryButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
-    infoText: { fontSize: 12, color: '#94A3B8', textAlign: 'center', lineHeight: 20 },
-    nfcInstructions: { marginTop: 20, padding: 20, backgroundColor: '#1E293B', borderRadius: 12, width: '100%' },
+    skipButton: {
+        backgroundColor: '#64748B',
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 15,
+        marginTop: 20
+    },
+    skipButtonText: { color: '#FFF', fontSize: 14 },
+    infoBox: {
+        backgroundColor: '#1E293B',
+        padding: 20,
+        borderRadius: 12,
+        width: '100%',
+        marginTop: 10
+    },
+    infoText: { fontSize: 13, color: '#94A3B8', lineHeight: 22 },
+    nfcInstructions: {
+        marginTop: 20,
+        padding: 20,
+        backgroundColor: '#1E293B',
+        borderRadius: 12,
+        width: '100%'
+    },
     instructionText: { color: '#CBD5E0', fontSize: 13, marginBottom: 8 },
-    resultCard: { backgroundColor: '#1E293B', padding: 16, borderRadius: 12, marginBottom: 16, width: '100%' },
+    resultCard: {
+        backgroundColor: '#1E293B',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 16
+    },
     resultCardTitle: { fontSize: 16, fontWeight: 'bold', color: '#60A5FA', marginBottom: 10 },
     resultText: { color: '#E2E8F0', fontSize: 13, marginBottom: 4 },
-    logsContainer: { maxHeight: 250, backgroundColor: '#1E293B', margin: 20, borderRadius: 12, padding: 12 },
-    logSection: { marginBottom: 16 },
-    logSectionTitle: { fontSize: 14, fontWeight: 'bold', color: '#60A5FA', marginBottom: 8 },
+    warningText: { color: '#F59E0B', fontSize: 13, marginTop: 8, fontWeight: '600' },
+    logsContainer: {
+        maxHeight: 200,
+        backgroundColor: '#1E293B',
+        margin: 20,
+        borderRadius: 12,
+        padding: 12
+    },
+    logTitle: { fontSize: 14, fontWeight: 'bold', color: '#60A5FA', marginBottom: 8 },
     logEmpty: { color: '#64748B', fontSize: 12, fontStyle: 'italic' },
-    logItem: { marginBottom: 8, borderLeftWidth: 2, borderLeftColor: '#3B82F6', paddingLeft: 8 },
+    logItem: {
+        marginBottom: 8,
+        borderLeftWidth: 2,
+        borderLeftColor: '#3B82F6',
+        paddingLeft: 8
+    },
     logTime: { color: '#94A3B8', fontSize: 11 },
     logMessage: { color: '#E2E8F0', fontSize: 12, marginTop: 2 },
-    backButton: { position: 'absolute', top: 50, left: 20, backgroundColor: 'rgba(0,0,0,0.5)', padding: 10, borderRadius: 8 },
+    backButton: {
+        position: 'absolute',
+        top: 50,
+        left: 20,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: 10,
+        borderRadius: 8
+    },
     backButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
     errorText: { color: '#EF4444', fontSize: 16 },
 });
