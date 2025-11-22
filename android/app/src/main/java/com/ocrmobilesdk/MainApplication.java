@@ -10,6 +10,7 @@ import com.facebook.react.ReactPackage;
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
 import com.facebook.react.defaults.DefaultReactNativeHost;
 import com.ocr.modules.FaceDetectionPackage;
+import com.sdk.nfc.NFCPassportReaderPackage;
 import com.facebook.react.ReactInstanceEventListener;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.soloader.SoLoader;
@@ -46,6 +47,7 @@ public class MainApplication extends MultiDexApplication implements ReactApplica
       // Packages that cannot be autolinked yet can be added manually here. For
       // example:
       packages.add(new FaceDetectionPackage());
+      packages.add(new NFCPassportReaderPackage()); // NFC Passport Reader with BAC/PACE
       return packages;
     }
   };

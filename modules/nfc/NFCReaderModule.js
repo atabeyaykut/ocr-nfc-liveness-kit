@@ -37,6 +37,11 @@ const { NFCReaderModule: IOSNFCReaderModule } = NativeModules;
 const isIOS = Platform.OS === 'ios';
 const iosEventEmitter = isIOS && IOSNFCReaderModule ? new NativeEventEmitter(IOSNFCReaderModule) : null;
 
+// Android Native Module Bridge
+const { NFCPassportReaderModule: AndroidNFCModule } = NativeModules;
+const isAndroid = Platform.OS === 'android';
+const androidEventEmitter = isAndroid && AndroidNFCModule ? new NativeEventEmitter(AndroidNFCModule) : null;
+
 // NFC Command constants for Turkish ID cards
 const NFC_COMMANDS = {
   SELECT_APP: [0x00, 0xA4, 0x04, 0x00, 0x07, 0xA0, 0x00, 0x00, 0x02, 0x47, 0x10, 0x01],
@@ -128,6 +133,7 @@ class NFCReaderModule {
     this.operationListeners = new Set();
     this.verificationHandler = null;
     this.iosEventSubscriptions = []; // iOS event subscriptions
+    this.androidEventSubscriptions = []; // Android event subscriptions
     nfcLogger.info('NFCReaderModule instance created', { platform: Platform.OS });
     this.options = {
       cardType: options.cardType || 'tc_kimlik',
@@ -144,9 +150,11 @@ class NFCReaderModule {
       this.setVerificationHandler(this.options.verificationHandler);
     }
 
-    // Setup iOS event listeners if on iOS
+    // Setup event listeners based on platform
     if (isIOS && iosEventEmitter) {
       this.setupIOSEventListeners();
+    } else if (isAndroid && androidEventEmitter) {
+      this.setupAndroidEventListeners();
     }
   }
 
@@ -244,6 +252,100 @@ class NFCReaderModule {
     }
   }
 
+  // Setup Android Native Module Event Listeners
+  setupAndroidEventListeners = () => {
+    nfcLogger.info('Setting up Android event listeners');
+
+    // NFC_SCAN_STARTED
+    this.androidEventSubscriptions.push(
+      androidEventEmitter.addListener('NFC_SCAN_STARTED', (event) => {
+        nfcLogger.info('Android: NFC_SCAN_STARTED', event);
+        if (this.callbacks.onStarted) {
+          this.callbacks.onStarted();
+        }
+      })
+    );
+
+    // NFC_TAG_DETECTED
+    this.androidEventSubscriptions.push(
+      androidEventEmitter.addListener('NFC_TAG_DETECTED', (event) => {
+        nfcLogger.info('Android: NFC_TAG_DETECTED', event);
+        if (this.callbacks.onTagDiscovered) {
+          this.callbacks.onTagDiscovered(event);
+        }
+      })
+    );
+
+    // NFC_DATA_READ
+    this.androidEventSubscriptions.push(
+      androidEventEmitter.addListener('NFC_DATA_READ', (event) => {
+        nfcLogger.info('Android: NFC_DATA_READ', { bytesRead: event.bytesRead });
+      })
+    );
+
+    // NFC_SCAN_COMPLETED
+    this.androidEventSubscriptions.push(
+      androidEventEmitter.addListener('NFC_SCAN_COMPLETED', (event) => {
+        nfcLogger.success('Android: NFC_SCAN_COMPLETED', event);
+
+        if (event.status === 'SUCCESS' && event.data) {
+          const parsedFields = event.data;
+
+          // Create success operation
+          const operation = this.createSuccessOperation(parsedFields, null);
+          this.dispatchIdScanOperation(operation);
+
+          // Call onResult callback
+          if (this.callbacks.onResult) {
+            const response = {
+              success: true,
+              parsedFields,
+              cardType: this.options.cardType,
+              timestamp: new Date().toISOString(),
+            };
+            this.callbacks.onResult(response);
+          }
+        }
+
+        this.isReading = false;
+      })
+    );
+
+    // NFC_ERROR
+    this.androidEventSubscriptions.push(
+      androidEventEmitter.addListener('NFC_ERROR', (event) => {
+        nfcLogger.error('Android: NFC_ERROR', event.error);
+
+        const error = new Error(event.error);
+        this.handleError(error);
+        this.isReading = false;
+      })
+    );
+
+    // NFC_CANCELLED
+    this.androidEventSubscriptions.push(
+      androidEventEmitter.addListener('NFC_CANCELLED', (event) => {
+        nfcLogger.warn('Android: NFC_CANCELLED');
+
+        const error = new Error('NFC okuma kullanıcı tarafından iptal edildi');
+        error.code = NFC_ERROR_CODES.NFC_CANCELLED;
+        this.handleError(error);
+        this.isReading = false;
+      })
+    );
+
+    nfcLogger.success('Android event listeners setup complete');
+  }
+
+  // Cleanup Android event listeners
+  cleanupAndroidEventListeners = () => {
+    if (this.androidEventSubscriptions.length > 0) {
+      nfcLogger.info('Cleaning up Android event listeners');
+      this.androidEventSubscriptions.forEach(subscription => subscription.remove());
+      this.androidEventSubscriptions = [];
+    }
+  }
+
   // API Methods
   startNFC = async (options = {}) => {
     nfcLogger.step('START_NFC', { options, platform: Platform.OS });
@@ -279,9 +381,15 @@ class NFCReaderModule {
         return await this.startNFCIOS(this.options);
       }
 
-      // Android: Use existing react-native-nfc-manager implementation
-      nfcLogger.info('Using Android NFC implementation');
-      return await this.startNFCAndroid();
+      // Android: Use native NFCPassportReaderModule with BAC/PACE
+      if (isAndroid && AndroidNFCModule) {
+        nfcLogger.info('Using Android native NFCPassportReaderModule');
+        return await this.startNFCAndroidNative(this.options);
+      }
+
+      // Fallback: Use existing react-native-nfc-manager implementation
+      nfcLogger.warn('Using fallback NFC implementation (limited functionality)');
+      return await this.startNFCFallback();
 
     } catch (error) {
       this.handleError(error);
@@ -333,8 +441,53 @@ class NFCReaderModule {
     }
   };
 
-  // Android Implementation (existing code)
-  startNFCAndroid = async () => {
+  // Android Native Implementation
+  startNFCAndroidNative = async (options) => {
+    nfcLogger.info('Starting Android NFC with native module');
+
+    try {
+      // Check if Android module is available
+      const supportResult = await AndroidNFCModule.isSupported();
+      nfcLogger.info('Android NFC Support:', supportResult);
+
+      if (!supportResult.supported) {
+        throw new Error(supportResult.message || 'Bu cihaz NFC desteklemiyor');
+      }
+
+      // Prepare options for native module
+      const nativeOptions = {
+        alertMessage: options.alertMessage || 'Kimlik kartınızı cihazınızın arkasına yaklaştırın',
+        timeoutSeconds: (options.readTimeout || 60000) / 1000,
+        timeout: options.readTimeout || 60000,
+      };
+
+      // Add MRZ seed for BAC authentication
+      if (options.mrzSeed) {
+        nativeOptions.mrzSeed = options.mrzSeed;
+        nfcLogger.info('Android: MRZ seed provided for BAC authentication');
+      }
+
+      // Add CAN for PACE authentication (if supported)
+      if (options.canNumber) {
+        nativeOptions.canNumber = options.canNumber;
+        nfcLogger.info('Android: CAN provided for PACE authentication');
+      }
+
+      // Start native NFC reading
+      const result = await AndroidNFCModule.startReading(nativeOptions);
+      nfcLogger.success('Android NFC started:', result);
+
+      this.isReading = true;
+      return result;
+
+    } catch (error) {
+      nfcLogger.error('Android NFC start failed:', error);
+      throw error;
+    }
+  };
+
+  // Fallback Implementation (existing react-native-nfc-manager code)
+  startNFCFallback = async () => {
     try {
       // Check NFC support
       nfcLogger.info('Checking NFC support...');
@@ -388,6 +541,11 @@ class NFCReaderModule {
         nfcLogger.info('Stopping iOS NFC with native module');
         await IOSNFCReaderModule.stopReading();
         nfcLogger.success('iOS NFC stopped');
+      } else if (isAndroid && AndroidNFCModule) {
+        // Android: Use native module
+        nfcLogger.info('Stopping Android NFC with native module');
+        await AndroidNFCModule.stopReading();
+        nfcLogger.success('Android NFC stopped');
       } else {
         // Android: Use existing implementation
         // Remove DiscoverTag event listener
@@ -1778,9 +1936,11 @@ export const NFCReaderScreen = ({ navigation, route }) => {
     // Cleanup on unmount
     return () => {
       nfcModule.stopNFC();
-      // Cleanup iOS event listeners if on iOS
+      // Cleanup event listeners based on platform
       if (isIOS) {
         nfcModule.cleanupIOSEventListeners();
+      } else if (isAndroid) {
+        nfcModule.cleanupAndroidEventListeners();
       }
     };
   }, [addLog, nfcModule]);
