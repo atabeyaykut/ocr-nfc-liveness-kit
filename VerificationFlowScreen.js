@@ -267,9 +267,43 @@ const VerificationFlowScreen = ({ navigation }) => {
 
             addLog('➡️ NFC başlatılıyor...');
 
+            // ============================================
+            // 🧪 MANUEL TEST VERİLERİ - BAC DEBUG
+            // ============================================
+            // OCR'dan gelen gerçek veriyi kullanmak için:
+            // startNfcFlow(result.data);
+
+            // Manuel test verisi kullanmak için aşağıdaki test verisini düzenleyin:
+            const manualTestData = {
+                tcNo: '12345678901',              // 11 haneli TC No
+                name: 'MEHMET',                   // İsim (BÜYÜK HARF)
+                surname: 'YILMAZ',                // Soyisim (BÜYÜK HARF)
+                birthDate: '900101',              // YYMMDD formatında (örn: 1 Ocak 1990)
+                validUntil: '300101',             // YYMMDD formatında (örn: 1 Ocak 2030)
+                documentNo: 'U12345678',          // Belge/Seri No (örn: U12345678)
+                serialNo: 'U12345678',            // Seri No
+                gender: 'E',                      // E veya K
+                nationality: 'TUR',               // 3 haneli ülke kodu
+                mrzCheckDigits: {                 // MRZ check digit'leri (opsiyonel)
+                    documentNumber: '8',
+                    birthDate: '0',
+                    expiryDate: '6'
+                }
+            };
+
+            // 🔴 HANGİ VERİYİ KULLANMAK İSTİYORSUNUZ?
+            // Seçenek 1: OCR'dan gelen gerçek veri
+            // const dataToSend = result.data;
+
+            // Seçenek 2: Manuel test verisi (ŞU AN AKTİF)
+            const dataToSend = manualTestData;
+
+            addLog('⚠️ MANUEL TEST VERİSİ KULLANILIYOR!');
+            // ============================================
+
             // Start NFC flow
             setTimeout(() => {
-                startNfcFlow(result.data);
+                startNfcFlow(dataToSend);
             }, 1500);
         } catch (error) {
             console.error('[OCR] Error:', error);
