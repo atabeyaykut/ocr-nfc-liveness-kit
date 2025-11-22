@@ -1,0 +1,28 @@
+# OSX
+.DS_Store
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Typescript
+lib/
+*.tsbuildinfo
+
+# Build
+android/build/
+android/.gradle/
+ios/build/
+*.xcarchive
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Misc
+.env
+.env.local
