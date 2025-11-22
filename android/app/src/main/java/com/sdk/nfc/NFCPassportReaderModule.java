@@ -7,6 +7,7 @@ import android.util.Base64;
 import android.util.Log;
 
 import com.facebook.react.bridge.*;
+import com.facebook.react.module.annotations.ReactModule;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 import java.io.IOException;
@@ -26,6 +27,7 @@ import java.util.Locale;
  * - Event-based architecture matching iOS
  * - Direct APDU communication for maximum control
  */
+@ReactModule(name = "NFCReaderModule")
 public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
 
     private static final String TAG = "NFCPassportReader";
