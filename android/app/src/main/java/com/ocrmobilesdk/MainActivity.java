@@ -25,29 +25,43 @@ public class MainActivity extends ReactActivity {
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(null);
 
+    Log.d("MainActivity", "▶▶▶ onCreate CALLED ◀◀◀");
+
     // Initialize NFC adapter
     nfcAdapter = NfcAdapter.getDefaultAdapter(this);
     if (nfcAdapter != null) {
+      Log.d("MainActivity", "NFC Adapter initialized successfully");
       Intent intent = new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
       pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_MUTABLE);
+      Log.d("MainActivity", "PendingIntent created for NFC foreground dispatch");
+    } else {
+      Log.e("MainActivity", "NFC Adapter is NULL - device does not support NFC!");
     }
   }
 
   @Override
   protected void onResume() {
     super.onResume();
+    Log.d("MainActivity", "▶▶▶ onResume CALLED ◀◀◀");
+
     // Enable NFC foreground dispatch
     if (nfcAdapter != null) {
       nfcAdapter.enableForegroundDispatch(this, pendingIntent, null, null);
+      Log.d("MainActivity", "✅ NFC foreground dispatch ENABLED");
+    } else {
+      Log.w("MainActivity", "Cannot enable NFC dispatch - adapter is null");
     }
   }
 
   @Override
   protected void onPause() {
     super.onPause();
+    Log.d("MainActivity", "▶▶▶ onPause CALLED ◀◀◀");
+
     // Disable NFC foreground dispatch
     if (nfcAdapter != null) {
       nfcAdapter.disableForegroundDispatch(this);
+      Log.d("MainActivity", "❌ NFC foreground dispatch DISABLED");
     }
   }
 
@@ -56,9 +70,13 @@ public class MainActivity extends ReactActivity {
     super.onNewIntent(intent);
     setIntent(intent);
 
+    Log.d("MainActivity", "▶▶▶▶▶▶ onNewIntent CALLED ◀◀◀◀◀◀");
+    Log.d("MainActivity", "Intent action: " + (intent.getAction() != null ? intent.getAction() : "NULL"));
+
     // Handle NFC intent
     if (NfcAdapter.ACTION_TECH_DISCOVERED.equals(intent.getAction()) ||
         NfcAdapter.ACTION_TAG_DISCOVERED.equals(intent.getAction())) {
+      Log.d("MainActivity", "🔔 NFC ACTION MATCHED!");
       Tag tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
       if (tag != null) {
         Log.d("MainActivity", "=== NFC TAG DETECTED ===");
@@ -70,7 +88,13 @@ public class MainActivity extends ReactActivity {
 
         // Try to pass tag to native module
         tryPassTagToModule(tag, 3); // 3 retry attempts
+      } else {
+        Log.e("MainActivity", "❌ Tag is NULL even though action matched!");
       }
+    } else {
+      Log.w("MainActivity", "⚠️ Intent action did NOT match NFC actions");
+      Log.w("MainActivity", "Expected: TECH_DISCOVERED or TAG_DISCOVERED");
+      Log.w("MainActivity", "Got: " + intent.getAction());
     }
   }
 
