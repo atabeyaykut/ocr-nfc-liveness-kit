@@ -7,8 +7,8 @@ import {
   Text,
   Alert,
   Dimensions,
-  Animated,
 } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming } from 'react-native-reanimated';
 import {
   Camera,
   useCameraDevices,
@@ -39,7 +39,7 @@ const OCRCamera = ({
   const cameraRef = useRef(null);
   const devices = useCameraDevices();
   const device = devices.back;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useSharedValue(1);
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
@@ -47,7 +47,7 @@ const OCRCamera = ({
   useEffect(() => {
     requestCameraPermission();
     startPulseAnimation();
-    
+
     return () => {
       // Cleanup camera on unmount
       setCameraStatus(OCR_STATUS.IDLE);
@@ -55,21 +55,16 @@ const OCRCamera = ({
   }, []);
 
   const startPulseAnimation = () => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
+    pulseAnim.value = withRepeat(
+      withTiming(1.1, { duration: 1000 }),
+      -1,
+      true
+    );
   };
+
+  const animatedFrameStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseAnim.value }]
+  }));
 
   const requestCameraPermission = async () => {
     try {
@@ -157,7 +152,7 @@ const OCRCamera = ({
       </View>
 
       <Animated.View
-        style={[styles.guidanceFrame, { transform: [{ scale: pulseAnim }] }]}
+        style={[styles.guidanceFrame, animatedFrameStyle]}
       >
         <View style={styles.frameCorner} />
         <View style={[styles.frameCorner, styles.topRight]} />
@@ -269,7 +264,7 @@ const OCRCamera = ({
           >
             <Text style={styles.iconText}>{torchEnabled ? '🔦' : '🔦'}</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[styles.iconButton, flashMode !== 'off' && styles.iconButtonActive]}
             onPress={() => {

@@ -12,12 +12,12 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Animated,
   Dimensions,
   StatusBar,
   Platform,
   NativeModules,
 } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence } from 'react-native-reanimated';
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import Tts from 'react-native-tts';
@@ -125,7 +125,7 @@ class LivenessDetectionModule {
 
       // Start first challenge
       await this.startNextChallenge();
-      
+
     } catch (error) {
       this.handleError(error);
     }
@@ -142,7 +142,7 @@ class LivenessDetectionModule {
     }
     this.challenges = [];
     this.currentChallengeIndex = 0;
-    
+
     if (this.callbacks.onStopped) {
       this.callbacks.onStopped();
     }
@@ -173,15 +173,15 @@ class LivenessDetectionModule {
     // 🔧 FIX: Properly handle all TTS promise rejections
     try {
       await Tts.getInitStatus();
-      
+
       // Check if TTS is available
       const voices = await Tts.voices();
       const turkishVoice = voices.find(v => v.language === 'tr-TR');
-      
+
       if (turkishVoice) {
         await Tts.setDefaultVoice(turkishVoice.id);
       }
-      
+
       this.ttsEnabled = true;
     } catch (error) {
       // Catch ALL TTS errors here - no rethrow
@@ -227,7 +227,7 @@ class LivenessDetectionModule {
     if (!faces || faces.length === 0) {
       this.faceDetected = false;
       this.noFaceDetectionCount++;
-      
+
       // If no face detected for too long (10 consecutive checks), fail the challenge
       if (this.noFaceDetectionCount > 10 && this.currentChallengeIndex < this.challenges.length) {
         const challenge = this.challenges[this.currentChallengeIndex];
@@ -256,7 +256,7 @@ class LivenessDetectionModule {
 
   detectChallengeCompletion = (face, challenge) => {
     const now = Date.now();
-    
+
     // Make sure enough time has passed since challenge started
     if (now - this.challengeStartTime < 500) {
       return false;
@@ -267,7 +267,7 @@ class LivenessDetectionModule {
         // Detect eye blink - stricter threshold
         const leftEyeOpen = face.leftEyeOpenProbability;
         const rightEyeOpen = face.rightEyeOpenProbability;
-        
+
         if (leftEyeOpen !== undefined && rightEyeOpen !== undefined) {
           // Both eyes closed (blink detected) - must be clearly closed
           if (leftEyeOpen < 0.2 && rightEyeOpen < 0.2) {
@@ -355,7 +355,7 @@ class LivenessDetectionModule {
 
     // Move to next challenge
     this.currentChallengeIndex++;
-    
+
     // Small delay before next challenge
     setTimeout(() => {
       this.startNextChallenge();
@@ -365,7 +365,7 @@ class LivenessDetectionModule {
   challengeTimeout = (challenge) => {
     // Check if this challenge is still active
     if (this.currentChallengeIndex < this.challenges.length &&
-        this.challenges[this.currentChallengeIndex].id === challenge.id) {
+      this.challenges[this.currentChallengeIndex].id === challenge.id) {
       // Challenge failed due to timeout
       this.challengeCompleted(challenge, false);
     }
@@ -420,7 +420,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
   const cameraRef = useRef(null);
   const device = useCameraDevice('front');
   const livenessModule = useRef(new LivenessDetectionModule()).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useSharedValue(1);
   const returnTo = route?.params?.returnTo;
   const returnSourceStep = route?.params?.returnParams?.sourceStep;
 
@@ -455,7 +455,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
         setIsCameraActive(true);
       }
     });
-    
+
     // Setup callbacks
     livenessModule.onLivenessResult((result) => {
       if (isMounted) {
@@ -513,14 +513,14 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
       isMounted = false;
       setIsCameraActive(false);
       livenessModule.stopLiveness();
-      
+
       // Stop TTS if available
       try {
         Tts.stop();
       } catch (error) {
         // TTS not available, ignore
       }
-      
+
       unsubscribeFocus();
       unsubscribeBlur();
     };
@@ -532,38 +532,38 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
       setFaceDetected(false);
       return;
     }
-    
+
     let isActive = true;
-    
+
     const detectFace = async () => {
       if (!isActive || !cameraRef.current) return;
-      
+
       try {
         // Take a photo snapshot for face detection
         const photo = await cameraRef.current.takePhoto({
           qualityPrioritization: 'speed',
           flash: 'off',
         });
-        
+
         if (!isActive) return;
-        
+
         // Convert path to file:// URI for ML Kit
-        const photoUri = Platform.OS === 'android' 
-          ? `file://${photo.path}` 
+        const photoUri = Platform.OS === 'android'
+          ? `file://${photo.path}`
           : photo.path;
-        
+
         // Detect faces using ML Kit
         const faces = await FaceDetection.detect(photoUri, {
           performanceMode: 'fast',
           landmarkMode: 'all',
           classificationMode: 'all',
         });
-        
+
         if (!isActive) return;
-        
+
         if (faces && faces.length > 0) {
           setFaceDetected(true);
-          
+
           // Convert ML Kit face format to our expected format
           const mlKitFace = faces[0];
           const faceData = [{
@@ -574,7 +574,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
             xAngle: mlKitFace.rotationX || 0,  // X-axis rotation (head tilt up/down)
             zAngle: mlKitFace.rotationZ || 0,  // Z-axis rotation (head roll)
           }];
-          
+
           livenessModule.processFaceData(faceData);
         } else {
           setFaceDetected(false);
@@ -584,15 +584,15 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
         console.log('Face detection error:', error.message);
         setFaceDetected(false);
       }
-      
+
       // Continue detection loop
       if (isActive) {
         setTimeout(detectFace, 300); // Check every 300ms
       }
     };
-    
+
     detectFace();
-    
+
     return () => {
       isActive = false;
     };
@@ -601,7 +601,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
   const checkPermissions = async () => {
     try {
       const result = await check(PERMISSIONS.ANDROID.CAMERA);
-      
+
       if (result !== RESULTS.GRANTED) {
         const requestResult = await request(PERMISSIONS.ANDROID.CAMERA);
         if (requestResult !== RESULTS.GRANTED) {
@@ -622,16 +622,16 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
       // Reset states
       setDetectionResult(null);
       setCountdown(3);
-      
+
       // Countdown animation
       for (let i = 3; i > 0; i--) {
         setCountdown(i);
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      
+
       setCountdown(null);
       setIsDetecting(true);
-      
+
       // Start liveness module with 5 challenges
       await livenessModule.startLiveness([
         'blink',        // Göz kırp
@@ -640,7 +640,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
         'turnHeadRight',// Kafayı sağa çevir
         'tiltHead'      // Kafayı yana yatır
       ]);
-      
+
     } catch (error) {
       console.error('Start detection error:', error);
       Alert.alert('Hata', 'Canlılık testi başlatılamadı');
@@ -654,29 +654,23 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
   };
 
   const animateFaceBox = () => {
-    Animated.sequence([
-      Animated.timing(pulseAnim, {
-        toValue: 0.9,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(pulseAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    pulseAnim.value = withSequence(
+      withTiming(0.9, { duration: 200 }),
+      withTiming(1, { duration: 200 })
+    );
   };
+
+  const animatedFaceBoxStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseAnim.value }],
+    borderColor: faceDetected ? '#4CAF50' : '#FF5252',
+  }));
 
   const renderFaceOverlay = () => (
     <View style={styles.faceOverlay}>
-      <Animated.View 
+      <Animated.View
         style={[
           styles.faceBox,
-          { 
-            transform: [{ scale: pulseAnim }],
-            borderColor: faceDetected ? '#4CAF50' : '#FF5252',
-          }
+          animatedFaceBoxStyle
         ]}
       >
         <View style={[styles.faceCorner, styles.faceCornerTopLeft]} />
@@ -684,7 +678,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
         <View style={[styles.faceCorner, styles.faceCornerBottomLeft]} />
         <View style={[styles.faceCorner, styles.faceCornerBottomRight]} />
       </Animated.View>
-      
+
       {!faceDetected && (
         <Text style={styles.faceHint}>Yüzünüzü çerçeve içine yerleştirin</Text>
       )}
@@ -728,18 +722,18 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
           ]}>
             {detectionResult.passed ? '✓' : '✗'}
           </Text>
-          
+
           <Text style={[
             styles.resultTitle,
             { color: detectionResult.passed ? '#2E7D32' : '#C62828' }
           ]}>
             {detectionResult.passed ? 'Canlılık Doğrulandı' : 'Canlılık Doğrulanamadı'}
           </Text>
-          
+
           <Text style={styles.resultScore}>
             Skor: %{detectionResult.score}
           </Text>
-          
+
           <View style={styles.resultDetails}>
             <Text style={styles.resultDetailText}>
               Toplam Test: {detectionResult.details.totalChallenges}
@@ -751,7 +745,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
               Başarısız: {detectionResult.details.failedChallenges}
             </Text>
           </View>
-          
+
           <View style={styles.resultChallenges}>
             {detectionResult.details.challenges.map((challenge, index) => (
               <View key={index} style={styles.challengeResult}>
@@ -767,7 +761,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
               </View>
             ))}
           </View>
-          
+
           <TouchableOpacity style={styles.retryButton} onPress={startDetection}>
             <Text style={styles.retryButtonText}>Tekrar Dene</Text>
           </TouchableOpacity>
@@ -780,7 +774,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
-        
+
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.backButton}>←</Text>
@@ -788,7 +782,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
           <Text style={styles.headerTitle}>Canlılık Testi Sonucu</Text>
           <View style={{ width: 40 }} />
         </View>
-        
+
         {renderResult()}
       </View>
     );
@@ -813,7 +807,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
-      
+
       {/* Header with back button */}
       <View style={styles.topHeader}>
         <TouchableOpacity
@@ -828,7 +822,7 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
         <Text style={styles.topHeaderTitle}>Canlılık Testi</Text>
         <View style={styles.headerSpacer} />
       </View>
-      
+
       {device && isCameraActive && isDetecting ? (
         <>
           <Camera
@@ -839,11 +833,11 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
             photo={true}
             video={false}
           />
-          
+
           {renderFaceOverlay()}
-          
+
           {renderChallenge()}
-          
+
           <TouchableOpacity style={styles.cancelButton} onPress={stopDetection}>
             <Text style={styles.cancelButtonText}>İptal</Text>
           </TouchableOpacity>
@@ -857,36 +851,36 @@ export const LivenessDetectionScreen = ({ navigation, route }) => {
             <Text style={styles.headerTitle}>Canlılık Testi</Text>
             <View style={{ width: 40 }} />
           </View>
-          
+
           <View style={styles.content}>
             <Text style={styles.welcomeTitle}>Yüz Doğrulama</Text>
-            
+
             <Text style={styles.welcomeText}>
               Güvenliğiniz için kısa bir canlılık testi yapacağız.
               Ekrandaki yönlendirmeleri takip edin.
             </Text>
-            
+
             <View style={styles.stepsList}>
               <View style={styles.stepItem}>
                 <Text style={styles.stepNumber}>1</Text>
                 <Text style={styles.stepText}>Yüzünüzü çerçeve içine yerleştirin</Text>
               </View>
-              
+
               <View style={styles.stepItem}>
                 <Text style={styles.stepNumber}>2</Text>
                 <Text style={styles.stepText}>Sesli yönlendirmeleri takip edin</Text>
               </View>
-              
+
               <View style={styles.stepItem}>
                 <Text style={styles.stepNumber}>3</Text>
                 <Text style={styles.stepText}>İstenen hareketleri yapın</Text>
               </View>
             </View>
-            
+
             <Text style={styles.durationText}>
               ⏱️ Tahmini süre: 15-20 saniye
             </Text>
-            
+
             <TouchableOpacity style={styles.startButton} onPress={startDetection}>
               <Text style={styles.startButtonText}>Teste Başla</Text>
             </TouchableOpacity>
