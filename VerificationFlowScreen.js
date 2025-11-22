@@ -130,6 +130,39 @@ const VerificationFlowScreen = ({ navigation }) => {
         addLog('📸 Ön yüz çekimi başlıyor...');
     }, [addLog, checkCameraPermission]);
 
+    // Start back side capture (NFC varsa direkt arka yüzden başlar)
+    const startBackCapture = useCallback(async () => {
+        const hasPermission = await checkCameraPermission();
+        if (!hasPermission) return;
+
+        setCurrentPhase('ocr_back');
+        setCurrentSide(SIDE.BACK);
+        setIsCameraActive(true);
+        setDetectionHint('Arka yüzü gösterin - Kart otomatik algılanacak');
+        addLog('📸 Arka yüz çekimi başlıyor (otomatik algılama)...');
+
+        // Otomatik algılama için 3 saniye bekle (kullanıcı kartı yerleştirsin)
+        setTimeout(async () => {
+            if (cameraRef.current) {
+                try {
+                    setDetectionHint('Arka yüz çekiliyor...');
+                    const frames = await captureMultipleFrames(SIDE.BACK);
+                    setBackFrames(frames);
+                    setIsCameraActive(false);
+
+                    addLog('✅ Arka yüz çekildi (ön yüz skip - NFC var), işleniyor...');
+                    setCurrentPhase('processing');
+
+                    // Process back only
+                    await processOCR([], frames);
+                } catch (error) {
+                    Alert.alert('Hata', error.message);
+                    setIsCameraActive(false);
+                }
+            }
+        }, 3000);
+    }, [addLog, checkCameraPermission, captureMultipleFrames, processOCR]);
+
     // Capture front side frames
     const captureFront = useCallback(async () => {
         try {
@@ -162,10 +195,16 @@ const VerificationFlowScreen = ({ navigation }) => {
             setBackFrames(frames);
             setIsCameraActive(false);
 
-            addLog('✅ Her iki taraf çekildi, işleniyor...');
+            // NFC varsa sadece arka yüz, yoksa her ikisi
+            const hasNFC = frontFrames.length === 0;
+            if (hasNFC) {
+                addLog('✅ Arka yüz çekildi (ön yüz skip - NFC var), işleniyor...');
+            } else {
+                addLog('✅ Her iki taraf çekildi, işleniyor...');
+            }
             setCurrentPhase('processing');
 
-            // Process both sides
+            // Process (both sides or back only)
             await processOCR(frontFrames, frames);
         } catch (error) {
             Alert.alert('Hata', error.message);
@@ -173,13 +212,22 @@ const VerificationFlowScreen = ({ navigation }) => {
         }
     }, [addLog, captureMultipleFrames, frontFrames]);
 
-    // Process OCR with both sides
+    // Process OCR with both sides or back only
     const processOCR = useCallback(async (frontPaths, backPaths) => {
         try {
             setDetectionHint('Fotoğraflar işleniyor...');
-            addLog('🔄 OCR işlemi başlıyor (ön + arka)...');
 
-            const result = await ocrModuleRef.current.processBothSides(frontPaths, backPaths);
+            // NFC varsa sadece arka yüz
+            const hasNFC = frontPaths.length === 0;
+            if (hasNFC) {
+                addLog('🔄 OCR işlemi başlıyor (sadece arka yüz - NFC var)...');
+            } else {
+                addLog('🔄 OCR işlemi başlıyor (ön + arka)...');
+            }
+
+            const result = hasNFC
+                ? await ocrModuleRef.current.processImages(backPaths) // Sadece arka yüz
+                : await ocrModuleRef.current.processBothSides(frontPaths, backPaths); // Her ikisi
 
             addLog('✅ OCR tamamlandı');
             console.log('[OCR] Result:', result);
@@ -339,10 +387,24 @@ const VerificationFlowScreen = ({ navigation }) => {
         setOcrResult(null);
         setNfcResult(null);
         setLivenessResult(null);
-        setBiometricPhotoUri(null); // added this line
+        setBiometricPhotoUri(null);
         addLog('🚀 Doğrulama başlatıldı');
-        startFrontCapture();
-    }, [addLog, startFrontCapture]);
+
+        // Check if NFC is available
+        try {
+            const isSupported = await NfcManager.isSupported();
+            if (isSupported) {
+                addLog('✅ NFC mevcut - Sadece arka yüz çekilecek');
+                startBackCapture();
+            } else {
+                addLog('⚠️ NFC yok - Her iki taraf çekilecek');
+                startFrontCapture();
+            }
+        } catch (error) {
+            addLog('⚠️ NFC kontrolü başarısız - Her iki taraf çekilecek');
+            startFrontCapture();
+        }
+    }, [addLog, startFrontCapture, startBackCapture]);
 
     // Reset verification
     const resetVerification = useCallback(() => {
@@ -373,18 +435,19 @@ const VerificationFlowScreen = ({ navigation }) => {
         <View style={styles.centerContainer}>
             <Text style={styles.title}>📱 Kimlik Doğrulama</Text>
             <Text style={styles.subtitle}>
-                Tam doğrulama: OCR (Ön+Arka) → NFC → Liveness
+                Akıllı doğrulama: OCR → NFC → Liveness
             </Text>
             <TouchableOpacity style={styles.primaryButton} onPress={startVerification}>
                 <Text style={styles.primaryButtonText}>Doğrulamayı Başlat</Text>
             </TouchableOpacity>
             <View style={styles.infoBox}>
                 <Text style={styles.infoText}>
-                    1️⃣ Ön yüz: 3 fotoğraf çekilir{'\n'}
-                    2️⃣ Arka yüz: 3 fotoğraf çekilir{'\n'}
-                    3️⃣ Karşılaştırma: MRZ ile doğrulama{'\n'}
-                    4️⃣ NFC: Kart okuma (sadece titreşim){'\n'}
-                    5️⃣ Liveness: Canlılık tespiti
+                    ✨ <Text style={{ fontWeight: 'bold' }}>Akıllı Mod:</Text>{'\n'}
+                    • NFC varsa: Sadece arka yüz (otomatik){'\n'}
+                    • NFC yoksa: Ön + Arka yüz{'\n\n'}
+                    1️⃣ OCR: Kart tarama (3 fotoğraf){'\n'}
+                    2️⃣ NFC: Çip okuma + BAC doğrulama{'\n'}
+                    3️⃣ Liveness: Canlılık tespiti
                 </Text>
             </View>
         </View>
@@ -615,19 +678,20 @@ const styles = StyleSheet.create({
     cameraContainer: { flex: 1 },
     overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
     cardGuide: {
-        width: screenWidth * 0.85,
-        height: 200,
-        borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.5)',
-        borderRadius: 8,
+        width: screenWidth * 0.90,
+        height: 260,
+        borderWidth: 3,
+        borderColor: 'rgba(34,197,94,0.7)',
+        borderRadius: 12,
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.2)'
     },
-    corner: { position: 'absolute', width: 20, height: 20, borderColor: '#00FF00' },
-    topLeft: { top: -2, left: -2, borderTopWidth: 4, borderLeftWidth: 4 },
-    topRight: { top: -2, right: -2, borderTopWidth: 4, borderRightWidth: 4 },
-    bottomLeft: { bottom: -2, left: -2, borderBottomWidth: 4, borderLeftWidth: 4 },
-    bottomRight: { bottom: -2, right: -2, borderBottomWidth: 4, borderRightWidth: 4 },
+    corner: { position: 'absolute', width: 30, height: 30, borderColor: '#22C55E' },
+    topLeft: { top: -3, left: -3, borderTopWidth: 5, borderLeftWidth: 5 },
+    topRight: { top: -3, right: -3, borderTopWidth: 5, borderRightWidth: 5 },
+    bottomLeft: { bottom: -3, left: -3, borderBottomWidth: 5, borderLeftWidth: 5 },
+    bottomRight: { bottom: -3, right: -3, borderBottomWidth: 5, borderRightWidth: 5 },
     sideLabel: { color: '#00FF00', fontSize: 24, fontWeight: 'bold' },
     hintBar: {
         position: 'absolute',
