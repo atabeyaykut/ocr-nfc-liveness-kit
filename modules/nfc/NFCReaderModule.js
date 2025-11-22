@@ -38,7 +38,8 @@ const isIOS = Platform.OS === 'ios';
 const iosEventEmitter = isIOS && IOSNFCReaderModule ? new NativeEventEmitter(IOSNFCReaderModule) : null;
 
 // Android Native Module Bridge
-const { NFCPassportReaderModule: AndroidNFCModule } = NativeModules;
+// Note: Android module is registered as "NFCReaderModule" (same as iOS for consistency)
+const AndroidNFCModule = Platform.OS === 'android' ? NativeModules.NFCReaderModule : null;
 const isAndroid = Platform.OS === 'android';
 const androidEventEmitter = isAndroid && AndroidNFCModule ? new NativeEventEmitter(AndroidNFCModule) : null;
 
