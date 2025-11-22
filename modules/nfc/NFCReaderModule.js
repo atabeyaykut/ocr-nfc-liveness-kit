@@ -475,6 +475,35 @@ class NFCReaderModule {
   handleTag = async (tag) => {
     nfcLogger.step('HANDLE_TAG', { tagId: tag?.id });
 
+    // SIMPLIFIED VERSION: Only detect card and vibrate
+    // All reading functionality is commented out due to CAN issue
+
+    nfcLogger.info('✅ Kart algılandı - sadece titreşim yapılacak (CAN problemi nedeniyle okuma devre dışı)');
+
+    // Vibrate to indicate card detected
+    if (this.options.enableVibration) {
+      nfcLogger.info('Titreşim başlatılıyor...');
+      Vibration.vibrate(100);
+    }
+
+    // Log tag info
+    const techList = Array.isArray(tag?.tech)
+      ? tag.tech
+      : Array.isArray(tag?.techTypes)
+        ? tag.techTypes
+        : [];
+
+    nfcLogger.info('Kart teknolojileri:', techList);
+    nfcLogger.info('Kart ID:', tag?.id);
+
+    // Call onTagDiscovered callback if exists
+    if (this.callbacks.onTagDiscovered) {
+      nfcLogger.info('onTagDiscovered callback çağrılıyor');
+      this.callbacks.onTagDiscovered(tag);
+    }
+
+    /* ===== TÜM OKUMA İŞLEMLERİ YORUM SATIRINA ALINDI (CAN PROBLEMİ) =====
+    
     // Store tag for transceive operations
     this.currentTag = tag;
     nfcLogger.info('Current tag stored for transceive operations');
@@ -602,16 +631,30 @@ class NFCReaderModule {
         }
       }
     }
+    
+    ===== OKUMA İŞLEMLERİ SONU ===== */
 
   };
 
   readIsoDep = async (tag) => {
+    // DEVRE DIŞI - CAN problemi nedeniyle okuma yapılmıyor
+    nfcLogger.warn('readIsoDep çağrıldı ama devre dışı (CAN problemi)');
+    return null;
+
+    /* YORUM SATIRINA ALINDI
     const timeoutMs = this.options.isoDepTimeout ?? 5000;
     const isoDepPromise = this._readIsoDepInternal(tag);
     return this.withTimeout(isoDepPromise, timeoutMs, `IsoDep okuması ${timeoutMs}ms içinde tamamlanmadı`);
+    */
   };
 
   _readIsoDepInternal = async (tag) => {
+    // DEVRE DIŞI - CAN problemi nedeniyle okuma yapılmıyor
+    nfcLogger.warn('_readIsoDepInternal çağrıldı ama devre dışı (CAN problemi)');
+    return null;
+
+    /* ===== TÜM ISODEP OKUMA İŞLEMLERİ YORUM SATIRINA ALINDI =====
+    
     nfcLogger.step('READ_ISODEP', { tagId: tag?.id });
 
     try {
@@ -791,10 +834,18 @@ class NFCReaderModule {
       // Re-throw to let handleError process it properly
       throw error;
     }
+    
+    ===== ISODEP OKUMA İŞLEMLERİ SONU ===== */
   };
 
   // PACE v2 authentication implementation
   performPACE = async (mrzSeed) => {
+    // DEVRE DIŞI - CAN problemi nedeniyle PACE çalışmıyor
+    nfcLogger.warn('performPACE çağrıldı ama devre dışı (CAN problemi)');
+    return false;
+
+    /* ===== PACE AUTHENTICATION YORUM SATIRINA ALINDI =====
+    
     try {
       console.log('[NFC][PACE] Starting PACE v2 authentication...');
       console.log('[NFC][PACE] MRZ Seed:', {
@@ -866,6 +917,8 @@ class NFCReaderModule {
 
       return false;
     }
+    
+    ===== PACE AUTHENTICATION SONU ===== */
   };
 
   // Parse PACEInfo from EF.CardAccess SecurityInfos
@@ -910,6 +963,12 @@ class NFCReaderModule {
 
   // Check if card supports PACE or BAC
   detectAuthenticationProtocol = async () => {
+    // DEVRE DIŞI - CAN problemi nedeniyle protokol tespiti devre dışı
+    nfcLogger.warn('detectAuthenticationProtocol çağrıldı ama devre dışı (CAN problemi)');
+    return 'BAC';
+
+    /* ===== PROTOCOL DETECTION YORUM SATIRINA ALINDI =====
+    
     try {
       console.log('[NFC][Protocol] Detecting card authentication protocol...');
 
@@ -979,10 +1038,18 @@ class NFCReaderModule {
       console.log('[NFC][Protocol] Assuming BAC (fallback)');
       return 'BAC';
     }
+    
+    ===== PROTOCOL DETECTION SONU ===== */
   };
 
   // Full BAC authentication implementation
   performBAC = async (mrzSeed) => {
+    // DEVRE DIŞI - CAN problemi nedeniyle BAC çalışmıyor
+    nfcLogger.warn('performBAC çağrıldı ama devre dışı (CAN problemi)');
+    return false;
+
+    /* ===== BAC AUTHENTICATION YORUM SATIRINA ALINDI =====
+    
     try {
       console.log('[NFC][BAC] Starting BAC authentication...');
       console.log('[NFC][BAC] MRZ Seed:', {
@@ -1057,9 +1124,17 @@ class NFCReaderModule {
 
       return false;
     }
+    
+    ===== BAC AUTHENTICATION SONU ===== */
   };
 
   readNdef = async (tag) => {
+    // DEVRE DIŞI - CAN problemi nedeniyle NDEF okuma devre dışı
+    nfcLogger.warn('readNdef çağrıldı ama devre dışı (CAN problemi)');
+    return null;
+
+    /* ===== NDEF OKUMA YORUM SATIRINA ALINDI =====
+    
     try {
       // Tag already connected via reader mode
       console.log('[NFC][Ndef] Reading NDEF data...');
@@ -1083,9 +1158,17 @@ class NFCReaderModule {
       console.error('NDEF read error:', error);
       return null;
     }
+    
+    ===== NDEF OKUMA SONU ===== */
   };
 
   readMifareClassic = async (tag) => {
+    // DEVRE DIŞI - CAN problemi nedeniyle Mifare okuma devre dışı
+    nfcLogger.warn('readMifareClassic çağrıldı ama devre dışı (CAN problemi)');
+    return null;
+
+    /* ===== MIFARE CLASSIC OKUMA YORUM SATIRINA ALINDI =====
+    
     try {
       // Tag already connected via reader mode
       console.log('[NFC][Mifare] Reading Mifare Classic...');
@@ -1109,9 +1192,17 @@ class NFCReaderModule {
       console.error('MifareClassic read error:', error);
       return null;
     }
+    
+    ===== MIFARE CLASSIC OKUMA SONU ===== */
   };
 
   readNfcA = async (tag) => {
+    // DEVRE DIŞI - CAN problemi nedeniyle NFC-A okuma devre dışı
+    nfcLogger.warn('readNfcA çağrıldı ama devre dışı (CAN problemi)');
+    return null;
+
+    /* ===== NFC-A OKUMA YORUM SATIRINA ALINDI =====
+    
     try {
       // Tag already connected via reader mode
       console.log('[NFC][NfcA] Reading NFC-A...');
@@ -1129,9 +1220,17 @@ class NFCReaderModule {
       console.error('NfcA read error:', error);
       return null;
     }
+    
+    ===== NFC-A OKUMA SONU ===== */
   };
 
   parseCardData = (rawData) => {
+    // DEVRE DIŞI - CAN problemi nedeniyle parsing devre dışı
+    nfcLogger.warn('parseCardData çağrıldı ama devre dışı (CAN problemi)');
+    return {};
+
+    /* ===== PARSE CARD DATA YORUM SATIRINA ALINDI =====
+    
     // Parse Turkish ID card data
     const fields = {};
 
@@ -1175,6 +1274,8 @@ class NFCReaderModule {
     }
 
     return fields;
+    
+    ===== PARSE CARD DATA SONU ===== */
   };
 
   bytesToString = (bytes) => {
