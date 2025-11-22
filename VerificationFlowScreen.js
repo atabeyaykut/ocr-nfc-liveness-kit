@@ -389,22 +389,11 @@ const VerificationFlowScreen = ({ navigation }) => {
         setLivenessResult(null);
         setBiometricPhotoUri(null);
         addLog('🚀 Doğrulama başlatıldı');
+        addLog('📸 Arka yüz MRZ okuması başlıyor...');
 
-        // Check if NFC is available
-        try {
-            const isSupported = await NfcManager.isSupported();
-            if (isSupported) {
-                addLog('✅ NFC mevcut - Sadece arka yüz çekilecek');
-                startBackCapture();
-            } else {
-                addLog('⚠️ NFC yok - Her iki taraf çekilecek');
-                startFrontCapture();
-            }
-        } catch (error) {
-            addLog('⚠️ NFC kontrolü başarısız - Her iki taraf çekilecek');
-            startFrontCapture();
-        }
-    }, [addLog, startFrontCapture, startBackCapture]);
+        // Her zaman sadece arka yüz MRZ
+        startBackCapture();
+    }, [addLog, startBackCapture]);
 
     // Reset verification
     const resetVerification = useCallback(() => {
@@ -435,19 +424,17 @@ const VerificationFlowScreen = ({ navigation }) => {
         <View style={styles.centerContainer}>
             <Text style={styles.title}>📱 Kimlik Doğrulama</Text>
             <Text style={styles.subtitle}>
-                Akıllı doğrulama: OCR → NFC → Liveness
+                MRZ Okuma → NFC Karşılaştırma → Liveness
             </Text>
             <TouchableOpacity style={styles.primaryButton} onPress={startVerification}>
                 <Text style={styles.primaryButtonText}>Doğrulamayı Başlat</Text>
             </TouchableOpacity>
             <View style={styles.infoBox}>
                 <Text style={styles.infoText}>
-                    ✨ <Text style={{ fontWeight: 'bold' }}>Akıllı Mod:</Text>{'\n'}
-                    • NFC varsa: Sadece arka yüz (otomatik){'\n'}
-                    • NFC yoksa: Ön + Arka yüz{'\n\n'}
-                    1️⃣ OCR: Kart tarama (3 fotoğraf){'\n'}
-                    2️⃣ NFC: Çip okuma + BAC doğrulama{'\n'}
-                    3️⃣ Liveness: Canlılık tespiti
+                    1️⃣ MRZ Okuma: Arka yüz OCR (otomatik){'\n'}
+                    2️⃣ NFC Okuma: Çip okuma + BAC{'\n'}
+                    3️⃣ Karşılaştırma: MRZ vs NFC verileri{'\n'}
+                    4️⃣ Liveness: Canlılık tespiti
                 </Text>
             </View>
         </View>
