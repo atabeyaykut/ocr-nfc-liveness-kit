@@ -19,6 +19,7 @@ import com.sdk.nfc.NFCPassportReaderModule;
 public class MainActivity extends ReactActivity {
   private NfcAdapter nfcAdapter;
   private PendingIntent pendingIntent;
+  private Tag pendingTag = null;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -60,25 +61,62 @@ public class MainActivity extends ReactActivity {
         NfcAdapter.ACTION_TAG_DISCOVERED.equals(intent.getAction())) {
       Tag tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
       if (tag != null) {
-        Log.d("MainActivity", "NFC Tag detected: " + tag.toString());
+        Log.d("MainActivity", "=== NFC TAG DETECTED ===");
+        Log.d("MainActivity", "Tag: " + tag.toString());
+        Log.d("MainActivity", "Tag ID: " + bytesToHex(tag.getId()));
 
-        // Pass tag to native module
-        ReactInstanceManager reactInstanceManager = getReactNativeHost().getReactInstanceManager();
-        ReactContext reactContext = reactInstanceManager.getCurrentReactContext();
+        // Store tag for retry
+        pendingTag = tag;
 
-        if (reactContext != null) {
-          NFCPassportReaderModule nfcModule = reactContext.getNativeModule(NFCPassportReaderModule.class);
-          if (nfcModule != null) {
-            nfcModule.setTag(tag);
-            Log.d("MainActivity", "Tag passed to NFCPassportReaderModule");
-          } else {
-            Log.w("MainActivity", "NFCPassportReaderModule not found");
-          }
-        } else {
-          Log.w("MainActivity", "ReactContext not ready yet");
-        }
+        // Try to pass tag to native module
+        tryPassTagToModule(tag, 3); // 3 retry attempts
       }
     }
+  }
+
+  private void tryPassTagToModule(final Tag tag, final int retriesLeft) {
+    if (retriesLeft <= 0) {
+      Log.e("MainActivity", "Failed to pass tag after all retries");
+      return;
+    }
+
+    try {
+      ReactInstanceManager reactInstanceManager = getReactNativeHost().getReactInstanceManager();
+      ReactContext reactContext = reactInstanceManager.getCurrentReactContext();
+
+      if (reactContext != null) {
+        NFCPassportReaderModule nfcModule = reactContext.getNativeModule(NFCPassportReaderModule.class);
+        if (nfcModule != null) {
+          nfcModule.setTag(tag);
+          Log.d("MainActivity", "✅ Tag successfully passed to NFCPassportReaderModule");
+          pendingTag = null; // Clear pending
+          return;
+        } else {
+          Log.w("MainActivity", "NFCPassportReaderModule not found, retrying... (" + retriesLeft + " left)");
+        }
+      } else {
+        Log.w("MainActivity", "ReactContext not ready, retrying... (" + retriesLeft + " left)");
+      }
+
+      // Retry after 500ms
+      new android.os.Handler().postDelayed(new Runnable() {
+        @Override
+        public void run() {
+          tryPassTagToModule(tag, retriesLeft - 1);
+        }
+      }, 500);
+
+    } catch (Exception e) {
+      Log.e("MainActivity", "Error passing tag: " + e.getMessage(), e);
+    }
+  }
+
+  private String bytesToHex(byte[] bytes) {
+    StringBuilder sb = new StringBuilder();
+    for (byte b : bytes) {
+      sb.append(String.format("%02X:", b));
+    }
+    return sb.length() > 0 ? sb.substring(0, sb.length() - 1) : "";
   }
 
   @Override
