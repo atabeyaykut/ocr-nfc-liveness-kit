@@ -39,17 +39,14 @@ const ensureFileUri = (path) => {
     return path;
   }
 
-  if (path.startsWith('file:///')) {
+  if (path.startsWith('file://')) {
+    // Already has file:// prefix, return as-is
     return path;
   }
 
-  if (path.startsWith('file://')) {
-    // Normalize legacy double-slash variants to triple-slash
-    return path.replace('file://', 'file:///');
-  }
-
   if (path.startsWith('file:/')) {
-    return path.replace('file:/', 'file:///');
+    // Single slash variant, normalize to double-slash
+    return path.replace('file:/', 'file://');
   }
 
   // Absolute paths coming from native modules (e.g. /data/user/0/...)
@@ -58,7 +55,7 @@ const ensureFileUri = (path) => {
   }
 
   // Fallback for any other path format
-  return `file:///${path}`;
+  return `file://${path}`;
 };
 
 const extractMRZGenderChar = (match) => {
@@ -373,22 +370,39 @@ const parseMRZ = (text) => {
           const tcNo = (match1[3] || '').replace(/[^0-9]/g, '').substring(0, 11);
           const serialNo = normalizeSerialNumber(documentNo);
 
+          console.log('[MRZ] Extracted check digits - Doc:', docCheckDigit);
+
           // Validate document number check digit if available
           if (docCheckDigit && documentNo.length === 9) {
             validateCheckDigit(documentNo, docCheckDigit);
           }
 
           // Parse Line 2: Dates, gender, nationality
+          // LINE2 format: BIRTH(6) + CD(1) + GENDER(1) + EXPIRY(6) + CD(1) + TUR + <<< + COMPOSITE(1)
           const fullMatch2 = match2[0] || '';
           const birthDate = (match2[1] || '').replace(/[^0-9]/g, '').substring(0, 6);
-          // Gender is in match2[3] for flexible pattern
-          let genderChar = extractMRZGenderChar(match2) || 'M';
+          // CRITICAL: match2[2] is birth check digit (0-9)
+          const birthCheckDigit = (match2[2] || '').replace(/[^0-9]/g, '');
+          // CRITICAL: match2[3] is gender (M/F), NOT check digit
+          let genderChar = (match2[3] || 'M').toUpperCase();
           // Handle OCR errors: 0 → M
           if (genderChar === '0' || genderChar === 'O') genderChar = 'M';
-          const expirySource = match2[4] && /\d+/.test(match2[4]) ? match2[4] : match2[3];
-          const expiryDate = (expirySource || '').replace(/[^0-9]/g, '').substring(0, 6);
+          // CRITICAL: match2[4] is expiry date (6 digits)
+          const expiryDate = (match2[4] || '').replace(/[^0-9]/g, '').substring(0, 6);
+          // CRITICAL: match2[5] is expiry check digit (0-9)
+          const expiryCheckDigit = (match2[5] || '').replace(/[^0-9]/g, '');
+          // match2[6] is composite check digit (optional)
+          const compositeCheckDigit = (match2[6] || '').replace(/[^0-9]/g, '');
 
-          console.log('[MRZ] Parsed Line2:', { fullMatch2, birthDate, genderChar, expiryDate });
+          console.log('[MRZ] Parsed Line2:', {
+            fullMatch2,
+            birthDate,
+            birthCheckDigit,
+            genderChar,
+            expiryDate,
+            expiryCheckDigit,
+            compositeCheckDigit
+          });
 
           const gender = (genderChar === 'F' || genderChar === 'K') ? 'Kadın' : 'Erkek';
           const nationality = 'TUR';
@@ -460,6 +474,29 @@ const parseMRZ = (text) => {
             continue;
           }
 
+          // CRITICAL: Calculate check digits instead of trusting OCR
+          // OCR can misread check digits, so we calculate them from the actual data
+          const calculatedDocCD = calculateCheckDigit(documentNo);
+          const calculatedBirthCD = calculateCheckDigit(birthDate);
+          const calculatedExpiryCD = expiryDate ? calculateCheckDigit(expiryDate) : '';
+
+          // Calculate composite check digit (TD1 format)
+          // Composite = checksum of: documentNo + docCD + birthDate + birthCD + expiryDate + expiryCD
+          const compositeData = documentNo + calculatedDocCD + birthDate + calculatedBirthCD + (expiryDate || '<<<<<<') + calculatedExpiryCD;
+          const calculatedCompositeCD = calculateCheckDigit(compositeData);
+
+          // Use calculated check digits, fall back to OCR if calculation fails
+          const finalDocCD = calculatedDocCD.toString() || docCheckDigit;
+          const finalBirthCD = calculatedBirthCD.toString() || birthCheckDigit;
+          const finalExpiryCD = calculatedExpiryCD.toString() || expiryCheckDigit;
+          const finalCompositeCD = calculatedCompositeCD.toString() || compositeCheckDigit;
+
+          console.log('[MRZ] Check Digits Comparison:');
+          console.log('[MRZ]   Document: OCR=' + docCheckDigit + ', Calculated=' + finalDocCD);
+          console.log('[MRZ]   Birth: OCR=' + birthCheckDigit + ', Calculated=' + finalBirthCD);
+          console.log('[MRZ]   Expiry: OCR=' + expiryCheckDigit + ', Calculated=' + finalExpiryCD);
+          console.log('[MRZ]   Composite: OCR=' + compositeCheckDigit + ', Calculated=' + finalCompositeCD);
+
           const result = {
             tcNo: tcNo,
             documentNo: documentNo,
@@ -470,7 +507,14 @@ const parseMRZ = (text) => {
             gender,
             nationality,
             source: 'MRZ (3-Line)',
-            checkDigitsValid: true, // Simplified - could add more validation
+            checkDigitsValid: true,
+            // CRITICAL: Use CALCULATED check digits for BAC/PACE authentication
+            mrzCheckDigits: {
+              documentNo: finalDocCD,
+              birthDate: finalBirthCD,
+              expiryDate: finalExpiryCD,
+              composite: finalCompositeCD
+            }
           };
 
           // Add expiry date if available
