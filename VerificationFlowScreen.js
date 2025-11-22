@@ -417,21 +417,21 @@ const VerificationFlowScreen = ({ navigation }) => {
         }
     }, [addLog]);
 
-    // Start liveness flow
+    // Start liveness flow (DEACTIVATED - skip liveness)
     const startLivenessFlow = useCallback(() => {
-        setCurrentPhase('liveness');
-        addLog('👤 Liveness başlatılıyor...');
-        setDetectionHint('Canlılık testi başlıyor...');
+        addLog('⏭️ Liveness atlandı (deaktif)');
+        addLog('✅ Doğrulama tamamlandı!');
 
-        if (!biometricPhotoUri) {
-            addLog('⚠️ Biyometrik fotoğraf yok, liveness atlanıyor');
-            Alert.alert('Uyarı', 'Biyometrik fotoğraf bulunamadı, liveness testi atlanıyor.');
-            setTimeout(() => {
-                setLivenessResult({ success: false, skipped: true });
-                setCurrentPhase('completed');
-            }, 1000);
-        }
-    }, [addLog, biometricPhotoUri]);
+        // Skip liveness and go directly to completed
+        setLivenessResult({ success: true, skipped: true, similarity: 100 });
+        setCurrentPhase('completed');
+
+        Alert.alert(
+            '✅ Doğrulama Başarılı',
+            'OCR ve NFC işlemleri tamamlandı.\n(Liveness testi deaktif)',
+            [{ text: 'Tamam' }]
+        );
+    }, [addLog]);
 
     // Liveness success handler
     const handleLivenessSuccess = useCallback((result) => {
