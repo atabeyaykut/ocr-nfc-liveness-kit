@@ -17,6 +17,10 @@ import {
   Image,
   StatusBar,
   ScrollView,
+  Platform,
+  NativeModules,
+  NativeEventEmitter,
+  DeviceEventEmitter,
 } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming } from 'react-native-reanimated';
 import NfcManager, {
@@ -27,6 +31,11 @@ import NfcManager, {
 } from 'react-native-nfc-manager';
 import { NFCFallbackModal } from '../../components/NFCFallbackModal';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+
+// iOS Native Module Bridge
+const { NFCReaderModule: IOSNFCReaderModule } = NativeModules;
+const isIOS = Platform.OS === 'ios';
+const iosEventEmitter = isIOS && IOSNFCReaderModule ? new NativeEventEmitter(IOSNFCReaderModule) : null;
 
 // NFC Command constants for Turkish ID cards
 const NFC_COMMANDS = {
@@ -118,7 +127,8 @@ class NFCReaderModule {
     this.currentTag = null; // Store current tag for transceive
     this.operationListeners = new Set();
     this.verificationHandler = null;
-    nfcLogger.info('NFCReaderModule instance created');
+    this.iosEventSubscriptions = []; // iOS event subscriptions
+    nfcLogger.info('NFCReaderModule instance created', { platform: Platform.OS });
     this.options = {
       cardType: options.cardType || 'tc_kimlik',
       readTimeout: options.readTimeout || 60000,
@@ -133,11 +143,110 @@ class NFCReaderModule {
     if (this.options.verificationHandler) {
       this.setVerificationHandler(this.options.verificationHandler);
     }
+
+    // Setup iOS event listeners if on iOS
+    if (isIOS && iosEventEmitter) {
+      this.setupIOSEventListeners();
+    }
+  }
+
+  // Setup iOS Native Module Event Listeners
+  setupIOSEventListeners = () => {
+    nfcLogger.info('Setting up iOS event listeners');
+
+    // NFC_SCAN_STARTED
+    this.iosEventSubscriptions.push(
+      iosEventEmitter.addListener('NFC_SCAN_STARTED', (event) => {
+        nfcLogger.info('iOS: NFC_SCAN_STARTED', event);
+        if (this.callbacks.onStarted) {
+          this.callbacks.onStarted();
+        }
+      })
+    );
+
+    // NFC_TAG_DETECTED
+    this.iosEventSubscriptions.push(
+      iosEventEmitter.addListener('NFC_TAG_DETECTED', (event) => {
+        nfcLogger.info('iOS: NFC_TAG_DETECTED', event);
+        if (this.callbacks.onTagDiscovered) {
+          this.callbacks.onTagDiscovered(event);
+        }
+      })
+    );
+
+    // NFC_DATA_READ
+    this.iosEventSubscriptions.push(
+      iosEventEmitter.addListener('NFC_DATA_READ', (event) => {
+        nfcLogger.info('iOS: NFC_DATA_READ', { bytesRead: event.bytesRead });
+      })
+    );
+
+    // NFC_SCAN_COMPLETED
+    this.iosEventSubscriptions.push(
+      iosEventEmitter.addListener('NFC_SCAN_COMPLETED', (event) => {
+        nfcLogger.success('iOS: NFC_SCAN_COMPLETED', event);
+
+        if (event.status === 'SUCCESS' && event.data) {
+          const parsedFields = event.data;
+
+          // Create success operation
+          const operation = this.createSuccessOperation(parsedFields, null);
+          this.dispatchIdScanOperation(operation);
+
+          // Call onResult callback
+          if (this.callbacks.onResult) {
+            const response = {
+              success: true,
+              parsedFields,
+              cardType: this.options.cardType,
+              timestamp: new Date().toISOString(),
+            };
+            this.callbacks.onResult(response);
+          }
+        }
+
+        this.isReading = false;
+      })
+    );
+
+    // NFC_ERROR
+    this.iosEventSubscriptions.push(
+      iosEventEmitter.addListener('NFC_ERROR', (event) => {
+        nfcLogger.error('iOS: NFC_ERROR', event.error);
+
+        const error = new Error(event.error);
+        this.handleError(error);
+        this.isReading = false;
+      })
+    );
+
+    // NFC_CANCELLED
+    this.iosEventSubscriptions.push(
+      iosEventEmitter.addListener('NFC_CANCELLED', (event) => {
+        nfcLogger.warn('iOS: NFC_CANCELLED');
+
+        const error = new Error('NFC okuma kullanıcı tarafından iptal edildi');
+        error.code = NFC_ERROR_CODES.NFC_CANCELLED;
+        this.handleError(error);
+        this.isReading = false;
+      })
+    );
+
+    nfcLogger.success('iOS event listeners setup complete');
+  }
+
+  // Cleanup iOS event listeners
+  cleanupIOSEventListeners = () => {
+    if (this.iosEventSubscriptions.length > 0) {
+      nfcLogger.info('Cleaning up iOS event listeners');
+      this.iosEventSubscriptions.forEach(subscription => subscription.remove());
+      this.iosEventSubscriptions = [];
+    }
   }
 
   // API Methods
   startNFC = async (options = {}) => {
-    nfcLogger.step('START_NFC', { options });
+    nfcLogger.step('START_NFC', { options, platform: Platform.OS });
 
     const defaultOptions = {
       readTimeout: 30000,
@@ -163,6 +272,69 @@ class NFCReaderModule {
       this.setVerificationHandler(this.options.verificationHandler);
     }
 
+    try {
+      // iOS: Use native NFCPassportReader module
+      if (isIOS && IOSNFCReaderModule) {
+        nfcLogger.info('Using iOS native NFCPassportReader module');
+        return await this.startNFCIOS(this.options);
+      }
+
+      // Android: Use existing react-native-nfc-manager implementation
+      nfcLogger.info('Using Android NFC implementation');
+      return await this.startNFCAndroid();
+
+    } catch (error) {
+      this.handleError(error);
+    }
+  };
+
+  // iOS Native Implementation
+  startNFCIOS = async (options) => {
+    nfcLogger.info('Starting iOS NFC with native module');
+
+    try {
+      // Check if iOS module is available
+      const supportResult = await IOSNFCReaderModule.isSupported();
+      nfcLogger.info('iOS NFC Support:', supportResult);
+
+      if (!supportResult.supported) {
+        throw new Error(supportResult.message || 'Bu cihaz NFC desteklemiyor');
+      }
+
+      // Prepare options for native module
+      const nativeOptions = {
+        alertMessage: options.alertMessage || 'Kimlik kartınızı cihazınızın arkasına yaklaştırın',
+        timeoutSeconds: (options.readTimeout || 60000) / 1000,
+        timeout: options.readTimeout || 60000,
+      };
+
+      // Add MRZ seed for BAC authentication
+      if (options.mrzSeed) {
+        nativeOptions.mrzSeed = options.mrzSeed;
+        nfcLogger.info('iOS: MRZ seed provided for BAC authentication');
+      }
+
+      // Add CAN for PACE authentication
+      if (options.canNumber) {
+        nativeOptions.canNumber = options.canNumber;
+        nfcLogger.info('iOS: CAN provided for PACE authentication');
+      }
+
+      // Start native NFC reading
+      const result = await IOSNFCReaderModule.startReading(nativeOptions);
+      nfcLogger.success('iOS NFC started:', result);
+
+      this.isReading = true;
+      return result;
+
+    } catch (error) {
+      nfcLogger.error('iOS NFC start failed:', error);
+      throw error;
+    }
+  };
+
+  // Android Implementation (existing code)
+  startNFCAndroid = async () => {
     try {
       // Check NFC support
       nfcLogger.info('Checking NFC support...');
@@ -199,34 +371,43 @@ class NFCReaderModule {
       nfcLogger.success('NFC discovery registered successfully');
 
     } catch (error) {
-      this.handleError(error);
+      nfcLogger.error('Android NFC start failed:', error);
+      throw error;
     }
-  };
+  }
 
   stopNFC = async () => {
-    nfcLogger.step('STOP_NFC');
+    nfcLogger.step('STOP_NFC', { platform: Platform.OS });
 
     this.isReading = false;
     nfcLogger.info('isReading set to false');
 
     try {
-      // Remove DiscoverTag event listener
-      nfcLogger.info('Removing DiscoverTag event listener...');
-      NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
-      nfcLogger.success('DiscoverTag listener removed');
+      // iOS: Use native module
+      if (isIOS && IOSNFCReaderModule) {
+        nfcLogger.info('Stopping iOS NFC with native module');
+        await IOSNFCReaderModule.stopReading();
+        nfcLogger.success('iOS NFC stopped');
+      } else {
+        // Android: Use existing implementation
+        // Remove DiscoverTag event listener
+        nfcLogger.info('Removing DiscoverTag event listener...');
+        NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
+        nfcLogger.success('DiscoverTag listener removed');
 
-      // Unregister tag event (if it was used)
-      if (typeof NfcManager.unregisterTagEvent === 'function') {
-        nfcLogger.info('Unregistering tag event...');
-        await NfcManager.unregisterTagEvent();
-        nfcLogger.success('Tag event unregistered');
-      }
+        // Unregister tag event (if it was used)
+        if (typeof NfcManager.unregisterTagEvent === 'function') {
+          nfcLogger.info('Unregistering tag event...');
+          await NfcManager.unregisterTagEvent();
+          nfcLogger.success('Tag event unregistered');
+        }
 
-      // Cancel technology request
-      if (typeof NfcManager.cancelTechnologyRequest === 'function') {
-        nfcLogger.info('Cancelling technology request...');
-        await NfcManager.cancelTechnologyRequest();
-        nfcLogger.success('Technology request cancelled');
+        // Cancel technology request
+        if (typeof NfcManager.cancelTechnologyRequest === 'function') {
+          nfcLogger.info('Cancelling technology request...');
+          await NfcManager.cancelTechnologyRequest();
+          nfcLogger.success('Technology request cancelled');
+        }
       }
     } catch (error) {
       nfcLogger.warn('Error during NFC stop', error.message);
@@ -1597,6 +1778,10 @@ export const NFCReaderScreen = ({ navigation, route }) => {
     // Cleanup on unmount
     return () => {
       nfcModule.stopNFC();
+      // Cleanup iOS event listeners if on iOS
+      if (isIOS) {
+        nfcModule.cleanupIOSEventListeners();
+      }
     };
   }, [addLog, nfcModule]);
 
