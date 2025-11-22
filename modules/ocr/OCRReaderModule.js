@@ -26,6 +26,7 @@ import { NFCReaderModule } from '../nfc/NFCReaderModule';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 
 const { ImageProcessor } = require('../../utils/imageProcessor');
+const TemplateMatching = require('./TemplateMatching');
 const ImageResizer = ImageResizerModule?.default ?? ImageResizerModule;
 const PermissionsAndroid = require('react-native').PermissionsAndroid;
 
@@ -1460,6 +1461,31 @@ class OCRReaderModule {
 
       console.log('[OCR] Merged and validated results:', mergedData);
 
+      // 🧩 Template-based extraction (soft mode - metrics only, no decision change)
+      let templateMatching = null;
+      let templateConfidence = null;
+      try {
+        const template = new TemplateMatching('tc_kimlik_2021');
+        const frontImageForTemplate = frontPaths[0];
+
+        if (frontImageForTemplate) {
+          templateMatching = await template.processWithTemplate(frontImageForTemplate);
+          try {
+            templateConfidence = template.calculateConfidence(templateMatching);
+          } catch (confidenceError) {
+            console.warn('[OCR] Template matching confidence calculation failed:', confidenceError.message);
+          }
+
+          console.log('[OCR] Template matching metrics:', {
+            aspectMatch: templateMatching?.aspectMatch,
+            qualityScore: templateMatching?.qualityScore,
+            confidence: templateConfidence,
+          });
+        }
+      } catch (templateError) {
+        console.warn('[OCR] Template matching failed:', templateError.message);
+      }
+
       // Extract biometric photo from front side for liveness test
       let biometricPhotoUri = null;
       try {
@@ -1487,6 +1513,12 @@ class OCRReaderModule {
         frontSide: frontFields,
         backSide: backFields,
         biometricPhoto: biometricPhotoUri, // For liveness test
+        templateMatching: templateMatching
+          ? {
+            ...templateMatching,
+            confidence: templateConfidence,
+          }
+          : null,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
