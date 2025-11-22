@@ -12,13 +12,13 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Animated,
   Vibration,
   BackHandler,
   Image,
   StatusBar,
   ScrollView,
 } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming } from 'react-native-reanimated';
 import NfcManager, {
   NfcTech,
   NfcEvents,
@@ -49,49 +49,154 @@ const NFC_ERROR_CODES = {
   TAG_LOST: 'TAG_LOST',
 };
 
+// Android NFC Reader Mode Flags
+// These are the actual values from Android NFC API
+// Used when NfcManager.FLAG_READER_* constants are not available
+const READER_FLAGS = {
+  FLAG_READER_NFC_A: 0x1,
+  FLAG_READER_NFC_B: 0x2,
+  FLAG_READER_NFC_F: 0x4,
+  FLAG_READER_NFC_V: 0x8,
+  FLAG_READER_SKIP_NDEF_CHECK: 0x80,
+  FLAG_READER_NO_PLATFORM_SOUNDS: 0x100,
+};
+
+// Logger utility for detailed NFC flow tracking
+const nfcLogger = {
+  step: (stepName, details = {}) => {
+    const timestamp = new Date().toISOString();
+    console.log(`\n[NFC Step] ========================================`);
+    console.log(`[NFC Step] ${stepName}`);
+    console.log(`[NFC Step] Time: ${timestamp}`);
+    if (Object.keys(details).length > 0) {
+      console.log(`[NFC Step] Details:`, JSON.stringify(details, null, 2));
+    }
+    console.log(`[NFC Step] ========================================\n`);
+  },
+  info: (message, data) => {
+    console.log(`[NFC Info] ${message}`, data || '');
+  },
+  success: (message, data) => {
+    console.log(`[NFC ✅] ${message}`, data || '');
+  },
+  warn: (message, data) => {
+    console.warn(`[NFC ⚠️] ${message}`, data || '');
+  },
+  error: (message, error) => {
+    console.error(`[NFC ❌] ${message}`, error || '');
+  },
+  apdu: (direction, command, response) => {
+    console.log(`[NFC APDU ${direction}]`, {
+      command: Array.isArray(command) ? command.map(b => b.toString(16).padStart(2, '0')).join(' ') : command,
+      response: response ? (Array.isArray(response) ? response.map(b => b.toString(16).padStart(2, '0')).join(' ') : response) : 'N/A'
+    });
+  }
+};
+
+class IdScanOperation {
+  constructor({ isSuccess, content = null, exception = null }) {
+    this.isSuccess = Boolean(isSuccess);
+    this.content = content;
+    this.exception = exception;
+    this.timestamp = new Date().toISOString();
+  }
+
+  static success(content) {
+    return new IdScanOperation({ isSuccess: true, content, exception: null });
+  }
+
+  static failure(exception) {
+    return new IdScanOperation({ isSuccess: false, content: null, exception });
+  }
+}
+
 class NFCReaderModule {
-  constructor() {
+  constructor(options = {}) {
     this.callbacks = {};
     this.isReading = false;
-    this.discoverListener = null;
+    this.bacSession = null;
+    this.currentTag = null; // Store current tag for transceive
+    this.operationListeners = new Set();
+    this.verificationHandler = null;
+    nfcLogger.info('NFCReaderModule instance created');
+    this.options = {
+      cardType: options.cardType || 'tc_kimlik',
+      readTimeout: options.readTimeout || 60000,
+      retryCount: options.retryCount || 3,
+      enableVibration: options.enableVibration !== false,
+      isoDepTimeout: options.isoDepTimeout ?? 5000,
+      sessionMetadata: options.sessionMetadata || null,
+      verificationHandler: options.verificationHandler || null,
+      ...options,
+    };
+
+    if (this.options.verificationHandler) {
+      this.setVerificationHandler(this.options.verificationHandler);
+    }
   }
 
   // API Methods
   startNFC = async (options = {}) => {
+    nfcLogger.step('START_NFC', { options });
+
     const defaultOptions = {
       readTimeout: 30000,
       enableVibration: true,
       cardType: 'tc_kimlik',
       retryCount: 3,
+      isoDepTimeout: 5000,
+      sessionMetadata: null,
+      verificationHandler: null,
+      canNumber: null,
     };
 
     this.options = { ...defaultOptions, ...options };
 
+    if (this.options.canNumber != null) {
+      const digitsOnly = String(this.options.canNumber).replace(/[^0-9]/g, '');
+      this.options.canNumber = digitsOnly ? digitsOnly.padStart(6, '0').slice(-6) : null;
+      nfcLogger.info('CAN number provided:', this.options.canNumber ? `${this.options.canNumber.slice(0, 2)}****` : null);
+    }
+    nfcLogger.info('Options merged', this.options);
+
+    if (this.options.verificationHandler) {
+      this.setVerificationHandler(this.options.verificationHandler);
+    }
+
     try {
       // Check NFC support
+      nfcLogger.info('Checking NFC support...');
       const isSupported = await NfcManager.isSupported();
+      nfcLogger.info('NFC Supported:', isSupported);
+
       if (!isSupported) {
         throw new Error('Bu cihaz NFC desteklemiyor');
       }
 
       // Check if NFC is enabled
+      nfcLogger.info('Checking NFC enabled status...');
       const isEnabled = await NfcManager.isEnabled();
+      nfcLogger.info('NFC Enabled:', isEnabled);
+
       if (!isEnabled) {
         throw new Error('NFC kapalı. Lütfen ayarlardan NFC\'yi açın.');
       }
 
       // Start NFC
+      nfcLogger.info('Starting NFC Manager...');
       await NfcManager.start();
       this.isReading = true;
-
-      this.setupDiscoverTagListener();
+      nfcLogger.success('NFC Manager started successfully');
 
       if (this.callbacks.onStarted) {
+        nfcLogger.info('Calling onStarted callback');
         this.callbacks.onStarted();
       }
 
-      // Register NFC discovery
+      // Register NFC discovery - this will handle tag detection
+      nfcLogger.info('Registering NFC discovery...');
       await this.registerNfcDiscovery();
+      nfcLogger.success('NFC discovery registered successfully');
 
     } catch (error) {
       this.handleError(error);
@@ -99,47 +204,42 @@ class NFCReaderModule {
   };
 
   stopNFC = async () => {
+    nfcLogger.step('STOP_NFC');
+
     this.isReading = false;
+    nfcLogger.info('isReading set to false');
+
     try {
+      // Remove DiscoverTag event listener
+      nfcLogger.info('Removing DiscoverTag event listener...');
+      NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
+      nfcLogger.success('DiscoverTag listener removed');
+
+      // Unregister tag event (if it was used)
       if (typeof NfcManager.unregisterTagEvent === 'function') {
+        nfcLogger.info('Unregistering tag event...');
         await NfcManager.unregisterTagEvent();
+        nfcLogger.success('Tag event unregistered');
       }
 
-      if (typeof NfcManager.stopTechnology === 'function') {
-        await NfcManager.stopTechnology();
-      } else if (typeof NfcManager.cancelTechnologyRequest === 'function') {
+      // Cancel technology request
+      if (typeof NfcManager.cancelTechnologyRequest === 'function') {
+        nfcLogger.info('Cancelling technology request...');
         await NfcManager.cancelTechnologyRequest();
+        nfcLogger.success('Technology request cancelled');
       }
     } catch (error) {
-      console.warn('NFC stop error:', error);
+      nfcLogger.warn('Error during NFC stop', error.message);
     } finally {
-      this.removeDiscoverTagListener();
+      this.bacSession = null;
+      nfcLogger.info('BAC session cleared');
 
       if (this.callbacks.onStopped) {
+        nfcLogger.info('Calling onStopped callback');
         this.callbacks.onStopped();
       }
-    }
-  };
 
-  setupDiscoverTagListener = () => {
-    if (this.discoverListener) {
-      NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
-    }
-
-    this.discoverListener = (tag) => {
-      console.log('[NFC] DiscoverTag event yakalandı:', tag?.id || 'unknown tag');
-      if (this.callbacks.onTagDiscovered) {
-        this.callbacks.onTagDiscovered(tag);
-      }
-    };
-
-    NfcManager.setEventListener(NfcEvents.DiscoverTag, this.discoverListener);
-  };
-
-  removeDiscoverTagListener = () => {
-    if (this.discoverListener) {
-      NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
-      this.discoverListener = null;
+      nfcLogger.success('NFC stopped successfully');
     }
   };
 
@@ -163,37 +263,227 @@ class NFCReaderModule {
     this.callbacks.onTagDiscovered = callback;
   };
 
+  setVerificationHandler = (handler) => {
+    if (handler && typeof handler !== 'function') {
+      throw new Error('verificationHandler bir fonksiyon olmalıdır');
+    }
+    this.verificationHandler = handler || null;
+    this.options.verificationHandler = this.verificationHandler;
+  };
+
+  onIdScanOperation = (listener) => {
+    if (typeof listener !== 'function') {
+      throw new Error('onIdScanOperation dinleyicisi bir fonksiyon olmalıdır');
+    }
+    this.operationListeners.add(listener);
+    return () => this.operationListeners.delete(listener);
+  };
+
+  emitIdScanOperation = (operation) => {
+    this.operationListeners.forEach((listener) => {
+      try {
+        listener(operation);
+      } catch (listenerError) {
+        nfcLogger.warn('IdScanOperation dinleyicisinde hata', listenerError.message);
+      }
+    });
+  };
+
+  dispatchIdScanOperation = async (operation) => {
+    if (!this.verificationHandler) {
+      this.emitIdScanOperation(operation);
+      return;
+    }
+
+    try {
+      const handlerResult = await this.verificationHandler(operation);
+
+      if (handlerResult instanceof IdScanOperation) {
+        this.emitIdScanOperation(handlerResult);
+        return;
+      }
+
+      if (handlerResult && typeof handlerResult === 'object') {
+        if (typeof handlerResult.isSuccess === 'boolean') {
+          this.emitIdScanOperation(new IdScanOperation(handlerResult));
+          return;
+        }
+
+        this.emitIdScanOperation(IdScanOperation.success(handlerResult));
+        return;
+      }
+
+      this.emitIdScanOperation(operation);
+    } catch (workerError) {
+      nfcLogger.error('Doğrulama işleyicisinde hata', workerError);
+      const workerException = {
+        message: workerError.message || 'Kart doğrulama işleyicisi başarısız oldu',
+        code: 'VERIFICATION_WORKER_ERROR',
+        details: {
+          stack: workerError.stack,
+        },
+      };
+      this.emitIdScanOperation(IdScanOperation.failure(workerException));
+    }
+  };
+
+  createSuccessOperation = (parsedFields, tag) => {
+    const content = {
+      parsedFields,
+      cardType: this.options.cardType,
+      rawTagId: tag?.id || null,
+      techList: tag?.techTypes || tag?.tech || [],
+      mrzSeed: this.options.mrzSeed || null,
+      sessionMetadata: this.options.sessionMetadata || null,
+    };
+
+    return IdScanOperation.success(content);
+  };
+
+  createFailureOperation = (errorResponse) => {
+    return IdScanOperation.failure(this.buildErrorResult(errorResponse));
+  };
+
+  buildErrorResult = (errorResponse) => ({
+    message: errorResponse.error,
+    code: errorResponse.code,
+    details: {
+      technicalError: errorResponse.technicalError,
+      technicalStack: errorResponse.technicalStack,
+      fallback: errorResponse.fallback,
+    },
+  });
+
+  withTimeout = (promise, timeoutMs, timeoutMessage) => {
+    if (!timeoutMs || timeoutMs <= 0) {
+      return promise;
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error(timeoutMessage || NFC_ERROR_CODES.TIMEOUT));
+      }, timeoutMs);
+
+      promise
+        .then((value) => {
+          clearTimeout(timeoutId);
+          resolve(value);
+        })
+        .catch((error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        });
+    });
+  };
+
   // Private Methods
   registerNfcDiscovery = async () => {
-    console.log('[NFC] registerNfcDiscovery invoked');
-    try {
-      await NfcManager.registerTagEvent(
-        async (tag) => {
-          console.log('[NFC] registerTagEvent callback fired');
-          if (this.options.enableVibration) {
-            Vibration.vibrate(100);
-          }
+    nfcLogger.step('REGISTER_NFC_DISCOVERY');
 
-          await this.handleTag(tag);
-        },
-        'Hold your ID card to the back of your phone',
-        {
-          readerModeFlags:
-            NfcManager.FLAG_READER_NFC_A |
-            NfcManager.FLAG_READER_NFC_B |
-            NfcManager.FLAG_READER_NFC_F |
-            NfcManager.FLAG_READER_NFC_V |
-            NfcManager.FLAG_READER_SKIP_NDEF_CHECK,
+    try {
+      nfcLogger.info('Activating NFC reader mode with registerTagEvent...');
+
+      // Try to use NfcManager flags first, fallback to manual values
+      const FLAG_A = NfcManager.FLAG_READER_NFC_A ?? READER_FLAGS.FLAG_READER_NFC_A;
+      const FLAG_B = NfcManager.FLAG_READER_NFC_B ?? READER_FLAGS.FLAG_READER_NFC_B;
+      const FLAG_F = NfcManager.FLAG_READER_NFC_F ?? READER_FLAGS.FLAG_READER_NFC_F;
+      const FLAG_V = NfcManager.FLAG_READER_NFC_V ?? READER_FLAGS.FLAG_READER_NFC_V;
+      const FLAG_SKIP = NfcManager.FLAG_READER_SKIP_NDEF_CHECK ?? READER_FLAGS.FLAG_READER_SKIP_NDEF_CHECK;
+
+      nfcLogger.info('Using flag values:', {
+        FLAG_READER_NFC_A: FLAG_A,
+        FLAG_READER_NFC_B: FLAG_B,
+        FLAG_READER_NFC_F: FLAG_F,
+        FLAG_READER_NFC_V: FLAG_V,
+        FLAG_READER_SKIP_NDEF_CHECK: FLAG_SKIP
+      });
+
+      const readerModeFlags = FLAG_A | FLAG_B | FLAG_F | FLAG_V | FLAG_SKIP;
+
+      nfcLogger.info('Reader mode flags calculated (decimal):', readerModeFlags);
+      nfcLogger.info('Reader mode flags calculated (hex):', '0x' + readerModeFlags.toString(16));
+
+      if (!readerModeFlags) {
+        nfcLogger.error(' Reader mode flags are still zero!');
+        throw new Error('Unable to set reader mode flags');
+      }
+
+      nfcLogger.success(' Reader mode flags configured successfully');
+
+      // CRITICAL: Use registerTagEvent callback for tag handling
+      // This is the cleanest approach - no mixing with DiscoverTag listener
+      nfcLogger.info('Calling NfcManager.registerTagEvent...');
+
+      const tagCallback = async (tag) => {
+        nfcLogger.step('🎉 TAG_DETECTED_IN_CALLBACK', {
+          tagId: tag?.id,
+          techTypes: tag?.techTypes,
+          nfcA: tag?.nfcA,
+          maxTransceiveLength: tag?.maxTransceiveLength
+        });
+
+        if (this.options.enableVibration) {
+          nfcLogger.info('Vibrating device for user feedback');
+          Vibration.vibrate(100);
         }
-      );
-      console.log('[NFC] registerTagEvent registered successfully');
+
+        if (this.callbacks.onTagDiscovered) {
+          nfcLogger.info('Calling onTagDiscovered callback');
+          this.callbacks.onTagDiscovered(tag);
+        }
+
+        // Handle the tag
+        nfcLogger.info('Calling handleTag...');
+        try {
+          await this.handleTag(tag);
+        } catch (error) {
+          nfcLogger.error('handleTag failed', error);
+          this.handleError(error);
+        }
+      };
+
+      nfcLogger.info('Callback function created, typeof:', typeof tagCallback);
+
+      // EVENT-BASED APPROACH: Use only DiscoverTag event listener
+      // DO NOT use requestTechnology as it blocks the event
+      nfcLogger.info('Setting up DiscoverTag event listener...');
+
+      NfcManager.setEventListener(NfcEvents.DiscoverTag, tagCallback);
+      nfcLogger.success('✅ DiscoverTag listener registered');
+
+      // Enable foreground dispatch with reader mode flags
+      nfcLogger.info('Enabling foreground dispatch with reader mode...');
+      try {
+        await NfcManager.registerTagEvent({
+          isReaderModeEnabled: true,
+          readerModeFlags: readerModeFlags
+        });
+        nfcLogger.success('✅ Foreground dispatch enabled with reader mode');
+      } catch (dispatchError) {
+        nfcLogger.warn('Foreground dispatch registration issue (might be OK):', dispatchError.message);
+      }
+
+      nfcLogger.success('✅ Reader mode activated - Event-based detection active');
+      nfcLogger.info('📡 Ready to scan - bring card close to device');
+      nfcLogger.info('🔔 Waiting for tag - DiscoverTag event will fire automatically');
     } catch (error) {
-      console.error('[NFC] registerTagEvent failed:', error);
+      nfcLogger.error('Reader mode activation failed', error);
       throw error;
     }
   };
 
   handleTag = async (tag) => {
+    nfcLogger.step('HANDLE_TAG', { tagId: tag?.id });
+
+    // Store tag for transceive operations
+    this.currentTag = tag;
+    nfcLogger.info('Current tag stored for transceive operations');
+
+    // Declare variables outside try block so they're accessible in finally block
+    let result = null;
+    let selectedTech = null;
+    let connectionTech = null;
+
     try {
       const techList = Array.isArray(tag?.tech)
         ? tag.tech
@@ -201,29 +491,61 @@ class NFCReaderModule {
           ? tag.techTypes
           : [];
 
-      console.log('[NFC] handleTag techList:', techList);
+      nfcLogger.info('Tech list extracted:', techList);
 
       if (techList.length === 0) {
+        nfcLogger.error('No technologies detected in tag');
         throw new Error('Kart teknolojisi algılanamadı. Lütfen kartı yeniden konumlandırın.');
       }
 
       const hasTech = (needle) =>
         techList.some((tech) => (tech || '').toLowerCase().includes(needle.toLowerCase()));
 
-      console.log('[NFC] Tag detected with tech list:', techList);
-
-      let result = null;
+      nfcLogger.info('Analyzing tag technologies...', techList);
 
       if (hasTech('isodep')) {
-        result = await this.readIsoDep(tag);
+        selectedTech = 'IsoDep';
+        connectionTech = NfcTech.IsoDep;
+        nfcLogger.info('Detected IsoDep technology - reading Turkish ID card');
+        nfcLogger.info('Tag is connected via reader mode - ready for APDU communication');
       } else if (hasTech('ndef')) {
-        result = await this.readNdef(tag);
+        selectedTech = 'Ndef';
+        connectionTech = NfcTech.Ndef;
+        nfcLogger.info('Detected Ndef technology');
       } else if (hasTech('mifare')) {
-        result = await this.readMifareClassic(tag);
+        selectedTech = 'MifareClassic';
+        connectionTech = NfcTech.MifareClassic;
+        nfcLogger.info('Detected Mifare Classic technology');
       } else if (hasTech('nfc')) {
+        selectedTech = 'NfcA';
+        connectionTech = NfcTech.NfcA;
+        nfcLogger.info('Detected NFC-A technology');
+      }
+
+      if (connectionTech) {
+        nfcLogger.info(`Connecting to ${selectedTech} technology session...`);
+        try {
+          await NfcManager.connect([connectionTech]);
+          nfcLogger.success(`${selectedTech} technology connected successfully`);
+        } catch (techError) {
+          nfcLogger.error(`Failed to connect ${selectedTech} technology`, techError.message);
+          throw new Error('Kart teknolojisi ile bağlantı kurulamadı');
+        }
+      }
+
+      if (selectedTech === 'IsoDep') {
+        result = await this.readIsoDep(tag);
+      } else if (selectedTech === 'Ndef') {
+        result = await this.readNdef(tag);
+      } else if (selectedTech === 'MifareClassic') {
+        result = await this.readMifareClassic(tag);
+      } else if (selectedTech === 'NfcA') {
         result = await this.readNfcA(tag);
       }
 
+      nfcLogger.info('Selected technology:', selectedTech);
+
+      nfcLogger.info('Validating parsed data...');
       const hasMeaningfulData = result && Object.values(result).some((value) => {
         if (!value) return false;
         if (typeof value === 'string') {
@@ -236,7 +558,7 @@ class NFCReaderModule {
       });
 
       if (result && hasMeaningfulData) {
-        console.log('[NFC] Parsed fields:', result);
+        nfcLogger.success('Data parsed successfully', Object.keys(result));
         const response = {
           success: true,
           raw: tag,
@@ -245,61 +567,502 @@ class NFCReaderModule {
           timestamp: new Date().toISOString(),
         };
 
+        nfcLogger.step('NFC_READ_SUCCESS', { fields: Object.keys(result) });
+
         if (this.callbacks.onResult) {
+          nfcLogger.info('Calling onResult callback with parsed data');
           this.callbacks.onResult(response);
         }
+
+        const operation = this.createSuccessOperation(result, tag);
+        await this.dispatchIdScanOperation(operation);
       } else {
-        console.warn('[NFC] No meaningful data parsed from tag');
+        nfcLogger.warn('No meaningful data parsed from tag');
         throw new Error('Kart verisi okunamadı. Desteklenmeyen kart tipi olabilir.');
       }
 
     } catch (error) {
       this.handleError(error);
     } finally {
-      await NfcManager.cancelTechnologyRequest();
+      if (connectionTech) {
+        try {
+          nfcLogger.info(`Closing ${selectedTech} technology connection...`);
+          await NfcManager.close();
+          nfcLogger.success('Technology connection closed');
+        } catch (closeError) {
+          nfcLogger.warn('Failed to close technology connection:', closeError.message);
+        }
+
+        try {
+          nfcLogger.info('Cancelling technology request (cleanup)...');
+          await NfcManager.cancelTechnologyRequest();
+          nfcLogger.success('Technology request cancelled');
+        } catch (cancelError) {
+          nfcLogger.warn('Failed to cancel technology request:', cancelError.message);
+        }
+      }
     }
+
   };
 
   readIsoDep = async (tag) => {
+    const timeoutMs = this.options.isoDepTimeout ?? 5000;
+    const isoDepPromise = this._readIsoDepInternal(tag);
+    return this.withTimeout(isoDepPromise, timeoutMs, `IsoDep okuması ${timeoutMs}ms içinde tamamlanmadı`);
+  };
+
+  _readIsoDepInternal = async (tag) => {
+    nfcLogger.step('READ_ISODEP', { tagId: tag?.id });
+
     try {
-      await NfcManager.requestTechnology(NfcTech.IsoDep);
+      nfcLogger.info('Tag is already connected via reader mode - ready for APDU commands');
 
       // Select application
-      const selectResponse = await NfcManager.transceive(NFC_COMMANDS.SELECT_APP);
-      console.log('[NFC][IsoDep] SELECT_APP response:', selectResponse);
+      nfcLogger.info('Step 1: Selecting card application...');
+      nfcLogger.apdu('SEND', NFC_COMMANDS.SELECT_APP);
+
+      const selectResponse = await this.transceiveApdu(NFC_COMMANDS.SELECT_APP);
+
+      nfcLogger.apdu('RECV', NFC_COMMANDS.SELECT_APP, selectResponse);
+      nfcLogger.info('SELECT_APP response (hex):', this.bytesToHex(selectResponse));
 
       if (!this.isSuccessResponse(selectResponse)) {
+        const sw1 = selectResponse[selectResponse.length - 2];
+        const sw2 = selectResponse[selectResponse.length - 1];
+        nfcLogger.error(`SELECT_APP failed with SW: ${sw1.toString(16).padStart(2, '0')}${sw2.toString(16).padStart(2, '0')}`);
         throw new Error('Kart uygulaması seçilemedi');
       }
 
+      nfcLogger.success('Application selected successfully');
+
+      // CRITICAL: Modern Turkish ID cards require BAC or PACE authentication
+      // According to TÜBİTAK: Turkish ID cards support both BAC and PACE v2
+      const hasAuthSeed = !!(this.options.mrzSeed || this.options.canNumber);
+      if (hasAuthSeed) {
+        const mrzSeed = this.options.mrzSeed || {};
+        nfcLogger.step('AUTHENTICATION_PHASE', {
+          documentNo: mrzSeed.documentNo,
+          birthDate: mrzSeed.birthDate,
+          expiryDate: mrzSeed.expiryDate || mrzSeed.validUntil,
+          hasMrzCheckDigits: !!mrzSeed.mrzCheckDigits,
+          canNumberProvided: !!this.options.canNumber
+        });
+
+        let authSuccess = false;
+
+        // STEP 1: Detect which authentication protocol the card supports
+        console.log('[NFC][Auth] Step 1: Detecting authentication protocol...');
+        const protocol = await this.detectAuthenticationProtocol();
+        console.log('[NFC][Auth] Detected protocol:', protocol);
+
+        // STEP 2: Try authentication based on detected protocol
+        if (protocol === 'PACE') {
+          console.log('[NFC][Auth] 🎯 Card requires PACE authentication');
+
+          if (this.options.mrzSeed?.mrzCheckDigits || this.options.canNumber) {
+            console.log('[NFC][Auth] Authentication seed available - attempting PACE...');
+            try {
+              const paceSuccess = await this.performPACE(this.options.mrzSeed);
+              if (paceSuccess) {
+                authSuccess = true;
+                nfcLogger.success('✅ PACE authentication successful');
+              } else {
+                console.warn('[NFC][Auth] ⚠️ PACE failed - trying BAC as fallback...');
+                nfcLogger.warn('PACE failed - trying BAC fallback');
+
+                if (this.options.mrzSeed) {
+                  try {
+                    const bacSuccess = await this.performBAC(this.options.mrzSeed);
+                    if (bacSuccess) {
+                      authSuccess = true;
+                      console.log('[NFC][Auth] ✅ BAC fallback successful!');
+                      nfcLogger.success('BAC fallback successful');
+                    }
+                  } catch (bacError) {
+                    console.error('[NFC][Auth] ❌ BAC fallback also failed:', bacError.message);
+                  }
+                } else {
+                  nfcLogger.warn('BAC fallback skipped - MRZ verisi mevcut değil');
+                }
+              }
+            } catch (error) {
+              console.error('[NFC][Auth] ❌ PACE authentication error:', error.message);
+              console.warn('[NFC][Auth] Trying BAC as fallback...');
+              nfcLogger.warn('PACE error - trying BAC fallback');
+
+              if (this.options.mrzSeed) {
+                try {
+                  const bacSuccess = await this.performBAC(this.options.mrzSeed);
+                  if (bacSuccess) {
+                    authSuccess = true;
+                    console.log('[NFC][Auth] ✅ BAC fallback successful!');
+                    nfcLogger.success('BAC fallback successful');
+                  }
+                } catch (bacError) {
+                  console.error('[NFC][Auth] ❌ BAC fallback also failed:', bacError.message);
+                }
+              } else {
+                nfcLogger.warn('BAC fallback skipped - MRZ verisi mevcut değil');
+              }
+            }
+          } else {
+            console.error('[NFC][Auth] ❌ PACE required but no authentication seed provided');
+            console.error('[NFC][Auth] Please provide mrzCheckDigits from OCR or CAN number for PACE');
+            nfcLogger.warn('PACE required but neither MRZ check digits nor CAN provided');
+          }
+        } else {
+          // BAC authentication (legacy cards)
+          console.log('[NFC][Auth] Card uses BAC authentication (legacy)');
+          nfcLogger.info('Step 2: Trying BAC authentication...');
+          if (this.options.mrzSeed) {
+            try {
+              const bacSuccess = await this.performBAC(this.options.mrzSeed);
+              if (!bacSuccess) {
+                nfcLogger.warn('BAC authentication failed, continuing without secure channel');
+              } else {
+                authSuccess = true;
+              }
+            } catch (error) {
+              console.error('[NFC][Auth] ❌ BAC authentication failed:', error.message);
+              nfcLogger.warn('BAC authentication failed, continuing without secure channel');
+            }
+          } else {
+            nfcLogger.warn('BAC authentication skipped - MRZ verisi mevcut değil');
+          }
+        }
+
+        if (!authSuccess) {
+          nfcLogger.warn('⚠️ No authentication succeeded - reading without secure channel');
+          console.warn('[NFC][Auth] This may result in 6982 errors when reading protected data');
+        }
+
+        if (authSuccess) {
+          nfcLogger.success('Authentication phase completed - secure channel established');
+        } else {
+          nfcLogger.warn('No authentication succeeded - reading without secure channel');
+        }
+      } else {
+        nfcLogger.warn('No MRZ seed provided - skipping authentication (may fail on modern cards)');
+      }
+
       // Read personal data
-      const personalData = await NfcManager.transceive(NFC_COMMANDS.READ_PERSONAL);
-      console.log('[NFC][IsoDep] READ_PERSONAL response length:', personalData?.length);
-      const idData = await NfcManager.transceive(NFC_COMMANDS.READ_ID);
-      console.log('[NFC][IsoDep] READ_ID response length:', idData?.length);
-      const birthData = await NfcManager.transceive(NFC_COMMANDS.READ_BIRTH);
-      console.log('[NFC][IsoDep] READ_BIRTH response length:', birthData?.length);
+      nfcLogger.step('DATA_READING_PHASE');
+      const useSecureMessaging = !!(this.bacSession?.isEstablished);
+      nfcLogger.info('Secure messaging enabled:', useSecureMessaging);
+
+      nfcLogger.info('Step 3a: Reading personal data...');
+      nfcLogger.apdu('SEND', NFC_COMMANDS.READ_PERSONAL);
+      const personalData = await this.transceiveApdu(NFC_COMMANDS.READ_PERSONAL, { secure: useSecureMessaging });
+      nfcLogger.apdu('RECV', NFC_COMMANDS.READ_PERSONAL, personalData);
+      nfcLogger.info('Personal data response length:', personalData?.length);
+
+      nfcLogger.info('Step 3b: Reading ID data...');
+      nfcLogger.apdu('SEND', NFC_COMMANDS.READ_ID);
+      const idData = await this.transceiveApdu(NFC_COMMANDS.READ_ID, { secure: useSecureMessaging });
+      nfcLogger.apdu('RECV', NFC_COMMANDS.READ_ID, idData);
+      nfcLogger.info('ID data response length:', idData?.length);
+
+      nfcLogger.info('Step 3c: Reading birth data...');
+      nfcLogger.apdu('SEND', NFC_COMMANDS.READ_BIRTH);
+      const birthData = await this.transceiveApdu(NFC_COMMANDS.READ_BIRTH, { secure: useSecureMessaging });
+      nfcLogger.apdu('RECV', NFC_COMMANDS.READ_BIRTH, birthData);
+      nfcLogger.info('Birth data response length:', birthData?.length);
 
       // Parse data
+      nfcLogger.step('DATA_PARSING_PHASE');
+      nfcLogger.info('Parsing card data...');
       const parsed = this.parseCardData({
         personal: personalData,
         id: idData,
         birth: birthData,
       });
 
-      console.log('[NFC][IsoDep] Parsed card data keys:', Object.keys(parsed));
+      nfcLogger.info('Parsed data fields:', Object.keys(parsed));
+      nfcLogger.success('IsoDep read completed successfully');
 
       return parsed;
 
     } catch (error) {
-      console.error('IsoDep read error:', error);
-      return null;
+      nfcLogger.error('IsoDep read failed', {
+        message: error.message,
+        stack: error.stack
+      });
+
+      // Re-throw to let handleError process it properly
+      throw error;
+    }
+  };
+
+  // PACE v2 authentication implementation
+  performPACE = async (mrzSeed) => {
+    try {
+      console.log('[NFC][PACE] Starting PACE v2 authentication...');
+      console.log('[NFC][PACE] MRZ Seed:', {
+        tcNo: mrzSeed?.tcNo ? '***' + mrzSeed.tcNo.slice(-4) : 'missing',
+        birthDate: mrzSeed?.birthDate || 'missing',
+        documentNo: mrzSeed?.documentNo || 'missing',
+        canProvided: !!this.options.canNumber
+      });
+
+      // Import PACE protocol module
+      console.log('[NFC][PACE] Loading PACE protocol module...');
+      const PACEModule = require('./PACEProtocol');
+      console.log('[NFC][PACE] PACE module loaded:', !!PACEModule);
+      console.log('[NFC][PACE] performPACEAuthentication available:', !!PACEModule.performPACEAuthentication);
+
+      const { performPACEAuthentication } = PACEModule;
+
+      // Prepare MRZ data for PACE
+      const mrzData = {
+        documentNo: mrzSeed?.documentNo || mrzSeed?.serialNo,
+        birthDate: mrzSeed?.birthDate,
+        expiryDate: mrzSeed?.validUntil || mrzSeed?.expiryDate,
+        // CRITICAL: Pass MRZ check digits from OCR
+        mrzCheckDigits: mrzSeed?.mrzCheckDigits,
+        // CRITICAL: Pass CAN for CAN-based PACE authentication
+        canNumber: this.options.canNumber
+      };
+
+      console.log('[NFC][PACE] Prepared MRZ data:', {
+        documentNo: mrzData.documentNo,
+        birthDate: mrzData.birthDate,
+        expiryDate: mrzData.expiryDate || 'not provided',
+        mrzCheckDigits: mrzData.mrzCheckDigits,
+        canNumber: mrzData.canNumber ? '******' : 'not provided'
+      });
+
+      // Perform PACE authentication
+      console.log('[NFC][PACE] Performing ICAO 9303 PACE v2 handshake...');
+      const session = await performPACEAuthentication(mrzData);
+
+      if (session && session.isEstablished) {
+        console.log('[NFC][PACE] ✅ PACE authentication successful!');
+        console.log('[NFC][PACE] Variant:', session.variant || 'unknown');
+        console.log('[NFC][PACE] OID:', session.oid || 'unknown');
+        console.log('[NFC][PACE] Secure channel established');
+
+        // Store session for secure messaging
+        this.paceSession = session;
+        // Also set bacSession for compatibility with existing code
+        this.bacSession = session;
+
+        return true;
+      } else {
+        console.error('[NFC][PACE] PACE session establishment failed');
+        return false;
+      }
+
+    } catch (error) {
+      console.error('[NFC][PACE] Authentication error:', error);
+      console.error('[NFC][PACE] Error message:', error.message);
+      console.error('[NFC][PACE] Error stack:', error.stack);
+
+      // Provide helpful error messages
+      if (error.message.includes('MSE:Set AT failed')) {
+        console.error('[NFC][PACE] ❌ Card does not support PACE or wrong cipher suite');
+      } else if (error.message.includes('GA Step')) {
+        console.error('[NFC][PACE] ❌ General Authenticate failed - check MRZ data');
+      }
+
+      return false;
+    }
+  };
+
+  // Parse PACEInfo from EF.CardAccess SecurityInfos
+  _parsePACEInfo = (data) => {
+    try {
+      console.log('[NFC][Protocol] Parsing SecurityInfos for PACEInfo...');
+
+      // Simple DER/ASN.1 parser to extract OIDs
+      // EF.CardAccess contains SecurityInfos (SET OF SecurityInfo)
+      // PACEInfo has OID starting with 0.4.0.127.0.7.2.2.4
+
+      const hexStr = Buffer.from(data).toString('hex');
+
+      // Look for PACE OID patterns in hex
+      // 0.4.0.127.0.7.2.2.4.x.y = 04 00 7F 00 07 02 02 04 ...
+      const paceOidPattern = '04007f000702020';
+      const index = hexStr.indexOf(paceOidPattern);
+
+      if (index !== -1) {
+        const oidHex = hexStr.substring(index, index + 24);
+        console.log('[NFC][Protocol] 🎯 Found PACE OID in EF.CardAccess:', oidHex);
+
+        // Try to identify the variant
+        if (oidHex.includes('040202')) {
+          console.log('[NFC][Protocol] → PACE ECDH-GM-AES128 (most common)');
+        } else if (oidHex.includes('040203')) {
+          console.log('[NFC][Protocol] → PACE ECDH-GM-AES192');
+        } else if (oidHex.includes('040204')) {
+          console.log('[NFC][Protocol] → PACE ECDH-GM-AES256');
+        }
+
+        // TODO: Store this OID for use in performPACE
+        this.detectedPACEOID = oidHex;
+      } else {
+        console.warn('[NFC][Protocol] ⚠️ Could not find PACE OID in SecurityInfos');
+        console.warn('[NFC][Protocol] Will try default OID: 0.4.0.127.0.7.2.2.4.2.2');
+      }
+    } catch (error) {
+      console.error('[NFC][Protocol] Error parsing PACEInfo:', error.message);
+    }
+  };
+
+  // Check if card supports PACE or BAC
+  detectAuthenticationProtocol = async () => {
+    try {
+      console.log('[NFC][Protocol] Detecting card authentication protocol...');
+
+      // Try to read EF.CardAccess (0x011C) - contains PACE info
+      // APDU: SELECT FILE by FID
+      const selectCardAccess = [
+        0x00, 0xA4, 0x02, 0x0C,  // CLA INS P1 P2
+        0x02,                      // Lc = 2 bytes
+        0x01, 0x1C                 // FID = 0x011C (EF.CardAccess)
+      ];
+
+      console.log('[NFC][Protocol] Trying to select EF.CardAccess (0x011C)...');
+      console.log('[NFC][Protocol] SELECT command:', Buffer.from(selectCardAccess).toString('hex'));
+      const selectResponse = await NfcManager.transceive(selectCardAccess);
+      const selectSW = this.getStatusWord(selectResponse);
+      console.log('[NFC][Protocol] SELECT EF.CardAccess response SW:', selectSW);
+
+      if (selectSW === '9000') {
+        console.log('[NFC][Protocol] ✅ EF.CardAccess found - card supports PACE');
+
+        // Read EF.CardAccess content to find supported PACE variants
+        // Try reading up to 256 bytes
+        const readCardAccess = [
+          0x00, 0xB0, 0x00, 0x00,  // READ BINARY from offset 0
+          0x00                      // Le = 256 bytes (max)
+        ];
+
+        try {
+          const readResponse = await NfcManager.transceive(readCardAccess);
+          const readSW = this.getStatusWord(readResponse);
+
+          if (readSW === '9000' || readSW.startsWith('61')) {
+            const data = readResponse.slice(0, -2);
+            console.log('[NFC][Protocol] 📄 EF.CardAccess content length:', data.length);
+            console.log('[NFC][Protocol] EF.CardAccess hex:', Buffer.from(data).toString('hex'));
+
+            // Parse SecurityInfos to find PACEInfo
+            this._parsePACEInfo(data);
+
+            console.log('[NFC][Protocol] 🎯 PACE is supported and likely REQUIRED');
+            return 'PACE';
+          } else {
+            console.warn('[NFC][Protocol] EF.CardAccess selected but cannot read (SW:', readSW + ')');
+            console.warn('[NFC][Protocol] Card likely requires PACE before reading EF.CardAccess');
+            return 'PACE';
+          }
+        } catch (error) {
+          console.warn('[NFC][Protocol] Error reading EF.CardAccess:', error.message);
+          console.warn('[NFC][Protocol] Assuming PACE is required');
+          return 'PACE';
+        }
+      } else {
+        const paceRequiredStatuses = ['6982', '6985'];
+        if (paceRequiredStatuses.includes(selectSW)) {
+          console.warn('[NFC][Protocol] ⚠️ EF.CardAccess selection blocked with SW:', selectSW);
+          console.warn('[NFC][Protocol] This usually means the card REQUIRES PACE before allowing reads');
+          console.warn('[NFC][Protocol] Treating protocol as PACE despite SELECT failure');
+          return 'PACE';
+        }
+
+        console.log('[NFC][Protocol] EF.CardAccess not accessible (SW:', selectSW + ')');
+        console.log('[NFC][Protocol] Card likely uses BAC (older standard)');
+        return 'BAC';
+      }
+    } catch (error) {
+      console.log('[NFC][Protocol] Error detecting protocol:', error.message);
+      console.log('[NFC][Protocol] Assuming BAC (fallback)');
+      return 'BAC';
+    }
+  };
+
+  // Full BAC authentication implementation
+  performBAC = async (mrzSeed) => {
+    try {
+      console.log('[NFC][BAC] Starting BAC authentication...');
+      console.log('[NFC][BAC] MRZ Seed:', {
+        tcNo: mrzSeed.tcNo ? '***' + mrzSeed.tcNo.slice(-4) : 'missing',
+        birthDate: mrzSeed.birthDate || 'missing',
+        documentNo: mrzSeed.documentNo || 'missing'
+      });
+
+      // Validate MRZ seed - BAC requires birthDate and documentNo
+      if (!mrzSeed.documentNo && !mrzSeed.serialNo) {
+        console.error('[NFC][BAC] ❌ ERROR: documentNo or serialNo is required for BAC');
+        console.error('[NFC][BAC] Please provide MRZ data from OCR (document number)');
+        throw new Error('BAC authentication requires documentNo. Please scan the document first with OCR.');
+      }
+
+      if (!mrzSeed.birthDate) {
+        console.error('[NFC][BAC] ❌ ERROR: birthDate is required for BAC');
+        console.error('[NFC][BAC] Please provide MRZ data from OCR (birth date in format: DD.MM.YYYY or YYMMDD)');
+        throw new Error('BAC authentication requires birthDate. Please scan the document first with OCR.');
+      }
+
+      // Import BAC protocol module
+      const { performBACAuthentication } = require('./BACProtocol');
+
+      // Prepare MRZ data for BAC
+      const mrzData = {
+        documentNo: mrzSeed.documentNo || mrzSeed.serialNo,
+        birthDate: mrzSeed.birthDate,
+        expiryDate: mrzSeed.validUntil || mrzSeed.expiryDate,
+        // CRITICAL: Pass MRZ check digits from OCR for BAC
+        mrzCheckDigits: mrzSeed.mrzCheckDigits
+      };
+
+      console.log('[NFC][BAC] Prepared MRZ data:', {
+        documentNo: mrzData.documentNo,
+        birthDate: mrzData.birthDate,
+        expiryDate: mrzData.expiryDate || 'not provided',
+        mrzCheckDigits: mrzData.mrzCheckDigits
+      });
+
+      // Perform BAC authentication
+      console.log('[NFC][BAC] Performing ICAO 9303 BAC handshake...');
+      const session = await performBACAuthentication(mrzData);
+
+      if (session && session.isEstablished) {
+        console.log('[NFC][BAC] ✅ BAC authentication successful!');
+        console.log('[NFC][BAC] Secure channel established');
+
+        // Store session for secure messaging
+        this.bacSession = session;
+
+        return true;
+      } else {
+        console.error('[NFC][BAC] BAC session establishment failed');
+        return false;
+      }
+
+    } catch (error) {
+      console.error('[NFC][BAC] Authentication error:', error);
+      console.error('[NFC][BAC] Error message:', error.message);
+      console.error('[NFC][BAC] Error stack:', error.stack);
+
+      // Provide helpful error messages
+      if (error.message.includes('Incorrect MRZ data')) {
+        console.error('[NFC][BAC] ❌ MRZ data mismatch - OCR might have errors');
+        console.error('[NFC][BAC] Check: Document number, birth date, expiry date');
+      } else if (error.message.includes('GET CHALLENGE failed')) {
+        console.error('[NFC][BAC] ❌ Chip did not respond to challenge request');
+      } else if (error.message.includes('MAC verification failed')) {
+        console.error('[NFC][BAC] ❌ MAC verification failed - key derivation error');
+      }
+
+      return false;
     }
   };
 
   readNdef = async (tag) => {
     try {
-      await NfcManager.requestTechnology(NfcTech.Ndef);
+      // Tag already connected via reader mode
+      console.log('[NFC][Ndef] Reading NDEF data...');
 
       const message = await NfcManager.getNdefMessage();
 
@@ -324,7 +1087,8 @@ class NFCReaderModule {
 
   readMifareClassic = async (tag) => {
     try {
-      await NfcManager.requestTechnology(NfcTech.MifareClassic);
+      // Tag already connected via reader mode
+      console.log('[NFC][Mifare] Reading Mifare Classic...');
 
       // Authenticate and read sectors
       const data = {};
@@ -349,7 +1113,8 @@ class NFCReaderModule {
 
   readNfcA = async (tag) => {
     try {
-      await NfcManager.requestTechnology(NfcTech.NfcA);
+      // Tag already connected via reader mode
+      console.log('[NFC][NfcA] Reading NFC-A...');
 
       const atqa = await NfcManager.getNfcAAtqa();
       const sak = await NfcManager.getNfcASak();
@@ -417,76 +1182,187 @@ class NFCReaderModule {
     return String.fromCharCode.apply(null, bytes);
   };
 
-  bytesToHex = (bytes) => {
-    if (!bytes) return '';
+  bytesToHex = (bytes = []) => {
+    if (!bytes || typeof bytes[Symbol.iterator] !== 'function') {
+      return '';
+    }
+
     return Array.from(bytes, byte => ('0' + (byte & 0xFF).toString(16)).slice(-2)).join('');
   };
 
-  isSuccessResponse = (response) => {
-    if (!response || response.length < 2) return false;
+  /**
+   * Extract SW1SW2 from APDU response as hex string (e.g., '9000')
+   */
+  getStatusWord = (response) => {
+    if (!response || response.length < 2) {
+      return '0000';
+    }
+
     const sw1 = response[response.length - 2];
     const sw2 = response[response.length - 1];
+    return sw1.toString(16).padStart(2, '0') + sw2.toString(16).padStart(2, '0');
+  };
+
+  transceiveApdu = async (command, options = {}) => {
+    const { secure = false } = options;
+    const shouldSecure = secure && this.bacSession?.isEstablished;
+
+    const cmdHex = Array.isArray(command) ? command.map(b => b.toString(16).padStart(2, '0')).join(' ') : 'unknown';
+    nfcLogger.info(`Transceiving APDU (secure: ${shouldSecure})`);
+    nfcLogger.info('Command:', cmdHex);
+
+    try {
+      let response;
+
+      if (shouldSecure) {
+        nfcLogger.info('Using secure messaging - wrapping APDU...');
+        const wrapped = this.bacSession.wrapAPDU(command);
+        nfcLogger.info('Wrapped command:', Array.isArray(wrapped) ? wrapped.map(b => b.toString(16).padStart(2, '0')).join(' ') : 'unknown');
+
+        nfcLogger.info('Sending wrapped APDU to card...');
+        response = await NfcManager.transceive(wrapped);
+        nfcLogger.info('Received wrapped response, length:', response?.length);
+
+        nfcLogger.info('Unwrapping response...');
+        const unwrapped = this.bacSession.unwrapAPDU(response);
+        nfcLogger.info('Unwrapped response:', Array.isArray(unwrapped) ? unwrapped.map(b => b.toString(16).padStart(2, '0')).join(' ') : 'unknown');
+        return unwrapped;
+      }
+
+      nfcLogger.info('Sending plain APDU to card...');
+      response = await NfcManager.transceive(command);
+      const respHex = Array.isArray(response) ? response.map(b => b.toString(16).padStart(2, '0')).join(' ') : 'unknown';
+      nfcLogger.info('Received response:', respHex);
+      nfcLogger.info('Response length:', response?.length);
+
+      return response;
+    } catch (error) {
+      nfcLogger.error('APDU transceive failed', {
+        secure: shouldSecure,
+        command: cmdHex,
+        errorMessage: error.message,
+        errorType: error.name
+      });
+      throw error;
+    }
+  };
+
+  isSuccessResponse = (response) => {
+    if (!response || response.length < 2) {
+      nfcLogger.warn('Invalid response - too short or null');
+      return false;
+    }
+
+    const sw1 = response[response.length - 2];
+    const sw2 = response[response.length - 1];
+    const swHex = `${sw1.toString(16).padStart(2, '0')}${sw2.toString(16).padStart(2, '0')}`;
+    nfcLogger.info('Checking status word (SW):', swHex);
 
     // Check for PACE/BAC requirement (CRITICAL for modern Turkish ID cards)
     if (sw1 === 0x69 && sw2 === 0x82) {
+      nfcLogger.error('Status: Security not satisfied (6982) - PACE/BAC required');
       throw new Error(NFC_ERROR_CODES.SECURITY_NOT_SATISFIED);
     }
 
     // Check for BAC requirement
     if (sw1 === 0x63 && sw2 === 0x00) {
+      nfcLogger.error('Status: BAC required (6300)');
       throw new Error(NFC_ERROR_CODES.BAC_REQUIRED);
     }
 
     // Check for authentication failure
     if (sw1 === 0x69 && sw2 === 0x88) {
+      nfcLogger.error('Status: Authentication failed (6988)');
       throw new Error(NFC_ERROR_CODES.AUTHENTICATION_FAILED);
     }
 
     // Check for file not found (unsupported card)
     if (sw1 === 0x6A && sw2 === 0x82) {
+      nfcLogger.error('Status: File not found (6A82) - unsupported card');
       throw new Error(NFC_ERROR_CODES.CARD_NOT_SUPPORTED);
     }
 
-    return sw1 === 0x90 && sw2 === 0x00;
+    const isSuccess = sw1 === 0x90 && sw2 === 0x00;
+    if (isSuccess) {
+      nfcLogger.success('Status: Success (9000)');
+    } else {
+      nfcLogger.warn(`Status: Unknown status word (${swHex})`);
+    }
+
+    return isSuccess;
   };
 
   handleError = (error) => {
+    nfcLogger.step('ERROR_HANDLER', {
+      errorMessage: error.message,
+      errorType: typeof error,
+      errorName: error.name
+    });
+
     let errorMessage = error.message || 'NFC okuma hatası';
     let errorCode = 'NFC_READ_ERROR';
     let fallbackOption = null;
 
+    nfcLogger.error('Processing error', {
+      message: error.message,
+      type: typeof error,
+      stack: error.stack?.substring(0, 200) // İlk 200 karakter
+    });
+
     // Detect PACE requirement and provide user-friendly messages
     if (error.message === NFC_ERROR_CODES.SECURITY_NOT_SATISFIED ||
-      error.message === NFC_ERROR_CODES.PACE_REQUIRED) {
+      error.message === NFC_ERROR_CODES.PACE_REQUIRED ||
+      error.message?.includes('6982') ||
+      error.message?.includes('Security not satisfied')) {
       errorCode = NFC_ERROR_CODES.PACE_REQUIRED;
-      errorMessage = 'Bu kimlik kartı gelişmiş güvenlik protokolü (PACE) gerektiriyor.';
+      errorMessage = '⚠️ Modern Kimlik Kartı Tespit Edildi\n\n' +
+        'Bu kimlik kartı BAC/PACE güvenlik protokolü gerektiriyor.\n\n' +
+        '❌ Sorun: Kart algılandı ancak güvenlik doğrulaması yapılamadı.\n\n' +
+        '🔧 Geçici Çözüm: Manuel veri girişi kullanabilirsiniz.';
       fallbackOption = {
         type: 'MANUAL_MRZ_ENTRY',
         title: 'Manuel Veri Girişi',
         message: 'Kimlik kartınızın arka yüzündeki MRZ kodunu manuel olarak girebilirsiniz.',
         action: 'MRZ Girişi Yap',
       };
-    } else if (error.message === NFC_ERROR_CODES.BAC_REQUIRED) {
+    } else if (error.message === NFC_ERROR_CODES.BAC_REQUIRED ||
+      error.message?.includes('6300') ||
+      error.message?.includes('BAC')) {
       errorCode = NFC_ERROR_CODES.BAC_REQUIRED;
-      errorMessage = 'Bu kart temel erişim kontrolü (BAC) gerektiriyor.';
+      errorMessage = '🔐 Güvenlik Doğrulaması Gerekli\n\n' +
+        'Bu kart BAC (Basic Access Control) gerektiriyor.\n\n' +
+        'Kart algılandı ancak güvenlik anahtarları türetilemedi.';
       fallbackOption = {
         type: 'MANUAL_MRZ_ENTRY',
         title: 'Manuel Veri Girişi',
         message: 'MRZ kodunu manuel olarak girebilirsiniz.',
         action: 'MRZ Girişi Yap',
       };
-    } else if (error.message === NFC_ERROR_CODES.AUTHENTICATION_FAILED) {
+    } else if (error.message === NFC_ERROR_CODES.AUTHENTICATION_FAILED ||
+      error.message?.includes('6988')) {
       errorCode = NFC_ERROR_CODES.AUTHENTICATION_FAILED;
-      errorMessage = 'Kart kimlik doğrulaması başarısız. Lütfen kartı tekrar okutun.';
-    } else if (error.message === NFC_ERROR_CODES.CARD_NOT_SUPPORTED) {
+      errorMessage = '❌ Kimlik Doğrulama Başarısız\n\n' +
+        'Kart güvenlik protokolünü kabul etmedi.\n\n' +
+        'Lütfen kartı tekrar okutun veya farklı bir kart deneyin.';
+    } else if (error.message === NFC_ERROR_CODES.CARD_NOT_SUPPORTED ||
+      error.message?.includes('6A82')) {
       errorCode = NFC_ERROR_CODES.CARD_NOT_SUPPORTED;
-      errorMessage = 'Bu kart tipi desteklenmiyor veya kart bozuk olabilir.';
+      errorMessage = '🚫 Desteklenmeyen Kart\n\n' +
+        'Bu kart tipi desteklenmiyor veya kart bozuk olabilir.';
     } else if (error.message && error.message.includes('timeout')) {
       errorCode = NFC_ERROR_CODES.TIMEOUT;
-      errorMessage = 'Okuma zaman aşımına uğradı. Kartı cihazın arkasında sabit tutun.';
+      errorMessage = '⏱️ Zaman Aşımı\n\n' +
+        'Okuma çok uzun sürdü.\n\n' +
+        'Kartı cihazın arkasında 3-5 saniye sabit tutun.';
     } else if (error.message && error.message.includes('Tag was lost')) {
       errorCode = NFC_ERROR_CODES.TAG_LOST;
-      errorMessage = 'Kart okuma sırasında hareket etti. Lütfen tekrar deneyin.';
+      errorMessage = '📱 Kart Hareket Etti\n\n' +
+        'Okuma sırasında kart hareket etti.\n\n' +
+        'Lütfen kartı sabit tutarak tekrar deneyin.';
+    } else if (error.message && error.message.includes('cancelled')) {
+      errorCode = 'NFC_CANCELLED';
+      errorMessage = '❌ İşlem İptal Edildi\n\n' +
+        'NFC okuma kullanıcı tarafından iptal edildi.';
     }
 
     const errorResponse = {
@@ -494,15 +1370,26 @@ class NFCReaderModule {
       error: errorMessage,
       code: errorCode,
       technicalError: error.message, // For debugging
+      technicalStack: error.stack, // For debugging
       fallback: fallbackOption,
       timestamp: new Date().toISOString(),
     };
 
-    console.error('[NFC Error]', errorResponse);
+    nfcLogger.step('ERROR_RESPONSE', {
+      errorCode,
+      userMessage: errorMessage,
+      hasFallback: !!fallbackOption
+    });
 
     if (this.callbacks.onError) {
+      nfcLogger.info('Calling onError callback with error response');
       this.callbacks.onError(errorResponse);
+    } else {
+      nfcLogger.warn('No error callback registered!');
     }
+
+    const failureOperation = this.createFailureOperation(errorResponse);
+    this.dispatchIdScanOperation(failureOperation);
   };
 }
 
@@ -514,7 +1401,7 @@ export const NFCReaderScreen = ({ navigation, route }) => {
   const [showFallbackModal, setShowFallbackModal] = useState(false);
   const [fallbackErrorInfo, setFallbackErrorInfo] = useState({});
   const [logs, setLogs] = useState([]);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useSharedValue(1);
   const nfcModule = useRef(new NFCReaderModule()).current;
   const returnTo = route?.params?.returnTo;
   const returnSourceStep = route?.params?.returnParams?.sourceStep;
@@ -722,21 +1609,16 @@ export const NFCReaderScreen = ({ navigation, route }) => {
   };
 
   const startPulseAnimation = () => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.2,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
+    pulseAnim.value = withRepeat(
+      withTiming(1.2, { duration: 1000 }),
+      -1,
+      true
+    );
   };
+
+  const animatedNfcIconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseAnim.value }]
+  }));
 
   const renderResult = () => {
     if (!nfcResult) return null;
@@ -780,7 +1662,7 @@ export const NFCReaderScreen = ({ navigation, route }) => {
 
   const renderScanning = () => (
     <View style={styles.scanningContainer}>
-      <Animated.View style={[styles.nfcIcon, { transform: [{ scale: pulseAnim }] }]}>
+      <Animated.View style={[styles.nfcIcon, animatedNfcIconStyle]}>
         <Image
           source={{ uri: 'https://img.icons8.com/color/200/000000/nfc-tag.png' }}
           style={styles.nfcImage}
@@ -809,7 +1691,7 @@ export const NFCReaderScreen = ({ navigation, route }) => {
       <TouchableOpacity style={styles.cancelButton} onPress={stopScanning}>
         <Text style={styles.cancelButtonText}>İptal</Text>
       </TouchableOpacity>
-    </View>
+    </View >
   );
 
   const renderLogs = () => (
@@ -1076,5 +1958,5 @@ const styles = StyleSheet.create({
   },
 });
 
-export { NFC_ERROR_CODES, NFCReaderModule };
+export { NFC_ERROR_CODES, NFCReaderModule, IdScanOperation };
 export default NFCReaderScreen;
