@@ -6,6 +6,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { OCRReaderScreen } from './modules/ocr/OCRReaderModule';
 import { NFCReaderScreen } from './modules/nfc/NFCReaderModule';
 import FullVerificationScreen from './FullVerificationScreen';
+import VerificationFlowScreen from './VerificationFlowScreen';
 
 const Stack = createStackNavigator();
 
@@ -39,9 +40,10 @@ export default function MainApp() {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="FullVerification"
+        initialRouteName="VerificationFlow"
         screenOptions={{ headerShown: false }}
       >
+        <Stack.Screen name="VerificationFlow" component={VerificationFlowScreen} />
         <Stack.Screen name="FullVerification" component={FullVerificationScreen} />
         <Stack.Screen name="OCR" component={OCRReaderScreen} />
         <Stack.Screen name="NFC" component={NFCReaderScreen} />
