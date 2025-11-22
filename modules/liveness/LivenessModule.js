@@ -17,6 +17,7 @@ import {
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import FaceDetection from '@react-native-ml-kit/face-detection';
 import Logger from '../../utils/logger';
+import BehavioralBiometrics from './BehavioralBiometrics';
 
 const LIVENESS_COMMANDS = [
     { type: 'look_straight', text: 'Düz bakın 👀', duration: 2000, validation: (face) => Math.abs(face.headEulerAngleY) < 10 && Math.abs(face.headEulerAngleX) < 10 },
@@ -55,6 +56,8 @@ export const LivenessModule = ({
     const device = useCameraDevice('front');
     const commandTimerRef = useRef(null);
     const detectionIntervalRef = useRef(null);
+    const behavioralRef = useRef(new BehavioralBiometrics());
+    const commandStartTimeRef = useRef(null);
 
     const currentCommand = LIVENESS_COMMANDS[currentCommandIndex];
 
@@ -70,12 +73,23 @@ export const LivenessModule = ({
     useEffect(() => {
         if (currentCommand && !isProcessing) {
             setStatusMessage(currentCommand.text);
+            // Start timing for behavioral biometrics (reaction time)
+            commandStartTimeRef.current = Date.now();
             startFaceDetection();
         }
     }, [currentCommandIndex]);
 
     const startLivenessTest = useCallback(() => {
         Logger.info('[Liveness] Test başlatıldı');
+        // Reset behavioral biometrics session in soft mode
+        try {
+            if (behavioralRef.current) {
+                behavioralRef.current.reset();
+            }
+        } catch (resetError) {
+            Logger.warn('[Liveness] Behavioral reset failed:', resetError);
+        }
+        commandStartTimeRef.current = null;
         setStatusMessage('Kameraya bakın...');
     }, []);
 
@@ -130,11 +144,23 @@ export const LivenessModule = ({
                         setCommandPassed(true);
                         Logger.info(`[Liveness] Komut tamamlandı: ${currentCommand.type}`);
 
+                        // Record behavioral biometrics for this command (soft mode)
+                        try {
+                            const endTime = Date.now();
+                            const startTime = commandStartTimeRef.current || endTime;
+                            if (behavioralRef.current && typeof behavioralRef.current.recordCommand === 'function') {
+                                behavioralRef.current.recordCommand(currentCommand, startTime, endTime);
+                            }
+                        } catch (behaviorError) {
+                            Logger.warn('[Liveness] Behavioral recordCommand failed:', behaviorError);
+                        }
+
                         // Move to next command after short delay
                         setTimeout(() => {
                             if (currentCommandIndex < LIVENESS_COMMANDS.length - 1) {
                                 setCurrentCommandIndex(currentCommandIndex + 1);
                                 setCommandPassed(false);
+                                commandStartTimeRef.current = null;
                             } else {
                                 // All commands completed - compare with reference photo
                                 compareFaces(normalizedPath);
@@ -257,7 +283,7 @@ export const LivenessModule = ({
                 throw new Error('Canlı görüntüde yüz bulunamadı');
             }
 
-            // Simple similarity calculation based on landmarks
+            // Similarity calculation based on landmarks
             const similarityScore = calculateFaceSimilarity(
                 referenceFaces[0],
                 liveFaces[0]
@@ -266,7 +292,7 @@ export const LivenessModule = ({
             setSimilarity(similarityScore);
             Logger.info(`[Liveness] Benzerlik skoru: ${similarityScore}%`);
 
-            // Threshold for passing
+            // Threshold for passing (soft mode)
             const SIMILARITY_THRESHOLD = 70;
 
             if (similarityScore >= SIMILARITY_THRESHOLD) {
@@ -275,12 +301,22 @@ export const LivenessModule = ({
 
                 setTimeout(() => {
                     if (onSuccess) {
+                        let behavioralResult = null;
+                        try {
+                            if (behavioralRef.current && typeof behavioralRef.current.analyzeSession === 'function') {
+                                behavioralResult = behavioralRef.current.analyzeSession();
+                            }
+                        } catch (behaviorError) {
+                            Logger.warn('[Liveness] Behavioral analysis failed:', behaviorError);
+                        }
+
                         onSuccess({
                             success: true,
                             similarity: similarityScore,
                             commands: LIVENESS_COMMANDS.length,
                             referenceFace: referenceFaces[0],
                             liveFace: liveFaces[0],
+                            behavioral: behavioralResult,
                         });
                     }
                 }, 1000);
@@ -443,7 +479,6 @@ export const LivenessModule = ({
                         </Text>
                     )}
                 </View>
-                )}
 
                 {referencePhotoUri && (
                     <Image
