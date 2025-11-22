@@ -1501,14 +1501,20 @@ class OCRReaderModule {
       // Extract biometric photo from front side for liveness test
       let biometricPhotoUri = null;
       try {
-        console.log('[OCR] Extracting biometric photo from front side...');
         const frontPath = Array.isArray(frontImagePath) ? frontImagePath[0] : frontImagePath;
-        biometricPhotoUri = await ImageProcessor.extractBiometricPhoto(frontPath);
 
-        if (biometricPhotoUri) {
-          console.log('[OCR] ✓ Biometric photo extracted:', biometricPhotoUri);
+        // Skip if no front image available (back-only mode)
+        if (frontPath && frontPath !== '') {
+          console.log('[OCR] Extracting biometric photo from front side...');
+          biometricPhotoUri = await ImageProcessor.extractBiometricPhoto(frontPath);
+
+          if (biometricPhotoUri) {
+            console.log('[OCR] ✓ Biometric photo extracted:', biometricPhotoUri);
+          } else {
+            console.warn('[OCR] ⚠ Biometric photo extraction failed or no face detected');
+          }
         } else {
-          console.warn('[OCR] ⚠ Biometric photo extraction failed or no face detected');
+          console.log('[OCR] Skipping biometric photo extraction (back-only mode)');
         }
       } catch (bioError) {
         console.warn('[OCR] Biometric photo extraction error:', bioError.message);
@@ -1604,8 +1610,8 @@ class OCRReaderModule {
       }
     });
 
-    // Back-side exclusive fields (from MRZ)
-    const backOnlyFields = ['documentNo', 'checkDigitsValid', 'motherName', 'fatherName', 'issuedBy'];
+    // Back-side exclusive fields (from MRZ and text extraction)
+    const backOnlyFields = ['documentNo', 'serialNo', 'checkDigitsValid', 'motherName', 'fatherName', 'issuedBy', 'mrzCheckDigits'];
     backOnlyFields.forEach(field => {
       if (backData[field]) {
         merged[field] = backData[field];
@@ -1614,7 +1620,7 @@ class OCRReaderModule {
     });
 
     // Front-side exclusive fields
-    const frontOnlyFields = ['serialNo', 'nationality'];
+    const frontOnlyFields = ['nationality'];
     frontOnlyFields.forEach(field => {
       if (frontData[field] && !merged[field]) {
         merged[field] = frontData[field];
