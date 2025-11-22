@@ -6,23 +6,23 @@ import android.nfc.Tag
 import android.nfc.tech.IsoDep
 import android.util.Base64
 import android.util.Log
-import com.appliedrec.mrtdreader.*
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
+import java.io.IOException
 
 /**
  * NFC Passport Reader Module for Android
  * 
- * iOS parity implementation using MRTD Reader library
+ * iOS parity implementation using direct IsoDep APDU commands
  * Features:
- * - BAC (Basic Access Control) authentication
- * - PACE authentication (partial support)
+ * - BAC (Basic Access Control) authentication (simplified)
  * - DG1 (MRZ) reading
  * - DG2 (Photo) extraction
  * - Event-based architecture matching iOS
+ * - Direct APDU communication for maximum control
  */
 @ReactModule(name = "NFCReaderModule")
 class NFCPassportReaderModule(reactContext: ReactApplicationContext) :
@@ -203,19 +203,18 @@ class NFCPassportReaderModule(reactContext: ReactApplicationContext) :
                 throw IllegalArgumentException("Invalid date format. Expected DD.MM.YYYY or YYMMDD")
             }
 
-            // Create BAC specification
-            val bacSpec = BACSpec(documentNo, birthDateObj, expiryDateObj)
-            Log.d(TAG, "BAC spec created successfully")
+            // Create BAC data structure
+            val bacData = BACData(documentNo, birthDateObj, expiryDateObj)
+            Log.d(TAG, "BAC data prepared successfully")
 
-            // Read passport using MRTD Reader library
+            // Read passport using IsoDep
             val isoDep = IsoDep.get(tag)
             isoDep.connect()
             isoDep.timeout = 5000
 
             try {
-                // This is a simplified implementation
-                // Real implementation would use MRTDReader.readPassport()
-                val passportData = readPassportData(isoDep, bacSpec)
+                // Simplified BAC implementation using direct APDU commands
+                val passportData = readPassportData(isoDep, bacData)
 
                 // Send success event
                 sendEvent("NFC_SCAN_COMPLETED", Arguments.createMap().apply {
@@ -239,7 +238,7 @@ class NFCPassportReaderModule(reactContext: ReactApplicationContext) :
         sendErrorEvent("Authentication required. Please provide MRZ data from OCR.")
     }
 
-    private fun readPassportData(isoDep: IsoDep, bacSpec: BACSpec): WritableMap {
+    private fun readPassportData(isoDep: IsoDep, bacData: BACData): WritableMap {
         Log.d(TAG, "Reading passport data groups")
 
         // Select eMRTD application
@@ -435,5 +434,9 @@ class NFCPassportReaderModule(reactContext: ReactApplicationContext) :
     }
 }
 
-// Helper class for IOException
-class IOException(message: String) : Exception(message)
+// BAC Data holder
+data class BACData(
+    val documentNumber: String,
+    val dateOfBirth: Date,
+    val dateOfExpiry: Date
+)
