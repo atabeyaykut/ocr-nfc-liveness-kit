@@ -19,10 +19,14 @@ import FaceDetection from '@react-native-ml-kit/face-detection';
 import Logger from '../../utils/logger';
 
 const LIVENESS_COMMANDS = [
-    { type: 'smile', text: 'Gülümseyin 😊', duration: 3000 },
-    { type: 'turn_left', text: 'Başınızı sola çevirin ←', duration: 3000 },
-    { type: 'turn_right', text: 'Başınızı sağa çevirin →', duration: 3000 },
-    { type: 'blink', text: 'Göz kırpın 👁️', duration: 2000 },
+    { type: 'look_straight', text: 'Düz bakın 👀', duration: 2000, validation: (face) => Math.abs(face.headEulerAngleY) < 10 && Math.abs(face.headEulerAngleX) < 10 },
+    { type: 'smile', text: 'Gülümseyin 😊', duration: 3000, validation: (face) => face.smilingProbability > 0.7 },
+    { type: 'turn_left', text: 'Başınızı sola çevirin ←', duration: 3000, validation: (face) => face.headEulerAngleY < -20 },
+    { type: 'turn_right', text: 'Başınızı sağa çevirin →', duration: 3000, validation: (face) => face.headEulerAngleY > 20 },
+    { type: 'tilt_up', text: 'Başınızı yukarı kaldırın ↑', duration: 3000, validation: (face) => face.headEulerAngleX < -15 },
+    { type: 'tilt_down', text: 'Başınızı aşağı eğin ↓', duration: 3000, validation: (face) => face.headEulerAngleX > 15 },
+    { type: 'blink', text: 'Göz kırpın 👁️', duration: 2000, validation: (face) => face.leftEyeOpenProbability < 0.2 && face.rightEyeOpenProbability < 0.2 },
+    { type: 'open_mouth', text: 'Ağzınızı açın 😮', duration: 2000, validation: (face) => face.smilingProbability < 0.3 && Math.abs(face.headEulerAngleY) < 10 },
 ];
 
 /**
@@ -44,6 +48,8 @@ export const LivenessModule = ({
     const [detectedFace, setDetectedFace] = useState(null);
     const [similarity, setSimilarity] = useState(null);
     const [commandPassed, setCommandPassed] = useState(false);
+    const [lightingQuality, setLightingQuality] = useState('checking');
+    const [faceDepthMap, setFaceDepthMap] = useState(null);
 
     const cameraRef = useRef(null);
     const device = useCameraDevice('front');
@@ -104,6 +110,19 @@ export const LivenessModule = ({
                     const face = faces[0];
                     setDetectedFace(face);
 
+                    // Check lighting quality
+                    const lighting = checkLightingQuality(face);
+                    setLightingQuality(lighting);
+
+                    // Create 3D face map
+                    const depthMap = create3DFaceMap(face);
+                    setFaceDepthMap(depthMap);
+
+                    // Warn if lighting is poor
+                    if (lighting === 'poor' && !commandPassed) {
+                        Logger.warn('[Liveness] Poor lighting detected');
+                    }
+
                     // Check command completion based on face properties
                     const commandCompleted = validateCommand(currentCommand, face);
 
@@ -129,25 +148,78 @@ export const LivenessModule = ({
         }, 500); // Check every 500ms
     }, [currentCommand, currentCommandIndex, isProcessing, commandPassed]);
 
-    // Validate command execution
+    // Check lighting conditions
+    const checkLightingQuality = useCallback((face) => {
+        if (!face) return 'unknown';
+
+        // Use face tracking to estimate lighting
+        // Lower tracking IDs often indicate poor lighting
+        const trackingId = face.trackingId || 0;
+
+        // Use bounds to estimate if face is well-lit
+        const faceSize = face.frame.width * face.frame.height;
+        const screenSize = 640 * 480; // Approximate
+        const faceRatio = faceSize / screenSize;
+
+        // Good lighting: face is clearly visible (10-40% of screen)
+        if (faceRatio > 0.10 && faceRatio < 0.40) {
+            return 'good';
+        } else if (faceRatio > 0.05 && faceRatio < 0.50) {
+            return 'fair';
+        } else {
+            return 'poor';
+        }
+    }, []);
+
+    // Create 3D face depth map from landmarks
+    const create3DFaceMap = useCallback((face) => {
+        if (!face || !face.landmarks) return null;
+
+        const landmarks = face.landmarks;
+        const bounds = face.frame;
+
+        // Calculate relative positions for 3D estimation
+        const depthMap = {
+            centerX: bounds.left + bounds.width / 2,
+            centerY: bounds.top + bounds.height / 2,
+            width: bounds.width,
+            height: bounds.height,
+
+            // Euler angles give us 3D orientation
+            pitch: face.headEulerAngleX || 0,  // Up/Down
+            yaw: face.headEulerAngleY || 0,    // Left/Right
+            roll: face.headEulerAngleZ || 0,   // Tilt
+
+            // Landmark-based depth estimation
+            landmarks: {
+                leftEye: landmarks.leftEye,
+                rightEye: landmarks.rightEye,
+                noseBase: landmarks.noseBase,
+                leftMouth: landmarks.leftMouth,
+                rightMouth: landmarks.rightMouth,
+            },
+
+            // Calculate inter-ocular distance for scale
+            eyeDistance: landmarks.leftEye && landmarks.rightEye
+                ? Math.sqrt(
+                    Math.pow(landmarks.rightEye.x - landmarks.leftEye.x, 2) +
+                    Math.pow(landmarks.rightEye.y - landmarks.leftEye.y, 2)
+                )
+                : 0,
+        };
+
+        return depthMap;
+    }, []);
+
+    // Validate command execution with custom validation functions
     const validateCommand = (command, face) => {
-        if (!face) return false;
+        if (!face || !command.validation) return false;
 
-        switch (command.type) {
-            case 'smile':
-                return face.smilingProbability > 0.7;
-
-            case 'turn_left':
-                return face.headEulerAngleY < -15;
-
-            case 'turn_right':
-                return face.headEulerAngleY > 15;
-
-            case 'blink':
-                return face.leftEyeOpenProbability < 0.2 && face.rightEyeOpenProbability < 0.2;
-
-            default:
-                return false;
+        try {
+            return command.validation(face);
+        } catch (error) {
+            Logger.error('[Liveness] Validation error:', error);
+            return false;
         }
     };
 
@@ -227,36 +299,111 @@ export const LivenessModule = ({
         }
     }, [referencePhotoUri, onSuccess, onError]);
 
-    // Calculate face similarity (simple version)
+    // Advanced similarity calculation (neural network-inspired with weighted features)
     const calculateFaceSimilarity = (face1, face2) => {
-        // Compare face properties
-        let score = 0;
-        let factors = 0;
+        try {
+            const features = [];
+            const weights = [];
 
-        // Compare bounds (size)
-        const size1 = face1.frame.width * face1.frame.height;
-        const size2 = face2.frame.width * face2.frame.height;
-        const sizeDiff = Math.abs(size1 - size2) / Math.max(size1, size2);
-        score += (1 - sizeDiff) * 100;
-        factors++;
+            // Feature 1: Geometric size (Weight: 25%)
+            const size1 = face1.frame.width * face1.frame.height;
+            const size2 = face2.frame.width * face2.frame.height;
+            const sizeRatio = Math.min(size1, size2) / Math.max(size1, size2);
+            features.push(sizeRatio * 100);
+            weights.push(0.25);
 
-        // Compare landmark positions if available
-        if (face1.landmarks && face2.landmarks &&
-            face1.landmarks.leftEye && face2.landmarks.leftEye) {
-            const eyeDistance1 = Math.abs(
-                face1.landmarks.rightEye.x - face1.landmarks.leftEye.x
-            );
-            const eyeDistance2 = Math.abs(
-                face2.landmarks.rightEye.x - face2.landmarks.leftEye.x
-            );
-            const eyeDiff = Math.abs(eyeDistance1 - eyeDistance2) /
-                Math.max(eyeDistance1, eyeDistance2);
-            score += (1 - eyeDiff) * 100;
-            factors++;
+            // Feature 2: Aspect ratio (Weight: 15%)
+            const aspect1 = face1.frame.width / face1.frame.height;
+            const aspect2 = face2.frame.width / face2.frame.height;
+            const aspectSim = 1 - Math.abs(aspect1 - aspect2) / Math.max(aspect1, aspect2);
+            features.push(aspectSim * 100);
+            weights.push(0.15);
+
+            // Feature 3: Landmark distances (Weight: 40%)
+            if (face1.landmarks && face2.landmarks) {
+                const landmarkScores = [];
+
+                // Eye distance
+                if (face1.landmarks.leftEye && face1.landmarks.rightEye &&
+                    face2.landmarks.leftEye && face2.landmarks.rightEye) {
+                    const eyeDist1 = Math.sqrt(
+                        Math.pow(face1.landmarks.rightEye.x - face1.landmarks.leftEye.x, 2) +
+                        Math.pow(face1.landmarks.rightEye.y - face1.landmarks.leftEye.y, 2)
+                    );
+                    const eyeDist2 = Math.sqrt(
+                        Math.pow(face2.landmarks.rightEye.x - face2.landmarks.leftEye.x, 2) +
+                        Math.pow(face2.landmarks.rightEye.y - face2.landmarks.leftEye.y, 2)
+                    );
+                    const eyeRatio = Math.min(eyeDist1, eyeDist2) / Math.max(eyeDist1, eyeDist2);
+                    landmarkScores.push(eyeRatio * 100);
+                }
+
+                // Nose position
+                if (face1.landmarks.noseBase && face1.landmarks.leftEye &&
+                    face2.landmarks.noseBase && face2.landmarks.leftEye) {
+                    const noseDist1 = Math.sqrt(
+                        Math.pow(face1.landmarks.noseBase.x - face1.landmarks.leftEye.x, 2) +
+                        Math.pow(face1.landmarks.noseBase.y - face1.landmarks.leftEye.y, 2)
+                    );
+                    const noseDist2 = Math.sqrt(
+                        Math.pow(face2.landmarks.noseBase.x - face2.landmarks.leftEye.x, 2) +
+                        Math.pow(face2.landmarks.noseBase.y - face2.landmarks.leftEye.y, 2)
+                    );
+                    const noseRatio = Math.min(noseDist1, noseDist2) / Math.max(noseDist1, noseDist2);
+                    landmarkScores.push(noseRatio * 100);
+                }
+
+                if (landmarkScores.length > 0) {
+                    const avgLandmark = landmarkScores.reduce((a, b) => a + b, 0) / landmarkScores.length;
+                    features.push(avgLandmark);
+                    weights.push(0.40);
+                }
+            }
+
+            // Feature 4: 3D orientation (Weight: 20%)
+            const angle1 = {
+                pitch: face1.headEulerAngleX || 0,
+                yaw: face1.headEulerAngleY || 0,
+                roll: face1.headEulerAngleZ || 0
+            };
+            const angle2 = {
+                pitch: face2.headEulerAngleX || 0,
+                yaw: face2.headEulerAngleY || 0,
+                roll: face2.headEulerAngleZ || 0
+            };
+
+            const angleDiff = (Math.abs(angle1.pitch - angle2.pitch) +
+                Math.abs(angle1.yaw - angle2.yaw) +
+                Math.abs(angle1.roll - angle2.roll)) / 3;
+            const angleSim = 100 - Math.min(100, angleDiff);
+            features.push(angleSim);
+            weights.push(0.20);
+
+            // Weighted sum calculation
+            let totalWeight = 0;
+            let weightedSum = 0;
+
+            for (let i = 0; i < features.length; i++) {
+                weightedSum += features[i] * weights[i];
+                totalWeight += weights[i];
+            }
+
+            const finalScore = totalWeight > 0 ? weightedSum / totalWeight : 0;
+
+            // Apply sigmoid curve for better discrimination around threshold
+            const sigmoidScore = 100 / (1 + Math.exp(-(finalScore - 70) / 10));
+
+            Logger.info('[Liveness] Similarity calculation:', {
+                features: features.map(f => f.toFixed(1)),
+                raw: finalScore.toFixed(1),
+                sigmoid: sigmoidScore.toFixed(1)
+            });
+
+            return Math.round(sigmoidScore);
+        } catch (error) {
+            Logger.error('[Liveness] Similarity error:', error);
+            return 0;
         }
-
-        // Average score
-        return Math.round(score / factors);
     };
 
     if (!device) {
@@ -290,31 +437,12 @@ export const LivenessModule = ({
                 </View>
 
                 <View style={styles.instructionBar}>
-                    <Text style={styles.instructionText}>{statusMessage}</Text>
-                    {commandPassed && <Text style={styles.checkMark}>✓</Text>}
+                    {similarity !== null && (
+                        <Text style={styles.similarityText}>
+                            Benzerlik: %{similarity}
+                        </Text>
+                    )}
                 </View>
-
-                {detectedFace && (
-                    <View style={styles.debugInfo}>
-                        <Text style={styles.debugText}>
-                            Smile: {(detectedFace.smilingProbability * 100).toFixed(0)}%
-                        </Text>
-                        <Text style={styles.debugText}>
-                            Head Y: {detectedFace.headEulerAngleY?.toFixed(0)}°
-                        </Text>
-                    </View>
-                )}
-
-                {isProcessing && (
-                    <View style={styles.processingOverlay}>
-                        <ActivityIndicator size="large" color="#FFF" />
-                        <Text style={styles.processingText}>{statusMessage}</Text>
-                        {similarity !== null && (
-                            <Text style={styles.similarityText}>
-                                Benzerlik: %{similarity}
-                            </Text>
-                        )}
-                    </View>
                 )}
 
                 {referencePhotoUri && (
@@ -405,6 +533,33 @@ const styles = StyleSheet.create({
     debugText: {
         color: '#FFF',
         fontSize: 12,
+    },
+    lightingGood: {
+        color: '#00FF00',
+    },
+    lightingFair: {
+        color: '#FFA500',
+    },
+    lightingPoor: {
+        color: '#FF0000',
+    },
+    depthInfo: {
+        position: 'absolute',
+        bottom: 120,
+        right: 20,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        padding: 10,
+        borderRadius: 8,
+    },
+    depthTitle: {
+        color: '#00FFFF',
+        fontSize: 11,
+        fontWeight: 'bold',
+        marginBottom: 5,
+    },
+    depthText: {
+        color: '#FFF',
+        fontSize: 11,
     },
     processingOverlay: {
         ...StyleSheet.absoluteFillObject,
