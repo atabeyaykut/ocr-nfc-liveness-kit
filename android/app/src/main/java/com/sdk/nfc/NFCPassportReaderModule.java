@@ -7,13 +7,35 @@ import android.util.Base64;
 import android.util.Log;
 
 import com.facebook.react.bridge.*;
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.module.annotations.ReactModule;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
+import org.jmrtd.BACKey;
+import org.jmrtd.BACKeySpec;
+import org.jmrtd.PassportService;
+import org.jmrtd.lds.icao.DG1File;
+import org.jmrtd.lds.icao.DG2File;
+import org.jmrtd.lds.icao.MRZInfo;
+import org.jmrtd.lds.iso19794.FaceImageInfo;
+import org.jmrtd.lds.iso19794.FaceInfo;
+
+import net.sf.scuba.smartcards.CardService;
+import net.sf.scuba.smartcards.CardServiceException;
+
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -205,8 +227,10 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
     }
 
     private void readPassportWithBAC(Tag tag, ReadableMap mrzSeed) throws IOException {
-        Log.d(TAG, "Reading passport with BAC authentication");
+        Log.d(TAG, "Reading passport with JMRTD BAC authentication");
         Log.d(TAG, "mrzSeed keys: " + (mrzSeed != null ? mrzSeed.toString() : "NULL"));
+
+        PassportService passportService = null;
 
         try {
             // Extract MRZ components
@@ -222,24 +246,53 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
 
             Log.d(TAG, "BAC params - Doc: " + documentNo + ", Birth: " + birthDate + ", Expiry: " + expiryDate);
 
-            // Convert dates
-            Date birthDateObj = parseDate(birthDate);
-            Date expiryDateObj = parseDate(expiryDate);
-
-            if (birthDateObj == null || expiryDateObj == null) {
-                throw new IllegalArgumentException("Invalid date format. Expected DD.MM.YYYY or YYMMDD");
+            // Validate inputs
+            if (documentNo.isEmpty() || birthDate.length() != 6 || expiryDate.length() != 6) {
+                throw new IllegalArgumentException("Invalid MRZ data format. Doc: " + documentNo + ", Birth: "
+                        + birthDate + ", Expiry: " + expiryDate);
             }
 
-            Log.d(TAG, "BAC data prepared successfully");
+            Log.d(TAG, "Creating BAC key from MRZ data");
 
-            // Read passport using IsoDep
+            // Create BAC key using JMRTD
+            BACKeySpec bacKey = new BACKey(documentNo, birthDate, expiryDate);
+            Log.d(TAG, "✓ BAC key created successfully");
+
+            // Initialize IsoDep
             IsoDep isoDep = IsoDep.get(tag);
+            if (isoDep == null) {
+                throw new IOException("IsoDep not available for this tag");
+            }
+
             isoDep.connect();
-            isoDep.setTimeout(5000);
+            isoDep.setTimeout(10000); // 10 second timeout
+            Log.d(TAG, "✓ IsoDep connected");
 
             try {
-                // Simplified BAC implementation
-                WritableMap passportData = readPassportData(isoDep);
+                // Wrap IsoDep in CardService for JMRTD
+                CardService cardService = CardService.getInstance(isoDep);
+                cardService.open();
+                Log.d(TAG, "✓ CardService opened");
+
+                // Create PassportService and perform BAC
+                passportService = new PassportService(
+                        cardService,
+                        PassportService.NORMAL_MAX_TRANCEIVE_LENGTH,
+                        PassportService.DEFAULT_MAX_BLOCKSIZE,
+                        false, // isSFIEnabled
+                        true // shouldCheckMAC
+                );
+
+                passportService.open();
+                Log.d(TAG, "✓ PassportService opened");
+
+                // Perform BAC authentication
+                Log.d(TAG, "Performing BAC authentication...");
+                passportService.doBAC(bacKey);
+                Log.d(TAG, "✓ BAC authentication successful!");
+
+                // Read passport data using JMRTD
+                WritableMap passportData = readPassportDataWithJMRTD(passportService);
 
                 // Send success event
                 WritableMap event = Arguments.createMap();
@@ -249,9 +302,25 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 sendEvent("NFC_SCAN_COMPLETED", event);
 
             } finally {
-                isoDep.close();
+                if (passportService != null) {
+                    try {
+                        passportService.close();
+                        Log.d(TAG, "PassportService closed");
+                    } catch (Exception e) {
+                        Log.w(TAG, "Error closing PassportService", e);
+                    }
+                }
+                if (isoDep.isConnected()) {
+                    isoDep.close();
+                    Log.d(TAG, "IsoDep closed");
+                }
             }
 
+        } catch (CardServiceException e) {
+            Log.e(TAG, "❌ CardService error", e);
+            Log.e(TAG, "SW: " + Integer.toHexString(e.getSW()));
+            String errorMsg = "BAC hatası: " + getCardServiceErrorMessage(e);
+            sendErrorEvent(errorMsg);
         } catch (Exception e) {
             Log.e(TAG, "❌ BAC authentication failed", e);
             Log.e(TAG, "Exception type: " + e.getClass().getName());
@@ -263,52 +332,13 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
         }
     }
 
-    private WritableMap readPassportData(IsoDep isoDep) throws IOException {
-        Log.d(TAG, "Reading passport data groups");
+    private WritableMap readPassportDataWithJMRTD(PassportService passportService) throws Exception {
+        // Use JMRTD helper to read DG1/DG2 and parse MRZ
+        return NFCPassportReaderJMRTD.readPassportData(passportService);
+    }
 
-        // Select eMRTD application
-        byte[] selectApp = new byte[] {
-                (byte) 0x00, (byte) 0xA4, (byte) 0x04, (byte) 0x0C,
-                (byte) 0x07, (byte) 0xA0, (byte) 0x00, (byte) 0x00,
-                (byte) 0x02, (byte) 0x47, (byte) 0x10, (byte) 0x01
-        };
-
-        byte[] selectResponse = isoDep.transceive(selectApp);
-        if (!isSuccess(selectResponse)) {
-            throw new IOException("Failed to select eMRTD application");
-        }
-
-        Log.d(TAG, "eMRTD application selected");
-
-        // Read DG1 (MRZ)
-        byte[] dg1 = readDataGroup(isoDep, 0x01);
-        Log.d(TAG, "DG1 read successfully");
-
-        // Read DG2 (Photo)
-        byte[] dg2 = readDataGroup(isoDep, 0x02);
-        Log.d(TAG, "DG2 read successfully");
-
-        // Parse MRZ data
-        WritableMap mrzData = parseMRZFromDG1(dg1);
-
-        // Extract photo
-        String photoBase64 = Base64.encodeToString(dg2, Base64.NO_WRAP);
-
-        // Build response
-        WritableMap result = Arguments.createMap();
-        result.putString("documentNo", mrzData.getString("documentNo"));
-        result.putString("name", mrzData.getString("name"));
-        result.putString("surname", mrzData.getString("surname"));
-        result.putString("nationality", mrzData.getString("nationality"));
-        result.putString("birthDate", mrzData.getString("birthDate"));
-        result.putString("validUntil", mrzData.getString("validUntil"));
-        result.putString("gender", mrzData.getString("gender"));
-        result.putString("photoBase64", photoBase64);
-        result.putString("authenticationMethod", "BAC");
-        result.putString("source", "NFC");
-        result.putBoolean("isReal", true);
-
-        return result;
+    private String getCardServiceErrorMessage(CardServiceException e) {
+        return NFCPassportReaderJMRTD.getErrorMessage(e);
     }
 
     private byte[] readDataGroup(IsoDep isoDep, int dataGroup) throws IOException {
