@@ -233,8 +233,9 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
     }
 
     private void readPassportWithBAC(Tag tag, ReadableMap mrzSeed) throws IOException {
-        Log.d(TAG, "Reading passport with JMRTD BAC authentication");
-        Log.d(TAG, "mrzSeed keys: " + (mrzSeed != null ? mrzSeed.toString() : "NULL"));
+        Log.e(TAG, "[CRITICAL] ========== readPassportWithBAC CALLED ==========");
+        Log.e(TAG, "[CRITICAL] Reading passport with JMRTD BAC authentication");
+        Log.e(TAG, "[CRITICAL] mrzSeed keys: " + (mrzSeed != null ? mrzSeed.toString() : "NULL"));
 
         // Detailed logging of all mrzSeed fields
         if (mrzSeed != null) {
@@ -260,7 +261,21 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
             if (documentNo.isEmpty() && mrzSeed.hasKey("tcNo")) {
                 documentNo = mrzSeed.getString("tcNo");
             }
-            Log.d(TAG, "✓ documentNo extracted: '" + documentNo + "'");
+            Log.d(TAG, "✓ documentNo extracted: '" + documentNo + "' (length: " + documentNo.length() + ")");
+
+            // CRITICAL FIX: ICAO 9303 TD-1 format requires document number to be EXACTLY 9
+            // characters
+            // OCR may read 10 characters (e.g., A43D646181), but MRZ field is only 9 chars
+            // (A43D64618)
+            // The 10th character is actually the check digit in a separate field
+            if (documentNo.length() > 9) {
+                Log.w(TAG,
+                        "⚠️ WARNING: documentNo is " + documentNo.length() + " chars, truncating to 9 chars for BAC");
+                Log.w(TAG, "  Original: '" + documentNo + "'");
+                documentNo = documentNo.substring(0, 9);
+                Log.w(TAG, "  Truncated: '" + documentNo + "'");
+            }
+            Log.e(TAG, "[CRITICAL] documentNo for BAC: '" + documentNo + "' (length: " + documentNo.length() + ")");
 
             String birthDate = mrzSeed.hasKey("birthDate") ? mrzSeed.getString("birthDate") : "";
             Log.d(TAG, "✓ birthDate extracted (raw): '" + birthDate + "'");
@@ -317,7 +332,9 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
 
             try {
                 // MANUEL BAC IMPLEMENTATION - Bypass JMRTD
-                Log.d(TAG, "=== MANUEL BAC BAŞLIYOR ===");
+                Log.e(TAG, "[CRITICAL] ========================================");
+                Log.e(TAG, "[CRITICAL] === MANUEL BAC BAŞLIYOR ===");
+                Log.e(TAG, "[CRITICAL] =========================================");
 
                 // 1. Build MRZ Key (with REAL check digits)
                 // ICAO 9303: K_SEED = Document Number + Check + Birth Date + Check + Expiry
@@ -355,7 +372,7 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
 
                 byte[] rndICC = new byte[8];
                 System.arraycopy(challengeResp, 0, rndICC, 0, 8);
-                Log.d(TAG, "RND.ICC (card challenge): " + bytesToHex(rndICC));
+                Log.e(TAG, "[CRITICAL] RND.ICC (card challenge): " + bytesToHex(rndICC));
 
                 // 4. Generate RND.IFD and K.IFD (random data for authentication)
                 SecureRandom random = new SecureRandom();
@@ -363,15 +380,15 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 byte[] kIFD = new byte[16];
                 random.nextBytes(rndIFD);
                 random.nextBytes(kIFD);
-                Log.d(TAG, "RND.IFD (our challenge): " + bytesToHex(rndIFD));
-                Log.d(TAG, "K.IFD (our key): " + bytesToHex(kIFD));
+                Log.e(TAG, "[CRITICAL] RND.IFD (our challenge): " + bytesToHex(rndIFD));
+                Log.e(TAG, "[CRITICAL] K.IFD (our key): " + bytesToHex(kIFD));
 
                 // 5. Derive Kenc and Kmac from MRZ key (convert ASCII string to bytes)
                 // ICAO 9303: Kseed = MRZ information as ASCII/UTF-8 bytes (typically 24 bytes)
                 // Format: DOC(9) + CHK(1) + BIRTH(6) + CHK(1) + EXP(6) + CHK(1) = 24 chars
                 byte[] mrzKeyBytes = mrzKey.getBytes("UTF-8");
-                Log.d(TAG, "Kseed (MRZ Key) bytes: " + bytesToHex(mrzKeyBytes));
-                Log.d(TAG, "Kseed length: " + mrzKeyBytes.length + " bytes (expected: 24)");
+                Log.e(TAG, "[CRITICAL] Kseed (MRZ Key) bytes: " + bytesToHex(mrzKeyBytes));
+                Log.e(TAG, "[CRITICAL] Kseed length: " + mrzKeyBytes.length + " bytes (expected: 24)");
 
                 // IMPORTANT: Do NOT truncate! SHA-1 will hash the FULL Kseed, then truncate
                 // result to 16 bytes
@@ -380,11 +397,11 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                     Log.w(TAG, "⚠️ This may cause BAC authentication to fail.");
                 }
 
-                Log.d(TAG, "Deriving Kenc...");
+                Log.e(TAG, "[CRITICAL] Deriving Kenc...");
                 byte[] kenc = null;
                 try {
                     kenc = deriveKey(mrzKeyBytes, (byte) 0x01);
-                    Log.d(TAG, "✓ Kenc derived: " + bytesToHex(kenc));
+                    Log.e(TAG, "[CRITICAL] ✓ Kenc derived: " + bytesToHex(kenc));
                 } catch (Exception e) {
                     Log.e(TAG, "❌ Kenc derivation failed!", e);
                     throw e;
