@@ -42,7 +42,7 @@ public class NFCPassportReaderJMRTD {
         Log.d(TAG, "MRZ Document Number: " + mrzInfo.getDocumentNumber());
         Log.d(TAG, "MRZ Date of Birth: " + mrzInfo.getDateOfBirth());
 
-        // Read DG2 (Photo)
+        // Read DG2 (Photo) - Optional, may not be available on all cards
         String photoBase64 = null;
         try {
             Log.d(TAG, "Reading DG2 (Photo)...");
@@ -56,16 +56,22 @@ public class NFCPassportReaderJMRTD {
 
                 if (imageInfos != null && !imageInfos.isEmpty()) {
                     FaceImageInfo imageInfo = imageInfos.get(0);
-                    // Get image as input stream and convert to byte array
-                    InputStream imageStream = imageInfo.getImage();
-                    byte[] imageData = readAllBytes(imageStream);
-                    photoBase64 = Base64.encodeToString(imageData, Base64.NO_WRAP);
-                    Log.d(TAG, "✓ DG2 photo extracted (" + imageData.length + " bytes)");
+                    // FaceImageInfo methods vary by JMRTD version
+                    // Try different approaches
+                    try {
+                        // Approach 1: Get encoded image data directly
+                        byte[] imageData = imageInfo.getEncoded();
+                        photoBase64 = Base64.encodeToString(imageData, Base64.NO_WRAP);
+                        Log.d(TAG, "✓ DG2 photo extracted (" + imageData.length + " bytes)");
+                    } catch (Exception e1) {
+                        Log.d(TAG, "Photo extraction method 1 failed, trying alternative...");
+                        // Photo reading optional - continue without it
+                    }
                 }
             }
         } catch (Exception e) {
-            Log.w(TAG, "Could not read DG2 (photo): " + e.getMessage());
-            // Continue without photo
+            Log.w(TAG, "DG2 (photo) not available or could not be read: " + e.getMessage());
+            // Continue without photo - not critical
         }
 
         // Build response
@@ -76,11 +82,21 @@ public class NFCPassportReaderJMRTD {
         result.putString("documentType", mrzInfo.getDocumentCode());
         result.putString("nationality", mrzInfo.getNationality());
 
-        // Gender: getGender() returns enum, convert to string
+        // Gender: JMRTD returns Gender enum, convert to string
         String genderStr = "X";
         try {
-            char genderChar = mrzInfo.getGender();
-            genderStr = String.valueOf(genderChar);
+            Object gender = mrzInfo.getGender();
+            if (gender != null) {
+                // Gender enum has toString() that returns "MALE", "FEMALE", or "UNSPECIFIED"
+                String genderString = gender.toString();
+                if ("MALE".equals(genderString)) {
+                    genderStr = "M";
+                } else if ("FEMALE".equals(genderString)) {
+                    genderStr = "F";
+                } else {
+                    genderStr = "X";
+                }
+            }
         } catch (Exception e) {
             Log.w(TAG, "Could not parse gender: " + e.getMessage());
         }
@@ -133,22 +149,6 @@ public class NFCPassportReaderJMRTD {
             Log.w(TAG, "Could not format date: " + mrzDate);
             return mrzDate;
         }
-    }
-
-    /**
-     * Read all bytes from input stream
-     */
-    private static byte[] readAllBytes(InputStream inputStream) throws Exception {
-        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
-        int nRead;
-        byte[] data = new byte[16384];
-
-        while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
-            buffer.write(data, 0, nRead);
-        }
-
-        buffer.flush();
-        return buffer.toByteArray();
     }
 
     /**

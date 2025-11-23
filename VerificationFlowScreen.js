@@ -275,19 +275,19 @@ const VerificationFlowScreen = ({ navigation }) => {
 
             // Manuel test verisi kullanmak için aşağıdaki test verisini düzenleyin:
             const manualTestData = {
-                tcNo: '12345678901',              // 11 haneli TC No
-                name: 'MEHMET',                   // İsim (BÜYÜK HARF)
-                surname: 'YILMAZ',                // Soyisim (BÜYÜK HARF)
-                birthDate: '900101',              // YYMMDD formatında (örn: 1 Ocak 1990)
-                validUntil: '300101',             // YYMMDD formatında (örn: 1 Ocak 2030)
-                documentNo: 'U12345678',          // Belge/Seri No (örn: U12345678)
-                serialNo: 'U12345678',            // Seri No
+                tcNo: '10945153402',              // 11 haneli TC No
+                name: 'ATABEY',                   // İsim (BÜYÜK HARF)
+                surname: 'AYKUT',                // Soyisim (BÜYÜK HARF)
+                birthDate: '980917',              // YYMMDD formatında (örn: 1 Ocak 1990)
+                validUntil: '330806',             // YYMMDD formatında (örn: 1 Ocak 2030)
+                documentNo: 'A43D64618',          // Belge/Seri No (örn: U12345678)
+                serialNo: 'A43D64618',            // Seri No
                 gender: 'E',                      // E veya K
                 nationality: 'TUR',               // 3 haneli ülke kodu
                 mrzCheckDigits: {                 // MRZ check digit'leri (opsiyonel)
-                    documentNumber: '8',
+                    documentNumber: '1',
                     birthDate: '0',
-                    expiryDate: '6'
+                    expiryDate: '2'
                 }
             };
 
