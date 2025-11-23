@@ -292,13 +292,13 @@ const VerificationFlowScreen = ({ navigation }) => {
             };
 
             // 🔴 HANGİ VERİYİ KULLANMAK İSTİYORSUNUZ?
-            // Seçenek 1: OCR'dan gelen gerçek veri
-            // const dataToSend = result.data;
+            // Seçenek 1: OCR'dan gelen gerçek veri (ŞU AN AKTİF) ✅
+            const dataToSend = result.data;
 
-            // Seçenek 2: Manuel test verisi (ŞU AN AKTİF)
-            const dataToSend = manualTestData;
+            // Seçenek 2: Manuel test verisi (DEVRE DIŞI)
+            // const dataToSend = manualTestData;
 
-            addLog('⚠️ MANUEL TEST VERİSİ KULLANILIYOR!');
+            addLog('✅ OCR VERİSİ KULLANILIYOR!');
             // ============================================
 
             // Start NFC flow
