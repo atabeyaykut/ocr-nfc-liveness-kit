@@ -347,41 +347,8 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 Log.d(TAG, "RND.ICC (card challenge): " + bytesToHex(rndICC));
 
                 // TODO: Implement remaining BAC steps
-                // For now, throw informative error
+                // For now, throw informative error with detailed logs
                 throw new IOException("Manuel BAC implementation in progress - CHECK LOGS ABOVE");
-
-                // OLD CODE:
-                // Wrap IsoDep in CardService for JMRTD
-                // CardService cardService = CardService.getInstance(isoDep);
-                // cardService.open();
-                // Log.d(TAG, "✓ CardService opened");
-                //
-                // // Create PassportService and perform BAC
-                // passportService = new PassportService(
-                // cardService,
-                // PassportService.NORMAL_MAX_TRANCEIVE_LENGTH,
-                // PassportService.DEFAULT_MAX_BLOCKSIZE,
-                // false, // isSFIEnabled
-                // true // shouldCheckMAC
-                // );
-                //
-                // passportService.open();
-                // Log.d(TAG, "✓ PassportService opened");
-                //
-                // // Perform BAC authentication
-                // Log.d(TAG, "Performing BAC authentication...");
-                // passportService.doBAC(bacKey);
-                // Log.d(TAG, "✓ BAC authentication successful!");
-
-                // Read passport data using JMRTD
-                WritableMap passportData = readPassportDataWithJMRTD(passportService);
-
-                // Send success event
-                WritableMap event = Arguments.createMap();
-                event.putString("status", "SUCCESS");
-                event.putMap("data", passportData);
-                event.putDouble("timestamp", System.currentTimeMillis() / 1000.0);
-                sendEvent("NFC_SCAN_COMPLETED", event);
 
             } finally {
                 if (passportService != null) {
@@ -398,13 +365,6 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 }
             }
 
-        } catch (
-
-        CardServiceException e) {
-            Log.e(TAG, "❌ CardService error", e);
-            Log.e(TAG, "SW: " + Integer.toHexString(e.getSW()));
-            String errorMsg = "BAC hatası: " + getCardServiceErrorMessage(e);
-            sendErrorEvent(errorMsg);
         } catch (Exception e) {
             Log.e(TAG, "❌ BAC authentication failed", e);
             Log.e(TAG, "Exception type: " + e.getClass().getName());
