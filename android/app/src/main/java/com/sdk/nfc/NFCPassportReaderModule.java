@@ -2,11 +2,8 @@ package com.sdk.nfc;
 
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
-import android.nfc.tech.IsoDep;
-import android.util.Base64;
 import android.util.Log;
 
-import com.facebook.react.bridge.*;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -20,28 +17,12 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
 import org.jmrtd.BACKey;
 import org.jmrtd.BACKeySpec;
 import org.jmrtd.PassportService;
-import org.jmrtd.lds.icao.DG1File;
-import org.jmrtd.lds.icao.DG2File;
-import org.jmrtd.lds.icao.MRZInfo;
-import org.jmrtd.lds.iso19794.FaceImageInfo;
-import org.jmrtd.lds.iso19794.FaceInfo;
 
-import net.sf.scuba.smartcards.CardService;
 import net.sf.scuba.smartcards.CardServiceException;
 
-import java.security.MessageDigest;
-import java.security.SecureRandom;
-import javax.crypto.Cipher;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.List;
 import java.util.Locale;
 
 /**
@@ -64,6 +45,7 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
     private NfcAdapter nfcAdapter;
     private Tag currentTag;
     private boolean isReading = false;
+    private String canNumber;
 
     public NFCPassportReaderModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -115,6 +97,7 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
 
             // Extract options
             ReadableMap mrzSeed = options.hasKey("mrzSeed") ? options.getMap("mrzSeed") : null;
+            canNumber = sanitizeCanNumber(options);
             int timeout = options.hasKey("timeoutSeconds") ? options.getInt("timeoutSeconds") : 60;
             String alertMessage = options.hasKey("alertMessage") ? options.getString("alertMessage")
                     : "Kimlik kartınızı yaklaştırın";
@@ -162,6 +145,7 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
         try {
             Log.d(TAG, "Stopping NFC reading");
             isReading = false;
+            canNumber = null;
             currentTag = null;
 
             WritableMap response = Arguments.createMap();
@@ -232,441 +216,56 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
         }
     }
 
-    private void readPassportWithBAC(Tag tag, ReadableMap mrzSeed) throws IOException {
+    private void readPassportWithBAC(Tag tag, ReadableMap mrzSeed) {
         Log.e(TAG, "[CRITICAL] ========== readPassportWithBAC CALLED ==========");
         Log.e(TAG, "[CRITICAL] Reading passport with JMRTD BAC authentication");
         Log.e(TAG, "[CRITICAL] mrzSeed keys: " + (mrzSeed != null ? mrzSeed.toString() : "NULL"));
 
-        // Detailed logging of all mrzSeed fields
-        if (mrzSeed != null) {
-            Log.d(TAG, "=== mrzSeed detailed contents ===");
-            Log.d(TAG, "  tcNo: " + (mrzSeed.hasKey("tcNo") ? mrzSeed.getString("tcNo") : "MISSING"));
-            Log.d(TAG, "  documentNo: " + (mrzSeed.hasKey("documentNo") ? mrzSeed.getString("documentNo") : "MISSING"));
-            Log.d(TAG, "  serialNo: " + (mrzSeed.hasKey("serialNo") ? mrzSeed.getString("serialNo") : "MISSING"));
-            Log.d(TAG, "  birthDate: " + (mrzSeed.hasKey("birthDate") ? mrzSeed.getString("birthDate") : "MISSING"));
-            Log.d(TAG, "  validUntil: " + (mrzSeed.hasKey("validUntil") ? mrzSeed.getString("validUntil") : "MISSING"));
-            Log.d(TAG, "  expiryDate: " + (mrzSeed.hasKey("expiryDate") ? mrzSeed.getString("expiryDate") : "MISSING"));
-            Log.d(TAG, "=== end mrzSeed ===");
-        }
-
-        PassportService passportService = null;
-
+        JMRTDSessionManager session = null;
         try {
-            // Extract MRZ components
-            // Prefer actual MRZ document number; fall back to TC No only if missing
-            String documentNo = mrzSeed.hasKey("documentNo") ? mrzSeed.getString("documentNo") : "";
-            if (documentNo.isEmpty() && mrzSeed.hasKey("serialNo")) {
-                documentNo = mrzSeed.getString("serialNo");
-            }
-            if (documentNo.isEmpty() && mrzSeed.hasKey("tcNo")) {
-                documentNo = mrzSeed.getString("tcNo");
-            }
-            Log.d(TAG, "✓ documentNo extracted: '" + documentNo + "' (length: " + documentNo.length() + ")");
+            MrzData mrzData = extractMrzData(mrzSeed);
+            BACKeySpec bacKey = new BACKey(mrzData.documentNumber, mrzData.birthDate, mrzData.expiryDate);
 
-            // CRITICAL FIX: ICAO 9303 TD-1 format requires document number to be EXACTLY 9
-            // characters
-            // OCR may read 10 characters (e.g., A43D646181), but MRZ field is only 9 chars
-            // (A43D64618)
-            // The 10th character is actually the check digit in a separate field
-            if (documentNo.length() > 9) {
-                Log.w(TAG,
-                        "⚠️ WARNING: documentNo is " + documentNo.length() + " chars, truncating to 9 chars for BAC");
-                Log.w(TAG, "  Original: '" + documentNo + "'");
-                documentNo = documentNo.substring(0, 9);
-                Log.w(TAG, "  Truncated: '" + documentNo + "'");
-            }
-            Log.e(TAG, "[CRITICAL] documentNo for BAC: '" + documentNo + "' (length: " + documentNo.length() + ")");
+            session = JMRTDSessionManager.open(tag);
+            PassportService passportService = session.getPassportService();
+            passportService.open();
+            passportService.sendSelectApplet(false);
 
-            String birthDate = mrzSeed.hasKey("birthDate") ? mrzSeed.getString("birthDate") : "";
-            Log.d(TAG, "✓ birthDate extracted (raw): '" + birthDate + "'");
-            birthDate = convertDateToMRZFormat(birthDate);
-            Log.d(TAG, "✓ birthDate converted to MRZ format: '" + birthDate + "'");
+            Log.d(TAG, "Attempting BAC via JMRTD PassportService");
+            passportService.doBAC(bacKey);
+            Log.e(TAG, "[CRITICAL] ✓ BAC authentication successful via JMRTD");
 
-            String expiryDate = mrzSeed.hasKey("validUntil") ? mrzSeed.getString("validUntil")
-                    : (mrzSeed.hasKey("expiryDate") ? mrzSeed.getString("expiryDate") : "");
-            Log.d(TAG, "✓ expiryDate extracted (raw): '" + expiryDate + "'");
-            expiryDate = convertDateToMRZFormat(expiryDate);
-            Log.d(TAG, "✓ expiryDate converted to MRZ format: '" + expiryDate + "'");
-
-            // NOTE: JMRTD BACKey automatically calculates check digits internally!
-            // We must NOT append check digits manually - just pass raw values
-            Log.d(TAG, "=== BAC KEY PARAMETERS ===");
-            Log.d(TAG, "  Document No (raw): '" + documentNo + "' (length: " + documentNo.length() + ")");
-            Log.d(TAG, "  Birth Date (MRZ): '" + birthDate + "' (length: " + birthDate.length() + ")");
-            Log.d(TAG, "  Expiry Date (MRZ): '" + expiryDate + "' (length: " + expiryDate.length() + ")");
-            Log.d(TAG, "  NOTE: JMRTD will calculate check digits automatically");
-            Log.d(TAG, "=== end BAC params ===");
-
-            // Validate inputs
-            if (documentNo.isEmpty() || birthDate.length() != 6 || expiryDate.length() != 6) {
-                throw new IllegalArgumentException("Invalid MRZ data format. Doc: " + documentNo + ", Birth: "
-                        + birthDate + ", Expiry: " + expiryDate);
+            // PACE placeholder: log if CAN was provided but not yet processed
+            if (canNumber != null) {
+                Log.w(TAG, "CAN provided but PACE implementation is pending. Continuing with BAC.");
             }
 
-            Log.d(TAG, "Creating BAC key - JMRTD will calculate check digits automatically");
+            WritableMap passportData = readPassportDataWithJMRTD(passportService);
+            Log.d(TAG, "✓ Passport data read via JMRTD");
+            sendSuccessEvent(passportData);
 
-            // Debug: Calculate check digits manually to verify
-            String docCheckDigit = calculateCheckDigit(documentNo);
-            String birthCheckDigit = calculateCheckDigit(birthDate);
-            String expiryCheckDigit = calculateCheckDigit(expiryDate);
-
-            Log.d(TAG, "=== CALCULATED CHECK DIGITS ===");
-            Log.d(TAG, "  Doc check digit: '" + docCheckDigit + "' (expected from MRZ: ?)");
-            Log.d(TAG, "  Birth check digit: '" + birthCheckDigit + "' (expected from MRZ: 0)");
-            Log.d(TAG, "  Expiry check digit: '" + expiryCheckDigit + "' (expected from MRZ: 2)");
-            Log.d(TAG, "=== end check digits ===");
-
-            // Create BAC key using JMRTD - check digits calculated internally
-            BACKeySpec bacKey = new BACKey(documentNo, birthDate, expiryDate);
-            Log.d(TAG, "✓ BAC key created successfully");
-
-            // Initialize IsoDep
-            IsoDep isoDep = IsoDep.get(tag);
-            if (isoDep == null) {
-                throw new IOException("IsoDep not available for this tag");
+        } catch (IllegalArgumentException e) {
+            Log.e(TAG, "Invalid MRZ data", e);
+            sendErrorEvent(e.getMessage());
+        } catch (CardServiceException e) {
+            Log.e(TAG, "Card service error", e);
+            sendErrorEvent(getCardServiceErrorMessage(e));
+        } catch (IOException e) {
+            Log.e(TAG, "I/O error during JMRTD session", e);
+            sendErrorEvent("JMRTD oturumu sırasında I/O hatası: " + e.getMessage());
+        } finally {
+            if (session != null) {
+                session.close();
             }
-
-            isoDep.connect();
-            isoDep.setTimeout(10000); // 10 second timeout
-            Log.d(TAG, "✓ IsoDep connected");
-
-            try {
-                // MANUEL BAC IMPLEMENTATION - Bypass JMRTD
-                Log.e(TAG, "[CRITICAL] ========================================");
-                Log.e(TAG, "[CRITICAL] === MANUEL BAC BAŞLIYOR ===");
-                Log.e(TAG, "[CRITICAL] =========================================");
-
-                // 1. Build MRZ Key (with REAL check digits)
-                // ICAO 9303: K_SEED = Document Number + Check + Birth Date + Check + Expiry
-                // Date + Check
-                String mrzKey = documentNo + docCheckDigit + birthDate + birthCheckDigit + expiryDate
-                        + expiryCheckDigit;
-                Log.d(TAG, "MRZ Key (string): " + mrzKey + " (length: " + mrzKey.length() + ")");
-                Log.d(TAG, "MRZ Key format: DOC(" + documentNo + ") + CHK(" + docCheckDigit + ") + BIRTH(" + birthDate
-                        + ") + CHK(" + birthCheckDigit + ") + EXP(" + expiryDate + ") + CHK(" + expiryCheckDigit + ")");
-
-                // 2. Select eMRTD Application
-                byte[] selectAppCmd = new byte[] {
-                        0x00, (byte) 0xA4, 0x04, 0x0C, 0x07,
-                        (byte) 0xA0, 0x00, 0x00, 0x02, 0x47, 0x10, 0x01
-                };
-                Log.d(TAG, ">> SELECT APP: " + bytesToHex(selectAppCmd));
-                byte[] selectResp = isoDep.transceive(selectAppCmd);
-                Log.d(TAG, "<< Response: " + bytesToHex(selectResp) + " (SW: " + getSW(selectResp) + ")");
-
-                if (!isSuccessSW(selectResp)) {
-                    throw new IOException("SELECT APPLICATION failed: " + getSW(selectResp));
-                }
-
-                // 3. GET CHALLENGE (8 random bytes from card)
-                byte[] getChallengeCmd = new byte[] {
-                        0x00, (byte) 0x84, 0x00, 0x00, 0x08
-                };
-                Log.d(TAG, ">> GET CHALLENGE: " + bytesToHex(getChallengeCmd));
-                byte[] challengeResp = isoDep.transceive(getChallengeCmd);
-                Log.d(TAG, "<< Response: " + bytesToHex(challengeResp) + " (SW: " + getSW(challengeResp) + ")");
-
-                if (!isSuccessSW(challengeResp)) {
-                    throw new IOException("GET CHALLENGE failed: " + getSW(challengeResp));
-                }
-
-                byte[] rndICC = new byte[8];
-                System.arraycopy(challengeResp, 0, rndICC, 0, 8);
-                Log.e(TAG, "[CRITICAL] RND.ICC (card challenge): " + bytesToHex(rndICC));
-
-                // 4. Generate RND.IFD and K.IFD (random data for authentication)
-                SecureRandom random = new SecureRandom();
-                byte[] rndIFD = new byte[8];
-                byte[] kIFD = new byte[16];
-                random.nextBytes(rndIFD);
-                random.nextBytes(kIFD);
-                Log.e(TAG, "[CRITICAL] RND.IFD (our challenge): " + bytesToHex(rndIFD));
-                Log.e(TAG, "[CRITICAL] K.IFD (our key): " + bytesToHex(kIFD));
-
-                // 5. Derive Kenc and Kmac from MRZ key (convert ASCII string to bytes)
-                // ICAO 9303: Kseed = MRZ information as ASCII/UTF-8 bytes (typically 24 bytes)
-                // Format: DOC(9) + CHK(1) + BIRTH(6) + CHK(1) + EXP(6) + CHK(1) = 24 chars
-                byte[] mrzKeyBytes = mrzKey.getBytes("UTF-8");
-                Log.e(TAG, "[CRITICAL] Kseed (MRZ Key) bytes: " + bytesToHex(mrzKeyBytes));
-                Log.e(TAG, "[CRITICAL] Kseed length: " + mrzKeyBytes.length + " bytes (expected: 24)");
-
-                // IMPORTANT: Do NOT truncate! SHA-1 will hash the FULL Kseed, then truncate
-                // result to 16 bytes
-                if (mrzKeyBytes.length != 24) {
-                    Log.w(TAG, "⚠️ WARNING: Kseed length is " + mrzKeyBytes.length + " bytes, expected 24!");
-                    Log.w(TAG, "⚠️ This may cause BAC authentication to fail.");
-                }
-
-                Log.e(TAG, "[CRITICAL] Deriving Kenc...");
-                byte[] kenc = null;
-                try {
-                    kenc = deriveKey(mrzKeyBytes, (byte) 0x01);
-                    Log.e(TAG, "[CRITICAL] ✓ Kenc derived: " + bytesToHex(kenc));
-                } catch (Exception e) {
-                    Log.e(TAG, "❌ Kenc derivation failed!", e);
-                    throw e;
-                }
-
-                Log.d(TAG, "Deriving Kmac...");
-                byte[] kmac = null;
-                try {
-                    kmac = deriveKey(mrzKeyBytes, (byte) 0x02);
-                    Log.d(TAG, "✓ Kmac derived: " + bytesToHex(kmac));
-                } catch (Exception e) {
-                    Log.e(TAG, "❌ Kmac derivation failed!", e);
-                    throw e;
-                }
-
-                // 6. Build authentication data: RND.IFD || RND.ICC || K.IFD
-                byte[] authData = new byte[32];
-                System.arraycopy(rndIFD, 0, authData, 0, 8);
-                System.arraycopy(rndICC, 0, authData, 8, 8);
-                System.arraycopy(kIFD, 0, authData, 16, 16);
-                Log.d(TAG, "Auth data (plain): " + bytesToHex(authData));
-
-                // 7. Encrypt with 3DES CBC
-                Log.d(TAG, "Encrypting auth data...");
-                byte[] encryptedAuthData = null;
-                try {
-                    encryptedAuthData = encrypt3DES(authData, kenc);
-                    Log.d(TAG, "✓ Auth data encrypted (" + encryptedAuthData.length + " bytes): "
-                            + bytesToHex(encryptedAuthData));
-                } catch (Exception e) {
-                    Log.e(TAG, "❌ Encryption failed!", e);
-                    throw e;
-                }
-
-                // 8. Calculate MAC over encrypted data
-                Log.d(TAG, "Calculating MAC...");
-                byte[] mac = null;
-                try {
-                    mac = calculateMAC(encryptedAuthData, kmac);
-                    Log.d(TAG, "✓ MAC calculated (" + mac.length + " bytes): " + bytesToHex(mac));
-                } catch (Exception e) {
-                    Log.e(TAG, "❌ MAC calculation failed!", e);
-                    throw e;
-                }
-
-                // 9. Build EXTERNAL AUTHENTICATE command
-                Log.d(TAG, "Building EXTERNAL AUTHENTICATE command...");
-                byte[] extAuthCmd = buildExternalAuthCmd(encryptedAuthData, mac);
-                Log.d(TAG, "Command length: " + extAuthCmd.length + " bytes");
-                Log.d(TAG, "Command structure: CLA=" + String.format("%02X", extAuthCmd[0]) +
-                        " INS=" + String.format("%02X", extAuthCmd[1]) +
-                        " P1=" + String.format("%02X", extAuthCmd[2]) +
-                        " P2=" + String.format("%02X", extAuthCmd[3]) +
-                        " Lc=" + String.format("%02X", extAuthCmd[4]) +
-                        " Le=" + String.format("%02X", extAuthCmd[extAuthCmd.length - 1]));
-                Log.d(TAG, ">> EXTERNAL AUTHENTICATE: " + bytesToHex(extAuthCmd));
-
-                Log.d(TAG, "Sending EXTERNAL AUTHENTICATE to card...");
-                byte[] extAuthResp = isoDep.transceive(extAuthCmd);
-                Log.d(TAG, "<< Response length: " + extAuthResp.length + " bytes");
-                Log.d(TAG, "<< Response: " + bytesToHex(extAuthResp) + " (SW: " + getSW(extAuthResp) + ")");
-
-                if (!isSuccessSW(extAuthResp)) {
-                    Log.e(TAG, "❌ EXTERNAL AUTHENTICATE FAILED!");
-                    Log.e(TAG, "Status Word: " + getSW(extAuthResp));
-                    Log.e(TAG, "SW 6982 = Security status not satisfied (MAC verification failed or wrong keys)");
-                    throw new IOException("EXTERNAL AUTHENTICATE failed: SW=" + getSW(extAuthResp));
-                }
-
-                Log.d(TAG, "✓ BAC authentication successful!");
-
-                // 10. Extract encrypted response and verify
-                byte[] encryptedResp = new byte[extAuthResp.length - 2];
-                System.arraycopy(extAuthResp, 0, encryptedResp, 0, encryptedResp.length);
-                Log.d(TAG, "Encrypted response: " + bytesToHex(encryptedResp));
-
-                // Decrypt response
-                byte[] decryptedResp = decrypt3DES(encryptedResp, kenc);
-                Log.d(TAG, "Decrypted response: " + bytesToHex(decryptedResp));
-
-                // Extract session keys from decrypted response
-                byte[] rndICCVerify = new byte[8];
-                byte[] rndIFDVerify = new byte[8];
-                byte[] kICCBytes = new byte[16];
-                System.arraycopy(decryptedResp, 0, rndICCVerify, 0, 8);
-                System.arraycopy(decryptedResp, 8, rndIFDVerify, 0, 8);
-                System.arraycopy(decryptedResp, 16, kICCBytes, 0, 16);
-
-                Log.d(TAG, "RND.ICC (verify): " + bytesToHex(rndICCVerify));
-                Log.d(TAG, "RND.IFD (verify): " + bytesToHex(rndIFDVerify));
-                Log.d(TAG, "K.ICC: " + bytesToHex(kICCBytes));
-
-                // Verify challenges match
-                if (!java.util.Arrays.equals(rndICC, rndICCVerify)) {
-                    throw new IOException("RND.ICC verification failed!");
-                }
-                if (!java.util.Arrays.equals(rndIFD, rndIFDVerify)) {
-                    throw new IOException("RND.IFD verification failed!");
-                }
-
-                Log.d(TAG, "✓ Challenge verification successful!");
-                Log.d(TAG, "✓ BAC COMPLETE - Secure channel established");
-
-                // Now we can read passport data with secure messaging
-                // TODO: Implement secure messaging for data reading
-                throw new IOException("BAC successful but secure messaging not yet implemented");
-
-            } finally {
-                if (passportService != null) {
-                    try {
-                        passportService.close();
-                        Log.d(TAG, "PassportService closed");
-                    } catch (Exception e) {
-                        Log.w(TAG, "Error closing PassportService", e);
-                    }
-                }
-                if (isoDep.isConnected()) {
-                    isoDep.close();
-                    Log.d(TAG, "IsoDep closed");
-                }
-            }
-
-        } catch (Exception e) {
-            Log.e(TAG, "❌ BAC authentication failed", e);
-            Log.e(TAG, "Exception type: " + e.getClass().getName());
-            Log.e(TAG, "Exception message: " + e.getMessage());
-            e.printStackTrace();
-
-            String errorDetail = e.getMessage() != null ? e.getMessage() : "Unknown error";
-            sendErrorEvent("BAC kimlik doğrulaması başarısız: " + errorDetail);
         }
     }
 
     private WritableMap readPassportDataWithJMRTD(PassportService passportService) throws Exception {
-        // Use JMRTD helper to read DG1/DG2 and parse MRZ
         return NFCPassportReaderJMRTD.readPassportData(passportService);
     }
 
     private String getCardServiceErrorMessage(CardServiceException e) {
         return NFCPassportReaderJMRTD.getErrorMessage(e);
-    }
-
-    private byte[] readDataGroup(IsoDep isoDep, int dataGroup) throws IOException {
-        // Select file
-        byte[] selectFile = new byte[] {
-                (byte) 0x00, (byte) 0xA4, (byte) 0x02, (byte) 0x0C,
-                (byte) 0x02, (byte) 0x01, (byte) dataGroup
-        };
-        byte[] selectResponse = isoDep.transceive(selectFile);
-
-        if (!isSuccess(selectResponse)) {
-            throw new IOException("Failed to select data group " + dataGroup);
-        }
-
-        // Read binary
-        byte[] readBinary = new byte[] {
-                (byte) 0x00, (byte) 0xB0, (byte) 0x00, (byte) 0x00, (byte) 0x00
-        };
-        byte[] data = isoDep.transceive(readBinary);
-
-        if (!isSuccess(data)) {
-            throw new IOException("Failed to read data group " + dataGroup);
-        }
-
-        // Send progress event
-        WritableMap event = Arguments.createMap();
-        event.putInt("bytesRead", data.length);
-        event.putDouble("timestamp", System.currentTimeMillis() / 1000.0);
-        sendEvent("NFC_DATA_READ", event);
-
-        // Remove status bytes (last 2 bytes)
-        byte[] result = new byte[data.length - 2];
-        System.arraycopy(data, 0, result, 0, data.length - 2);
-        return result;
-    }
-
-    private WritableMap parseMRZFromDG1(byte[] dg1) {
-        // Simplified MRZ parsing
-        String mrzString = new String(dg1);
-        Log.d(TAG, "MRZ data: " + mrzString);
-
-        WritableMap result = Arguments.createMap();
-
-        // Parse MRZ lines (TD3 format: 2 lines x 44 characters)
-        String[] lines = mrzString.split("\n");
-
-        if (lines.length >= 2) {
-            String line1 = lines[0];
-            String line2 = lines[1];
-
-            // Line 2: Document number, nationality, birth date, gender, expiry
-            String documentNo = line2.substring(0, 9).replace("<", "").trim();
-            String nationality = line2.substring(10, 13).replace("<", "").trim();
-            String birthDate = formatDate(line2.substring(13, 19));
-            String gender = mapGender(line2.charAt(20));
-            String expiryDate = formatDate(line2.substring(21, 27));
-
-            // Line 1: Name
-            String[] nameParts = line1.substring(5).split("<<");
-            String surname = nameParts.length > 0 ? nameParts[0].replace("<", " ").trim() : "";
-            String givenNames = nameParts.length > 1 ? nameParts[1].replace("<", " ").trim() : "";
-
-            result.putString("documentNo", documentNo);
-            result.putString("name", givenNames);
-            result.putString("surname", surname);
-            result.putString("nationality", nationality);
-            result.putString("birthDate", birthDate);
-            result.putString("validUntil", expiryDate);
-            result.putString("gender", gender);
-        }
-
-        return result;
-    }
-
-    private Date parseDate(String dateStr) {
-        try {
-            if (dateStr.contains(".")) {
-                // DD.MM.YYYY format
-                return new SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(dateStr);
-            } else if (dateStr.contains("/")) {
-                // DD/MM/YYYY format
-                return new SimpleDateFormat("dd/MM/yyyy", Locale.US).parse(dateStr);
-            } else if (dateStr.length() == 6) {
-                // YYMMDD format
-                return new SimpleDateFormat("yyMMdd", Locale.US).parse(dateStr);
-            }
-        } catch (ParseException e) {
-            Log.e(TAG, "Date parse error: " + dateStr, e);
-        }
-        return null;
-    }
-
-    private String formatDate(String yymmdd) {
-        // Convert YYMMDD to DD.MM.YYYY
-        if (yymmdd.length() != 6)
-            return yymmdd;
-
-        String yy = yymmdd.substring(0, 2);
-        String mm = yymmdd.substring(2, 4);
-        String dd = yymmdd.substring(4, 6);
-
-        try {
-            int year = Integer.parseInt(yy);
-            String century = year <= 30 ? "20" : "19";
-            return dd + "." + mm + "." + century + yy;
-        } catch (NumberFormatException e) {
-            return yymmdd;
-        }
-    }
-
-    private String mapGender(char ch) {
-        switch (ch) {
-            case 'M':
-                return "Male";
-            case 'F':
-                return "Female";
-            default:
-                return "Unknown";
-        }
-    }
-
-    private boolean isSuccess(byte[] response) {
-        return response.length >= 2 &&
-                response[response.length - 2] == (byte) 0x90 &&
-                response[response.length - 1] == (byte) 0x00;
     }
 
     private void sendEvent(String eventName, WritableMap params) {
@@ -680,6 +279,13 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
         event.putString("error", message);
         event.putDouble("timestamp", System.currentTimeMillis() / 1000.0);
         sendEvent("NFC_ERROR", event);
+    }
+
+    private void sendSuccessEvent(WritableMap result) {
+        WritableMap event = Arguments.createMap();
+        event.putDouble("timestamp", System.currentTimeMillis() / 1000.0);
+        event.putMap("data", result);
+        sendEvent("NFC_SUCCESS", event);
     }
 
     /**
@@ -761,166 +367,64 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
         return String.valueOf(sum % 10);
     }
 
-    /**
-     * Convert byte array to hex string for logging
-     */
-    private String bytesToHex(byte[] bytes) {
-        if (bytes == null)
-            return "null";
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02X ", b));
-        }
-        return sb.toString().trim();
-    }
-
-    /**
-     * Convert hex string to byte array (e.g., "A43D6461" → [0xA4, 0x3D, 0x64,
-     * 0x61])
-     */
-    private byte[] hexStringToBytes(String hexString) throws IllegalArgumentException {
-        if (hexString == null || hexString.isEmpty()) {
-            throw new IllegalArgumentException("Hex string is null or empty");
-        }
-
-        // Remove spaces if any
-        hexString = hexString.replaceAll("\\s+", "");
-
-        if (hexString.length() % 2 != 0) {
-            throw new IllegalArgumentException("Hex string must have even length: " + hexString);
-        }
-
-        byte[] bytes = new byte[hexString.length() / 2];
-        for (int i = 0; i < bytes.length; i++) {
-            int index = i * 2;
-            bytes[i] = (byte) Integer.parseInt(hexString.substring(index, index + 2), 16);
-        }
-        return bytes;
-    }
-
-    /**
-     * Get Status Word from APDU response
-     */
-    private String getSW(byte[] response) {
-        if (response == null || response.length < 2) {
-            return "0000";
-        }
-        int sw1 = response[response.length - 2] & 0xFF;
-        int sw2 = response[response.length - 1] & 0xFF;
-        return String.format("%02X%02X", sw1, sw2);
-    }
-
-    /**
-     * Check if Status Word indicates success (9000)
-     */
-    private boolean isSuccessSW(byte[] response) {
-        return "9000".equals(getSW(response));
-    }
-
-    /**
-     * Derive encryption/MAC key from MRZ key using SHA-1 and DES3
-     */
-    private byte[] deriveKey(byte[] mrzKey, byte mode) throws Exception {
-        Log.d(TAG, "  deriveKey: mode=" + String.format("%02X", mode) + ", input length=" + mrzKey.length);
-
-        // Removed strict validation - padding/truncation handled above
-
-        // ICAO 9303: K = SHA-1(mrzKey || 00 00 00 mode) truncated to 16 bytes
-        MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-        sha1.update(mrzKey);
-        sha1.update(new byte[] { 0x00, 0x00, 0x00, mode });
-        byte[] hash = sha1.digest();
-        Log.d(TAG, "  SHA-1 hash (" + hash.length + " bytes): " + bytesToHex(hash));
-
-        byte[] key = new byte[16];
-        System.arraycopy(hash, 0, key, 0, 16);
-        Log.d(TAG, "  Truncated to 16 bytes: " + bytesToHex(key));
-
-        // Adjust DES parity bits
-        adjustDESParity(key);
-        Log.d(TAG, "  After parity adjustment: " + bytesToHex(key));
-        return key;
-    }
-
-    /**
-     * Adjust DES parity bits (each byte must have odd parity)
-     */
-    private void adjustDESParity(byte[] key) {
-        for (int i = 0; i < key.length; i++) {
-            int b = key[i] & 0xFE; // Clear parity bit
-            int parity = 0;
-            for (int j = 0; j < 7; j++) {
-                parity ^= (b >> j) & 1;
-            }
-            key[i] = (byte) (b | (parity == 0 ? 1 : 0));
-        }
-    }
-
-    /**
-     * Encrypt data with 3DES CBC (zero IV)
-     */
-    private byte[] encrypt3DES(byte[] data, byte[] key) throws Exception {
-        SecretKeySpec keySpec = new SecretKeySpec(key, "DESede");
-        Cipher cipher = Cipher.getInstance("DESede/CBC/NoPadding");
-        IvParameterSpec iv = new IvParameterSpec(new byte[8]); // Zero IV
-        cipher.init(Cipher.ENCRYPT_MODE, keySpec, iv);
-        return cipher.doFinal(data);
-    }
-
-    /**
-     * Decrypt data with 3DES CBC (zero IV)
-     */
-    private byte[] decrypt3DES(byte[] data, byte[] key) throws Exception {
-        SecretKeySpec keySpec = new SecretKeySpec(key, "DESede");
-        Cipher cipher = Cipher.getInstance("DESede/CBC/NoPadding");
-        IvParameterSpec iv = new IvParameterSpec(new byte[8]); // Zero IV
-        cipher.init(Cipher.DECRYPT_MODE, keySpec, iv);
-        return cipher.doFinal(data);
-    }
-
-    /**
-     * Calculate MAC (CBC-MAC with 3DES)
-     */
-    private byte[] calculateMAC(byte[] data, byte[] key) throws Exception {
-        // Pad data to 8-byte blocks
-        int padLen = 8 - (data.length % 8);
-        byte[] paddedData = new byte[data.length + padLen];
-        System.arraycopy(data, 0, paddedData, 0, data.length);
-        paddedData[data.length] = (byte) 0x80; // ISO 9797-1 padding
-
-        // CBC-MAC
-        SecretKeySpec keySpec = new SecretKeySpec(key, "DESede");
-        Cipher cipher = Cipher.getInstance("DESede/CBC/NoPadding");
-        IvParameterSpec iv = new IvParameterSpec(new byte[8]);
-        cipher.init(Cipher.ENCRYPT_MODE, keySpec, iv);
-        byte[] encrypted = cipher.doFinal(paddedData);
-
-        // Return last 8 bytes
-        byte[] mac = new byte[8];
-        System.arraycopy(encrypted, encrypted.length - 8, mac, 0, 8);
-        return mac;
-    }
-
-    /**
-     * Build EXTERNAL AUTHENTICATE APDU command
-     */
-    private byte[] buildExternalAuthCmd(byte[] encData, byte[] mac) {
-        // Format: 00 82 00 00 Lc [encData || mac]
-        byte[] cmd = new byte[5 + encData.length + mac.length + 1];
-        cmd[0] = 0x00;
-        cmd[1] = (byte) 0x82;
-        cmd[2] = 0x00;
-        cmd[3] = 0x00;
-        cmd[4] = (byte) (encData.length + mac.length);
-        System.arraycopy(encData, 0, cmd, 5, encData.length);
-        System.arraycopy(mac, 0, cmd, 5 + encData.length, mac.length);
-        cmd[cmd.length - 1] = 0x28; // Le = 40 bytes expected
-        return cmd;
-    }
-
     @Override
     public void invalidate() {
         super.invalidate();
         isReading = false;
+    }
+
+    private MrzData extractMrzData(ReadableMap mrzSeed) {
+        if (mrzSeed == null) {
+            throw new IllegalArgumentException("MRZ verisi zorunludur");
+        }
+
+        String documentNo = mrzSeed.hasKey("documentNo") ? mrzSeed.getString("documentNo") : "";
+        if (documentNo.isEmpty() && mrzSeed.hasKey("serialNo")) {
+            documentNo = mrzSeed.getString("serialNo");
+        }
+        if (documentNo.isEmpty() && mrzSeed.hasKey("tcNo")) {
+            documentNo = mrzSeed.getString("tcNo");
+        }
+
+        if (documentNo.length() > 9) {
+            documentNo = documentNo.substring(0, 9);
+        }
+
+        String birthDate = convertDateToMRZFormat(mrzSeed.hasKey("birthDate") ? mrzSeed.getString("birthDate") : "");
+        String expiryDate = convertDateToMRZFormat(mrzSeed.hasKey("validUntil") ? mrzSeed.getString("validUntil")
+                : (mrzSeed.hasKey("expiryDate") ? mrzSeed.getString("expiryDate") : ""));
+
+        if (documentNo.isEmpty() || birthDate.length() != 6 || expiryDate.length() != 6) {
+            throw new IllegalArgumentException("MRZ alanları eksik veya hatalı");
+        }
+
+        return new MrzData(documentNo, birthDate, expiryDate);
+    }
+
+    private String sanitizeCanNumber(ReadableMap options) {
+        if (options == null || !options.hasKey("canNumber")) {
+            return null;
+        }
+        String raw = options.getString("canNumber");
+        if (raw == null) {
+            return null;
+        }
+        String digits = raw.replaceAll("[^0-9]", "");
+        if (digits.isEmpty()) {
+            return null;
+        }
+        return digits.length() > 6 ? digits.substring(digits.length() - 6) : digits;
+    }
+
+    private static final class MrzData {
+        final String documentNumber;
+        final String birthDate;
+        final String expiryDate;
+
+        MrzData(String documentNumber, String birthDate, String expiryDate) {
+            this.documentNumber = documentNumber;
+            this.birthDate = birthDate;
+            this.expiryDate = expiryDate;
+        }
     }
 }
