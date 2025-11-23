@@ -310,27 +310,68 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
             Log.d(TAG, "✓ IsoDep connected");
 
             try {
+                // MANUEL BAC IMPLEMENTATION - Bypass JMRTD
+                Log.d(TAG, "=== MANUEL BAC BAŞLIYOR ===");
+
+                // 1. Build MRZ Key (with check digits from MRZ)
+                String mrzKey = documentNo + "1" + birthDate + "0" + expiryDate + "2";
+                Log.d(TAG, "MRZ Key: " + mrzKey + " (length: " + mrzKey.length() + ")");
+
+                // 2. Select eMRTD Application
+                byte[] selectAppCmd = new byte[] {
+                        0x00, (byte) 0xA4, 0x04, 0x0C, 0x07,
+                        (byte) 0xA0, 0x00, 0x00, 0x02, 0x47, 0x10, 0x01
+                };
+                Log.d(TAG, ">> SELECT APP: " + bytesToHex(selectAppCmd));
+                byte[] selectResp = isoDep.transceive(selectAppCmd);
+                Log.d(TAG, "<< Response: " + bytesToHex(selectResp) + " (SW: " + getSW(selectResp) + ")");
+
+                if (!isSuccessSW(selectResp)) {
+                    throw new IOException("SELECT APPLICATION failed: " + getSW(selectResp));
+                }
+
+                // 3. GET CHALLENGE (8 random bytes from card)
+                byte[] getChallengeCmd = new byte[] {
+                        0x00, (byte) 0x84, 0x00, 0x00, 0x08
+                };
+                Log.d(TAG, ">> GET CHALLENGE: " + bytesToHex(getChallengeCmd));
+                byte[] challengeResp = isoDep.transceive(getChallengeCmd);
+                Log.d(TAG, "<< Response: " + bytesToHex(challengeResp) + " (SW: " + getSW(challengeResp) + ")");
+
+                if (!isSuccessSW(challengeResp)) {
+                    throw new IOException("GET CHALLENGE failed: " + getSW(challengeResp));
+                }
+
+                byte[] rndICC = new byte[8];
+                System.arraycopy(challengeResp, 0, rndICC, 0, 8);
+                Log.d(TAG, "RND.ICC (card challenge): " + bytesToHex(rndICC));
+
+                // TODO: Implement remaining BAC steps
+                // For now, throw informative error
+                throw new IOException("Manuel BAC implementation in progress - CHECK LOGS ABOVE");
+
+                // OLD CODE:
                 // Wrap IsoDep in CardService for JMRTD
-                CardService cardService = CardService.getInstance(isoDep);
-                cardService.open();
-                Log.d(TAG, "✓ CardService opened");
-
-                // Create PassportService and perform BAC
-                passportService = new PassportService(
-                        cardService,
-                        PassportService.NORMAL_MAX_TRANCEIVE_LENGTH,
-                        PassportService.DEFAULT_MAX_BLOCKSIZE,
-                        false, // isSFIEnabled
-                        true // shouldCheckMAC
-                );
-
-                passportService.open();
-                Log.d(TAG, "✓ PassportService opened");
-
-                // Perform BAC authentication
-                Log.d(TAG, "Performing BAC authentication...");
-                passportService.doBAC(bacKey);
-                Log.d(TAG, "✓ BAC authentication successful!");
+                // CardService cardService = CardService.getInstance(isoDep);
+                // cardService.open();
+                // Log.d(TAG, "✓ CardService opened");
+                //
+                // // Create PassportService and perform BAC
+                // passportService = new PassportService(
+                // cardService,
+                // PassportService.NORMAL_MAX_TRANCEIVE_LENGTH,
+                // PassportService.DEFAULT_MAX_BLOCKSIZE,
+                // false, // isSFIEnabled
+                // true // shouldCheckMAC
+                // );
+                //
+                // passportService.open();
+                // Log.d(TAG, "✓ PassportService opened");
+                //
+                // // Perform BAC authentication
+                // Log.d(TAG, "Performing BAC authentication...");
+                // passportService.doBAC(bacKey);
+                // Log.d(TAG, "✓ BAC authentication successful!");
 
                 // Read passport data using JMRTD
                 WritableMap passportData = readPassportDataWithJMRTD(passportService);
@@ -599,6 +640,38 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
         }
 
         return String.valueOf(sum % 10);
+    }
+
+    /**
+     * Convert byte array to hex string for logging
+     */
+    private String bytesToHex(byte[] bytes) {
+        if (bytes == null)
+            return "null";
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02X ", b));
+        }
+        return sb.toString().trim();
+    }
+
+    /**
+     * Get Status Word from APDU response
+     */
+    private String getSW(byte[] response) {
+        if (response == null || response.length < 2) {
+            return "0000";
+        }
+        int sw1 = response[response.length - 2] & 0xFF;
+        int sw2 = response[response.length - 1] & 0xFF;
+        return String.format("%02X%02X", sw1, sw2);
+    }
+
+    /**
+     * Check if Status Word indicates success (9000)
+     */
+    private boolean isSuccessSW(byte[] response) {
+        return "9000".equals(getSW(response));
     }
 
     @Override
