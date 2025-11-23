@@ -1906,13 +1906,24 @@ export const OCRReaderScreen = ({ navigation, route }) => {
     setNfcError(null);
     setNfcPhase('scanning');
 
-    const mrzSummary = {
-      tcNo: mrzFields.tcNo || null,
-      name: mrzFields.name || null,
-      surname: mrzFields.surname || null,
-      birthDate: mrzFields.birthDate || null,
-      documentNo: mrzFields.documentNo || null,
-    };
+    const mrzCheckDigits = mrzFields.mrzCheckDigits;
+    const expiryValue = mrzFields.validUntil || mrzFields.expiryDate;
+
+    const mrzSummary = Object.fromEntries(
+      Object.entries({
+        tcNo: mrzFields.tcNo,
+        name: mrzFields.name,
+        surname: mrzFields.surname,
+        birthDate: mrzFields.birthDate,
+        documentNo: mrzFields.documentNo,
+        validUntil: expiryValue,
+        expiryDate: expiryValue,
+      }).filter(([, value]) => value != null && value !== '')
+    );
+
+    if (mrzCheckDigits && Object.keys(mrzCheckDigits).length > 0) {
+      mrzSummary.mrzCheckDigits = mrzCheckDigits;
+    }
 
     console.log('[OCR→NFC] OCR tamamlandı. NFC başlatılıyor...', mrzSummary);
     appendLogEntryHelper(setOcrLogs, 'OCR_RESULT', mrzFields);
