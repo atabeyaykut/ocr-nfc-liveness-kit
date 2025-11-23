@@ -319,9 +319,14 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 // MANUEL BAC IMPLEMENTATION - Bypass JMRTD
                 Log.d(TAG, "=== MANUEL BAC BAŞLIYOR ===");
 
-                // 1. Build MRZ Key (with check digits from MRZ)
-                String mrzKey = documentNo + "1" + birthDate + "0" + expiryDate + "2";
-                Log.d(TAG, "MRZ Key: " + mrzKey + " (length: " + mrzKey.length() + ")");
+                // 1. Build MRZ Key (with REAL check digits)
+                // ICAO 9303: K_SEED = Document Number + Check + Birth Date + Check + Expiry
+                // Date + Check
+                String mrzKey = documentNo + docCheckDigit + birthDate + birthCheckDigit + expiryDate
+                        + expiryCheckDigit;
+                Log.d(TAG, "MRZ Key (string): " + mrzKey + " (length: " + mrzKey.length() + ")");
+                Log.d(TAG, "MRZ Key format: DOC(" + documentNo + ") + CHK(" + docCheckDigit + ") + BIRTH(" + birthDate
+                        + ") + CHK(" + birthCheckDigit + ") + EXP(" + expiryDate + ") + CHK(" + expiryCheckDigit + ")");
 
                 // 2. Select eMRTD Application
                 byte[] selectAppCmd = new byte[] {
@@ -361,11 +366,26 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 Log.d(TAG, "RND.IFD (our challenge): " + bytesToHex(rndIFD));
                 Log.d(TAG, "K.IFD (our key): " + bytesToHex(kIFD));
 
-                // 5. Derive Kenc and Kmac from MRZ key (convert hex string to bytes)
-                Log.d(TAG, "MRZ Key (hex string): " + mrzKey);
-                byte[] mrzKeyBytes = hexStringToBytes(mrzKey);
+                // 5. Derive Kenc and Kmac from MRZ key (convert ASCII string to bytes)
+                // ICAO 9303: MRZ information is used as ASCII/UTF-8 bytes directly
+                byte[] mrzKeyBytes = mrzKey.getBytes("UTF-8");
                 Log.d(TAG, "MRZ Key bytes: " + bytesToHex(mrzKeyBytes));
-                Log.d(TAG, "MRZ Key length: " + mrzKeyBytes.length + " bytes (should be 16)");
+                Log.d(TAG, "MRZ Key length: " + mrzKeyBytes.length + " bytes");
+
+                // Pad or truncate to 16 bytes if needed (ICAO 9303 spec)
+                if (mrzKeyBytes.length < 16) {
+                    Log.w(TAG,
+                            "⚠️ MRZ key too short (" + mrzKeyBytes.length + " bytes), padding with zeros to 16 bytes");
+                    byte[] padded = new byte[16];
+                    System.arraycopy(mrzKeyBytes, 0, padded, 0, mrzKeyBytes.length);
+                    mrzKeyBytes = padded;
+                } else if (mrzKeyBytes.length > 16) {
+                    Log.w(TAG, "⚠️ MRZ key too long (" + mrzKeyBytes.length + " bytes), truncating to 16 bytes");
+                    byte[] truncated = new byte[16];
+                    System.arraycopy(mrzKeyBytes, 0, truncated, 0, 16);
+                    mrzKeyBytes = truncated;
+                }
+                Log.d(TAG, "Final MRZ Key (16 bytes): " + bytesToHex(mrzKeyBytes));
 
                 Log.d(TAG, "Deriving Kenc...");
                 byte[] kenc = null;
@@ -793,9 +813,7 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
     private byte[] deriveKey(byte[] mrzKey, byte mode) throws Exception {
         Log.d(TAG, "  deriveKey: mode=" + String.format("%02X", mode) + ", input length=" + mrzKey.length);
 
-        if (mrzKey.length != 16) {
-            throw new IllegalArgumentException("MRZ key must be 16 bytes, got " + mrzKey.length);
-        }
+        // Removed strict validation - padding/truncation handled above
 
         // ICAO 9303: K = SHA-1(mrzKey || 00 00 00 mode) truncated to 16 bytes
         MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
