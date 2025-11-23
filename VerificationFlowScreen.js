@@ -24,12 +24,15 @@ import LivenessModule from './modules/liveness/LivenessModule';
 
 const OCRReaderModule = require('./modules/ocr/OCRReaderModule').default || require('./modules/ocr/OCRReaderModule');
 const { NFCReaderModule } = require('./modules/nfc/NFCReaderModule');
+const mockNFCData = require('./mock/nfcData');
+const MRZParser = require('./utils/mrzParser');
 
 const { width: screenWidth } = Dimensions.get('window');
 
 // Manual NFC debug toggle (only for local testing)
 const USE_MANUAL_NFC_DEBUG = true;
-const MANUAL_NFC_TEST_DATA = {
+
+const FALLBACK_MANUAL_NFC_TEST_DATA = {
     tcNo: '10945153402',
     name: 'ATABEY',
     surname: 'AYKUT',
@@ -52,6 +55,48 @@ const MANUAL_NFC_TEST_DATA = {
         'AYKUT<<ATABEY<<<<<<<<<<<<<<<<<',
     ],
 };
+
+const buildManualNfcTestData = () => {
+    const realTest = mockNFCData?.realTest;
+    if (!realTest) {
+        return null;
+    }
+
+    const { cardData = {}, mrz = {}, parsedMRZ } = realTest;
+    let parsed = parsedMRZ;
+
+    if ((!parsed || !parsed.documentNumber) && mrz.line1 && mrz.line2 && mrz.line3) {
+        parsed = MRZParser.parse(mrz.line1, mrz.line2, mrz.line3);
+    }
+
+    if (!parsed) {
+        return null;
+    }
+
+    const documentNumber = (parsed.documentNumber || cardData.documentNumber || '').replace(/<+/g, '');
+
+    // MRZ formatındaki tarihler zaten YYMMDD formatında (örn: '980917', '330806')
+    // Java tarafı bu formatı bekliyor
+    const testData = {
+        tcNo: parsed.idNumber || cardData.idNumber,
+        name: cardData.firstName || (parsed.givenNames || '').split(' ')[0] || parsed.givenNames,
+        surname: cardData.lastName || parsed.surname,
+        birthDate: parsed.birthDate, // MRZ format: YYMMDD
+        validUntil: parsed.expiryDate, // MRZ format: YYMMDD
+        expiryDate: parsed.expiryDate, // MRZ format: YYMMDD
+        documentNo: documentNumber || cardData.serialNumber,
+        serialNo: cardData.serialNumber || documentNumber,
+        gender: realTest.parsedMRZ?.gender || 'M',
+        nationality: parsed.nationality || cardData.nationality,
+        mrzCheckDigits: parsed.checksums,
+        mrzRawLines: [mrz.line1, mrz.line2, mrz.line3].filter(Boolean),
+    };
+
+    console.log('[VerificationFlow] 🔐 buildManualNfcTestData output:', JSON.stringify(testData, null, 2));
+    return testData;
+};
+
+const MANUAL_NFC_TEST_DATA = buildManualNfcTestData() || FALLBACK_MANUAL_NFC_TEST_DATA;
 
 const CAPTURE_SEQUENCE_COUNT = 3;
 const CAPTURE_DELAY_MS = 200;
@@ -366,14 +411,20 @@ const VerificationFlowScreen = ({ navigation }) => {
                 documentNo: ocrData.documentNo || ocrData.serialNo,
                 serialNo: ocrData.serialNo,
                 validUntil: ocrData.validUntil,
+                expiryDate: ocrData.expiryDate || ocrData.validUntil,
                 mrzCheckDigits: ocrData.mrzCheckDigits,
             };
 
+            console.log('[NFC] 🔐 mrzSeed being sent to native:', JSON.stringify(mrzSeed, null, 2));
             addLog('🔐 BAC için gönderilen veriler:');
             addLog(`  • tcNo: ${mrzSeed.tcNo || '❌ EKSİK'}`);
+            addLog(`  • documentNo: ${mrzSeed.documentNo || '❌ EKSİK'}`);
+            addLog(`  • serialNo: ${mrzSeed.serialNo || '❌ EKSİK'}`);
             addLog(`  • birthDate: ${mrzSeed.birthDate || '❌ EKSİK'}`);
             addLog(`  • validUntil: ${mrzSeed.validUntil || '❌ EKSİK'}`);
-            addLog(`  • documentNo: ${mrzSeed.documentNo || '❌ EKSİK'}`);
+            addLog(`  • expiryDate: ${mrzSeed.expiryDate || '❌ EKSİK'}`);
+            addLog(`  • mrzCheckDigits: ${mrzSeed.mrzCheckDigits ? 'VAR' : 'YOK'}`);
+            addLog('Note: birthDate ve expiryDate MRZ formatında (YYMMDD) olmalı');
 
             await nfcModuleRef.current.startNFC({
                 cardType: 'tc_kimlik',
