@@ -16,11 +16,19 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 import org.jmrtd.BACKey;
 import org.jmrtd.BACKeySpec;
+import org.jmrtd.PACEKeySpec;
 import org.jmrtd.PassportService;
+import org.jmrtd.lds.CardAccessFile;
+import org.jmrtd.lds.PACEInfo;
+import org.jmrtd.lds.SecurityInfo;
 
 import net.sf.scuba.smartcards.CardServiceException;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.security.GeneralSecurityException;
+import java.security.spec.AlgorithmParameterSpec;
+import java.util.List;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
@@ -231,14 +239,14 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
             passportService.open();
             passportService.sendSelectApplet(false);
 
+            boolean paceSuccess = tryPACE(passportService, bacKey);
+            if (!paceSuccess) {
+                Log.w(TAG, "PACE skipped or failed – proceeding with BAC");
+            }
+
             Log.d(TAG, "Attempting BAC via JMRTD PassportService");
             passportService.doBAC(bacKey);
             Log.e(TAG, "[CRITICAL] ✓ BAC authentication successful via JMRTD");
-
-            // PACE placeholder: log if CAN was provided but not yet processed
-            if (canNumber != null) {
-                Log.w(TAG, "CAN provided but PACE implementation is pending. Continuing with BAC.");
-            }
 
             WritableMap passportData = readPassportDataWithJMRTD(passportService);
             Log.d(TAG, "✓ Passport data read via JMRTD");
@@ -266,6 +274,69 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
 
     private String getCardServiceErrorMessage(CardServiceException e) {
         return NFCPassportReaderJMRTD.getErrorMessage(e);
+    }
+
+    private boolean tryPACE(PassportService passportService, BACKeySpec bacKey)
+            throws CardServiceException {
+        PACEInfo paceInfo = readPACEInfo(passportService);
+        if (paceInfo == null) {
+            Log.w(TAG, "PACEInfo not found in EF.CardAccess");
+            return false;
+        }
+
+        try {
+            PACEKeySpec paceKey = buildPACEKey(bacKey);
+            AlgorithmParameterSpec params = PACEInfo.toParameterSpec(paceInfo.getParameterId());
+            String oid = paceInfo.getObjectIdentifier();
+            Log.d(TAG, "Attempting PACE with OID=" + oid + ", param=" + paceInfo.getParameterId());
+            passportService.doPACE(paceKey, oid, params, null);
+            Log.e(TAG, "[CRITICAL] ✓ PACE authentication successful");
+            return true;
+        } catch (GeneralSecurityException e) {
+            Log.e(TAG, "PACE key derivation failed", e);
+        } catch (IOException e) {
+            Log.e(TAG, "PACE I/O error", e);
+        }
+        return false;
+    }
+
+    private PACEInfo readPACEInfo(PassportService passportService) {
+        InputStream inputStream = null;
+        try {
+            inputStream = passportService.getInputStream(PassportService.EF_CARD_ACCESS);
+            if (inputStream == null) {
+                return null;
+            }
+            CardAccessFile cardAccessFile = new CardAccessFile(inputStream);
+            List<SecurityInfo> infos = cardAccessFile.getSecurityInfos();
+            if (infos == null) {
+                return null;
+            }
+            for (SecurityInfo info : infos) {
+                if (info instanceof PACEInfo) {
+                    return (PACEInfo) info;
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to parse EF.CardAccess", e);
+        } finally {
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
+        return null;
+    }
+
+    private PACEKeySpec buildPACEKey(BACKeySpec bacKey) throws GeneralSecurityException {
+        if (canNumber != null) {
+            Log.d(TAG, "Using CAN for PACE");
+            return PACEKeySpec.createCANKey(canNumber);
+        }
+        Log.d(TAG, "Using MRZ-derived key for PACE");
+        return PACEKeySpec.createMRZKey(bacKey);
     }
 
     private void sendEvent(String eventName, WritableMap params) {
