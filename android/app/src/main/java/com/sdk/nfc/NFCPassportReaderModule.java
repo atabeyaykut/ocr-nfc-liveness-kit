@@ -367,25 +367,18 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 Log.d(TAG, "K.IFD (our key): " + bytesToHex(kIFD));
 
                 // 5. Derive Kenc and Kmac from MRZ key (convert ASCII string to bytes)
-                // ICAO 9303: MRZ information is used as ASCII/UTF-8 bytes directly
+                // ICAO 9303: Kseed = MRZ information as ASCII/UTF-8 bytes (typically 24 bytes)
+                // Format: DOC(9) + CHK(1) + BIRTH(6) + CHK(1) + EXP(6) + CHK(1) = 24 chars
                 byte[] mrzKeyBytes = mrzKey.getBytes("UTF-8");
-                Log.d(TAG, "MRZ Key bytes: " + bytesToHex(mrzKeyBytes));
-                Log.d(TAG, "MRZ Key length: " + mrzKeyBytes.length + " bytes");
+                Log.d(TAG, "Kseed (MRZ Key) bytes: " + bytesToHex(mrzKeyBytes));
+                Log.d(TAG, "Kseed length: " + mrzKeyBytes.length + " bytes (expected: 24)");
 
-                // Pad or truncate to 16 bytes if needed (ICAO 9303 spec)
-                if (mrzKeyBytes.length < 16) {
-                    Log.w(TAG,
-                            "⚠️ MRZ key too short (" + mrzKeyBytes.length + " bytes), padding with zeros to 16 bytes");
-                    byte[] padded = new byte[16];
-                    System.arraycopy(mrzKeyBytes, 0, padded, 0, mrzKeyBytes.length);
-                    mrzKeyBytes = padded;
-                } else if (mrzKeyBytes.length > 16) {
-                    Log.w(TAG, "⚠️ MRZ key too long (" + mrzKeyBytes.length + " bytes), truncating to 16 bytes");
-                    byte[] truncated = new byte[16];
-                    System.arraycopy(mrzKeyBytes, 0, truncated, 0, 16);
-                    mrzKeyBytes = truncated;
+                // IMPORTANT: Do NOT truncate! SHA-1 will hash the FULL Kseed, then truncate
+                // result to 16 bytes
+                if (mrzKeyBytes.length != 24) {
+                    Log.w(TAG, "⚠️ WARNING: Kseed length is " + mrzKeyBytes.length + " bytes, expected 24!");
+                    Log.w(TAG, "⚠️ This may cause BAC authentication to fail.");
                 }
-                Log.d(TAG, "Final MRZ Key (16 bytes): " + bytesToHex(mrzKeyBytes));
 
                 Log.d(TAG, "Deriving Kenc...");
                 byte[] kenc = null;
