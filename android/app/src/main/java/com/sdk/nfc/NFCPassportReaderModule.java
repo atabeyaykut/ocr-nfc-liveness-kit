@@ -361,10 +361,11 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 Log.d(TAG, "RND.IFD (our challenge): " + bytesToHex(rndIFD));
                 Log.d(TAG, "K.IFD (our key): " + bytesToHex(kIFD));
 
-                // 5. Derive Kenc and Kmac from MRZ key
-                byte[] mrzKeyBytes = mrzKey.getBytes("UTF-8");
+                // 5. Derive Kenc and Kmac from MRZ key (convert hex string to bytes)
+                Log.d(TAG, "MRZ Key (hex string): " + mrzKey);
+                byte[] mrzKeyBytes = hexStringToBytes(mrzKey);
                 Log.d(TAG, "MRZ Key bytes: " + bytesToHex(mrzKeyBytes));
-                Log.d(TAG, "MRZ Key length: " + mrzKeyBytes.length + " bytes");
+                Log.d(TAG, "MRZ Key length: " + mrzKeyBytes.length + " bytes (should be 16)");
 
                 Log.d(TAG, "Deriving Kenc...");
                 byte[] kenc = null;
@@ -744,6 +745,30 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
     }
 
     /**
+     * Convert hex string to byte array (e.g., "A43D6461" → [0xA4, 0x3D, 0x64,
+     * 0x61])
+     */
+    private byte[] hexStringToBytes(String hexString) throws IllegalArgumentException {
+        if (hexString == null || hexString.isEmpty()) {
+            throw new IllegalArgumentException("Hex string is null or empty");
+        }
+
+        // Remove spaces if any
+        hexString = hexString.replaceAll("\\s+", "");
+
+        if (hexString.length() % 2 != 0) {
+            throw new IllegalArgumentException("Hex string must have even length: " + hexString);
+        }
+
+        byte[] bytes = new byte[hexString.length() / 2];
+        for (int i = 0; i < bytes.length; i++) {
+            int index = i * 2;
+            bytes[i] = (byte) Integer.parseInt(hexString.substring(index, index + 2), 16);
+        }
+        return bytes;
+    }
+
+    /**
      * Get Status Word from APDU response
      */
     private String getSW(byte[] response) {
@@ -767,6 +792,10 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
      */
     private byte[] deriveKey(byte[] mrzKey, byte mode) throws Exception {
         Log.d(TAG, "  deriveKey: mode=" + String.format("%02X", mode) + ", input length=" + mrzKey.length);
+
+        if (mrzKey.length != 16) {
+            throw new IllegalArgumentException("MRZ key must be 16 bytes, got " + mrzKey.length);
+        }
 
         // ICAO 9303: K = SHA-1(mrzKey || 00 00 00 mode) truncated to 16 bytes
         MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
