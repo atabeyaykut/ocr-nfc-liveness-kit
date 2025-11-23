@@ -364,11 +364,27 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 // 5. Derive Kenc and Kmac from MRZ key
                 byte[] mrzKeyBytes = mrzKey.getBytes("UTF-8");
                 Log.d(TAG, "MRZ Key bytes: " + bytesToHex(mrzKeyBytes));
+                Log.d(TAG, "MRZ Key length: " + mrzKeyBytes.length + " bytes");
 
-                byte[] kenc = deriveKey(mrzKeyBytes, (byte) 0x01);
-                byte[] kmac = deriveKey(mrzKeyBytes, (byte) 0x02);
-                Log.d(TAG, "Kenc (encryption key): " + bytesToHex(kenc));
-                Log.d(TAG, "Kmac (MAC key): " + bytesToHex(kmac));
+                Log.d(TAG, "Deriving Kenc...");
+                byte[] kenc = null;
+                try {
+                    kenc = deriveKey(mrzKeyBytes, (byte) 0x01);
+                    Log.d(TAG, "✓ Kenc derived: " + bytesToHex(kenc));
+                } catch (Exception e) {
+                    Log.e(TAG, "❌ Kenc derivation failed!", e);
+                    throw e;
+                }
+
+                Log.d(TAG, "Deriving Kmac...");
+                byte[] kmac = null;
+                try {
+                    kmac = deriveKey(mrzKeyBytes, (byte) 0x02);
+                    Log.d(TAG, "✓ Kmac derived: " + bytesToHex(kmac));
+                } catch (Exception e) {
+                    Log.e(TAG, "❌ Kmac derivation failed!", e);
+                    throw e;
+                }
 
                 // 6. Build authentication data: RND.IFD || RND.ICC || K.IFD
                 byte[] authData = new byte[32];
@@ -378,21 +394,49 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 Log.d(TAG, "Auth data (plain): " + bytesToHex(authData));
 
                 // 7. Encrypt with 3DES CBC
-                byte[] encryptedAuthData = encrypt3DES(authData, kenc);
-                Log.d(TAG, "Auth data (encrypted): " + bytesToHex(encryptedAuthData));
+                Log.d(TAG, "Encrypting auth data...");
+                byte[] encryptedAuthData = null;
+                try {
+                    encryptedAuthData = encrypt3DES(authData, kenc);
+                    Log.d(TAG, "✓ Auth data encrypted (" + encryptedAuthData.length + " bytes): "
+                            + bytesToHex(encryptedAuthData));
+                } catch (Exception e) {
+                    Log.e(TAG, "❌ Encryption failed!", e);
+                    throw e;
+                }
 
                 // 8. Calculate MAC over encrypted data
-                byte[] mac = calculateMAC(encryptedAuthData, kmac);
-                Log.d(TAG, "MAC: " + bytesToHex(mac));
+                Log.d(TAG, "Calculating MAC...");
+                byte[] mac = null;
+                try {
+                    mac = calculateMAC(encryptedAuthData, kmac);
+                    Log.d(TAG, "✓ MAC calculated (" + mac.length + " bytes): " + bytesToHex(mac));
+                } catch (Exception e) {
+                    Log.e(TAG, "❌ MAC calculation failed!", e);
+                    throw e;
+                }
 
                 // 9. Build EXTERNAL AUTHENTICATE command
+                Log.d(TAG, "Building EXTERNAL AUTHENTICATE command...");
                 byte[] extAuthCmd = buildExternalAuthCmd(encryptedAuthData, mac);
+                Log.d(TAG, "Command length: " + extAuthCmd.length + " bytes");
+                Log.d(TAG, "Command structure: CLA=" + String.format("%02X", extAuthCmd[0]) +
+                        " INS=" + String.format("%02X", extAuthCmd[1]) +
+                        " P1=" + String.format("%02X", extAuthCmd[2]) +
+                        " P2=" + String.format("%02X", extAuthCmd[3]) +
+                        " Lc=" + String.format("%02X", extAuthCmd[4]) +
+                        " Le=" + String.format("%02X", extAuthCmd[extAuthCmd.length - 1]));
                 Log.d(TAG, ">> EXTERNAL AUTHENTICATE: " + bytesToHex(extAuthCmd));
 
+                Log.d(TAG, "Sending EXTERNAL AUTHENTICATE to card...");
                 byte[] extAuthResp = isoDep.transceive(extAuthCmd);
+                Log.d(TAG, "<< Response length: " + extAuthResp.length + " bytes");
                 Log.d(TAG, "<< Response: " + bytesToHex(extAuthResp) + " (SW: " + getSW(extAuthResp) + ")");
 
                 if (!isSuccessSW(extAuthResp)) {
+                    Log.e(TAG, "❌ EXTERNAL AUTHENTICATE FAILED!");
+                    Log.e(TAG, "Status Word: " + getSW(extAuthResp));
+                    Log.e(TAG, "SW 6982 = Security status not satisfied (MAC verification failed or wrong keys)");
                     throw new IOException("EXTERNAL AUTHENTICATE failed: SW=" + getSW(extAuthResp));
                 }
 
@@ -722,17 +766,22 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
      * Derive encryption/MAC key from MRZ key using SHA-1 and DES3
      */
     private byte[] deriveKey(byte[] mrzKey, byte mode) throws Exception {
+        Log.d(TAG, "  deriveKey: mode=" + String.format("%02X", mode) + ", input length=" + mrzKey.length);
+
         // ICAO 9303: K = SHA-1(mrzKey || 00 00 00 mode) truncated to 16 bytes
         MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
         sha1.update(mrzKey);
         sha1.update(new byte[] { 0x00, 0x00, 0x00, mode });
         byte[] hash = sha1.digest();
+        Log.d(TAG, "  SHA-1 hash (" + hash.length + " bytes): " + bytesToHex(hash));
 
         byte[] key = new byte[16];
         System.arraycopy(hash, 0, key, 0, 16);
+        Log.d(TAG, "  Truncated to 16 bytes: " + bytesToHex(key));
 
         // Adjust DES parity bits
         adjustDESParity(key);
+        Log.d(TAG, "  After parity adjustment: " + bytesToHex(key));
         return key;
     }
 
