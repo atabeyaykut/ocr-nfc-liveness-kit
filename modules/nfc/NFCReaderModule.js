@@ -284,28 +284,27 @@ class NFCReaderModule {
       })
     );
 
-    // NFC_SCAN_COMPLETED
+    // NFC_SUCCESS (matches Android native event name)
     this.androidEventSubscriptions.push(
-      androidEventEmitter.addListener('NFC_SCAN_COMPLETED', (event) => {
-        nfcLogger.success('Android: NFC_SCAN_COMPLETED', event);
+      androidEventEmitter.addListener('NFC_SUCCESS', (event) => {
+        nfcLogger.success('Android: NFC_SUCCESS', event);
 
-        if (event.status === 'SUCCESS' && event.data) {
-          const parsedFields = event.data;
+        // Event structure: { timestamp, data: {...} }
+        const parsedFields = event.data || event;
 
-          // Create success operation
-          const operation = this.createSuccessOperation(parsedFields, null);
-          this.dispatchIdScanOperation(operation);
+        // Create success operation
+        const operation = this.createSuccessOperation(parsedFields, null);
+        this.dispatchIdScanOperation(operation);
 
-          // Call onResult callback
-          if (this.callbacks.onResult) {
-            const response = {
-              success: true,
-              parsedFields,
-              cardType: this.options.cardType,
-              timestamp: new Date().toISOString(),
-            };
-            this.callbacks.onResult(response);
-          }
+        // Call onResult callback
+        if (this.callbacks.onResult) {
+          const response = {
+            success: true,
+            parsedFields,
+            cardType: this.options.cardType,
+            timestamp: event.timestamp || new Date().toISOString(),
+          };
+          this.callbacks.onResult(response);
         }
 
         this.isReading = false;
