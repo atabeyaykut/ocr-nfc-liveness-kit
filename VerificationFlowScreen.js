@@ -274,7 +274,7 @@ const VerificationFlowScreen = ({ navigation }) => {
             // startNfcFlow(result.data);
 
             // Manuel test verisi kullanmak için aşağıdaki test verisini düzenleyin:
-            const manualTestData = {
+            /* const manualTestData = {
                 tcNo: '10945153402',              // 11 haneli TC No
                 name: 'ATABEY',                   // İsim (BÜYÜK HARF)
                 surname: 'AYKUT',                // Soyisim (BÜYÜK HARF)
@@ -289,7 +289,7 @@ const VerificationFlowScreen = ({ navigation }) => {
                     birthDate: '0',
                     expiryDate: '2'
                 }
-            };
+            }; */
 
             // 🔴 HANGİ VERİYİ KULLANMAK İSTİYORSUNUZ?
             // Seçenek 1: OCR'dan gelen gerçek veri (ŞU AN AKTİF) ✅

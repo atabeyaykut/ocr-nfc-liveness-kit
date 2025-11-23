@@ -238,11 +238,15 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
             Log.d(TAG, "✓ documentNo extracted: '" + documentNo + "'");
 
             String birthDate = mrzSeed.hasKey("birthDate") ? mrzSeed.getString("birthDate") : "";
-            Log.d(TAG, "✓ birthDate extracted: '" + birthDate + "'");
+            Log.d(TAG, "✓ birthDate extracted (raw): '" + birthDate + "'");
+            birthDate = convertDateToMRZFormat(birthDate);
+            Log.d(TAG, "✓ birthDate converted to MRZ format: '" + birthDate + "'");
 
             String expiryDate = mrzSeed.hasKey("validUntil") ? mrzSeed.getString("validUntil")
                     : (mrzSeed.hasKey("expiryDate") ? mrzSeed.getString("expiryDate") : "");
-            Log.d(TAG, "✓ expiryDate extracted: '" + expiryDate + "'");
+            Log.d(TAG, "✓ expiryDate extracted (raw): '" + expiryDate + "'");
+            expiryDate = convertDateToMRZFormat(expiryDate);
+            Log.d(TAG, "✓ expiryDate converted to MRZ format: '" + expiryDate + "'");
 
             // NOTE: JMRTD BACKey automatically calculates check digits internally!
             // We must NOT append check digits manually - just pass raw values
@@ -480,6 +484,53 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
         event.putString("error", message);
         event.putDouble("timestamp", System.currentTimeMillis() / 1000.0);
         sendEvent("NFC_ERROR", event);
+    }
+
+    /**
+     * Convert date from dd.mm.yyyy or dd/mm/yyyy format to YYMMDD format
+     * If date is already in YYMMDD format (6 digits), return as-is
+     * 
+     * @param date Date string in various formats
+     * @return Date in YYMMDD format for MRZ
+     */
+    private String convertDateToMRZFormat(String date) {
+        if (date == null || date.isEmpty()) {
+            return "";
+        }
+
+        // Remove whitespace
+        date = date.trim();
+
+        // If already in YYMMDD format (6 digits), return as-is
+        if (date.matches("\\d{6}")) {
+            return date;
+        }
+
+        try {
+            // Handle dd.mm.yyyy or dd/mm/yyyy format
+            if (date.matches("\\d{2}[./]\\d{2}[./]\\d{4}")) {
+                String[] parts = date.split("[./]");
+                String day = parts[0];
+                String month = parts[1];
+                String year = parts[2];
+
+                // Convert to YY format (last 2 digits)
+                String yy = year.substring(2);
+
+                // Return YYMMDD
+                String result = yy + month + day;
+                Log.d(TAG, "Date conversion: " + date + " -> " + result);
+                return result;
+            }
+
+            // If format not recognized, log warning and return original
+            Log.w(TAG, "Unrecognized date format: " + date + " (expected YYMMDD or dd.mm.yyyy)");
+            return date;
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error converting date format: " + date, e);
+            return date;
+        }
     }
 
     @Override
