@@ -56,7 +56,9 @@ public class NFCPassportReaderJMRTD {
 
                 if (imageInfos != null && !imageInfos.isEmpty()) {
                     FaceImageInfo imageInfo = imageInfos.get(0);
-                    byte[] imageData = imageInfo.getImageBytes();
+                    // Get image as input stream and convert to byte array
+                    InputStream imageStream = imageInfo.getImage();
+                    byte[] imageData = readAllBytes(imageStream);
                     photoBase64 = Base64.encodeToString(imageData, Base64.NO_WRAP);
                     Log.d(TAG, "✓ DG2 photo extracted (" + imageData.length + " bytes)");
                 }
@@ -73,8 +75,16 @@ public class NFCPassportReaderJMRTD {
         result.putString("documentNo", mrzInfo.getDocumentNumber());
         result.putString("documentType", mrzInfo.getDocumentCode());
         result.putString("nationality", mrzInfo.getNationality());
-        result.putString("gender", mrzInfo.getGender() == MRZInfo.Gender.MALE ? "M"
-                : mrzInfo.getGender() == MRZInfo.Gender.FEMALE ? "F" : "X");
+
+        // Gender: getGender() returns enum, convert to string
+        String genderStr = "X";
+        try {
+            char genderChar = mrzInfo.getGender();
+            genderStr = String.valueOf(genderChar);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not parse gender: " + e.getMessage());
+        }
+        result.putString("gender", genderStr);
 
         // Names
         String primaryId = mrzInfo.getPrimaryIdentifier().replace("<", " ").trim();
@@ -123,6 +133,22 @@ public class NFCPassportReaderJMRTD {
             Log.w(TAG, "Could not format date: " + mrzDate);
             return mrzDate;
         }
+    }
+
+    /**
+     * Read all bytes from input stream
+     */
+    private static byte[] readAllBytes(InputStream inputStream) throws Exception {
+        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+        int nRead;
+        byte[] data = new byte[16384];
+
+        while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+            buffer.write(data, 0, nRead);
+        }
+
+        buffer.flush();
+        return buffer.toByteArray();
     }
 
     /**
