@@ -230,13 +230,30 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
         Log.d(TAG, "Reading passport with JMRTD BAC authentication");
         Log.d(TAG, "mrzSeed keys: " + (mrzSeed != null ? mrzSeed.toString() : "NULL"));
 
+        // Detailed logging of all mrzSeed fields
+        if (mrzSeed != null) {
+            Log.d(TAG, "=== mrzSeed detailed contents ===");
+            Log.d(TAG, "  tcNo: " + (mrzSeed.hasKey("tcNo") ? mrzSeed.getString("tcNo") : "MISSING"));
+            Log.d(TAG, "  documentNo: " + (mrzSeed.hasKey("documentNo") ? mrzSeed.getString("documentNo") : "MISSING"));
+            Log.d(TAG, "  serialNo: " + (mrzSeed.hasKey("serialNo") ? mrzSeed.getString("serialNo") : "MISSING"));
+            Log.d(TAG, "  birthDate: " + (mrzSeed.hasKey("birthDate") ? mrzSeed.getString("birthDate") : "MISSING"));
+            Log.d(TAG, "  validUntil: " + (mrzSeed.hasKey("validUntil") ? mrzSeed.getString("validUntil") : "MISSING"));
+            Log.d(TAG, "  expiryDate: " + (mrzSeed.hasKey("expiryDate") ? mrzSeed.getString("expiryDate") : "MISSING"));
+            Log.d(TAG, "=== end mrzSeed ===");
+        }
+
         PassportService passportService = null;
 
         try {
             // Extract MRZ components
-            // For Turkish ID cards, use TC No as document number for BAC authentication
-            String documentNo = mrzSeed.hasKey("tcNo") ? mrzSeed.getString("tcNo")
-                    : (mrzSeed.hasKey("documentNo") ? mrzSeed.getString("documentNo") : "");
+            // Prefer actual MRZ document number; fall back to TC No only if missing
+            String documentNo = mrzSeed.hasKey("documentNo") ? mrzSeed.getString("documentNo") : "";
+            if (documentNo.isEmpty() && mrzSeed.hasKey("serialNo")) {
+                documentNo = mrzSeed.getString("serialNo");
+            }
+            if (documentNo.isEmpty() && mrzSeed.hasKey("tcNo")) {
+                documentNo = mrzSeed.getString("tcNo");
+            }
             Log.d(TAG, "✓ documentNo extracted: '" + documentNo + "'");
 
             String birthDate = mrzSeed.hasKey("birthDate") ? mrzSeed.getString("birthDate") : "";
@@ -252,8 +269,12 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
 
             // NOTE: JMRTD BACKey automatically calculates check digits internally!
             // We must NOT append check digits manually - just pass raw values
-            Log.d(TAG, "BAC params (raw, NO manual check digits) - Doc: " + documentNo + ", Birth: " + birthDate
-                    + ", Expiry: " + expiryDate);
+            Log.d(TAG, "=== BAC KEY PARAMETERS ===");
+            Log.d(TAG, "  Document No (raw): '" + documentNo + "' (length: " + documentNo.length() + ")");
+            Log.d(TAG, "  Birth Date (MRZ): '" + birthDate + "' (length: " + birthDate.length() + ")");
+            Log.d(TAG, "  Expiry Date (MRZ): '" + expiryDate + "' (length: " + expiryDate.length() + ")");
+            Log.d(TAG, "  NOTE: JMRTD will calculate check digits automatically");
+            Log.d(TAG, "=== end BAC params ===");
 
             // Validate inputs
             if (documentNo.isEmpty() || birthDate.length() != 6 || expiryDate.length() != 6) {
@@ -325,7 +346,9 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 }
             }
 
-        } catch (CardServiceException e) {
+        } catch (
+
+        CardServiceException e) {
             Log.e(TAG, "❌ CardService error", e);
             Log.e(TAG, "SW: " + Integer.toHexString(e.getSW()));
             String errorMsg = "BAC hatası: " + getCardServiceErrorMessage(e);
