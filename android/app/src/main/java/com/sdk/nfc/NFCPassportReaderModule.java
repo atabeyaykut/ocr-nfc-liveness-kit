@@ -29,6 +29,12 @@ import org.jmrtd.lds.iso19794.FaceInfo;
 import net.sf.scuba.smartcards.CardService;
 import net.sf.scuba.smartcards.CardServiceException;
 
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -346,9 +352,87 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 System.arraycopy(challengeResp, 0, rndICC, 0, 8);
                 Log.d(TAG, "RND.ICC (card challenge): " + bytesToHex(rndICC));
 
-                // TODO: Implement remaining BAC steps
-                // For now, throw informative error with detailed logs
-                throw new IOException("Manuel BAC implementation in progress - CHECK LOGS ABOVE");
+                // 4. Generate RND.IFD and K.IFD (random data for authentication)
+                SecureRandom random = new SecureRandom();
+                byte[] rndIFD = new byte[8];
+                byte[] kIFD = new byte[16];
+                random.nextBytes(rndIFD);
+                random.nextBytes(kIFD);
+                Log.d(TAG, "RND.IFD (our challenge): " + bytesToHex(rndIFD));
+                Log.d(TAG, "K.IFD (our key): " + bytesToHex(kIFD));
+
+                // 5. Derive Kenc and Kmac from MRZ key
+                byte[] mrzKeyBytes = mrzKey.getBytes("UTF-8");
+                Log.d(TAG, "MRZ Key bytes: " + bytesToHex(mrzKeyBytes));
+
+                byte[] kenc = deriveKey(mrzKeyBytes, (byte) 0x01);
+                byte[] kmac = deriveKey(mrzKeyBytes, (byte) 0x02);
+                Log.d(TAG, "Kenc (encryption key): " + bytesToHex(kenc));
+                Log.d(TAG, "Kmac (MAC key): " + bytesToHex(kmac));
+
+                // 6. Build authentication data: RND.IFD || RND.ICC || K.IFD
+                byte[] authData = new byte[32];
+                System.arraycopy(rndIFD, 0, authData, 0, 8);
+                System.arraycopy(rndICC, 0, authData, 8, 8);
+                System.arraycopy(kIFD, 0, authData, 16, 16);
+                Log.d(TAG, "Auth data (plain): " + bytesToHex(authData));
+
+                // 7. Encrypt with 3DES CBC
+                byte[] encryptedAuthData = encrypt3DES(authData, kenc);
+                Log.d(TAG, "Auth data (encrypted): " + bytesToHex(encryptedAuthData));
+
+                // 8. Calculate MAC over encrypted data
+                byte[] mac = calculateMAC(encryptedAuthData, kmac);
+                Log.d(TAG, "MAC: " + bytesToHex(mac));
+
+                // 9. Build EXTERNAL AUTHENTICATE command
+                byte[] extAuthCmd = buildExternalAuthCmd(encryptedAuthData, mac);
+                Log.d(TAG, ">> EXTERNAL AUTHENTICATE: " + bytesToHex(extAuthCmd));
+
+                byte[] extAuthResp = isoDep.transceive(extAuthCmd);
+                Log.d(TAG, "<< Response: " + bytesToHex(extAuthResp) + " (SW: " + getSW(extAuthResp) + ")");
+
+                if (!isSuccessSW(extAuthResp)) {
+                    throw new IOException("EXTERNAL AUTHENTICATE failed: SW=" + getSW(extAuthResp));
+                }
+
+                Log.d(TAG, "✓ BAC authentication successful!");
+
+                // 10. Extract encrypted response and verify
+                byte[] encryptedResp = new byte[extAuthResp.length - 2];
+                System.arraycopy(extAuthResp, 0, encryptedResp, 0, encryptedResp.length);
+                Log.d(TAG, "Encrypted response: " + bytesToHex(encryptedResp));
+
+                // Decrypt response
+                byte[] decryptedResp = decrypt3DES(encryptedResp, kenc);
+                Log.d(TAG, "Decrypted response: " + bytesToHex(decryptedResp));
+
+                // Extract session keys from decrypted response
+                byte[] rndICCVerify = new byte[8];
+                byte[] rndIFDVerify = new byte[8];
+                byte[] kICCBytes = new byte[16];
+                System.arraycopy(decryptedResp, 0, rndICCVerify, 0, 8);
+                System.arraycopy(decryptedResp, 8, rndIFDVerify, 0, 8);
+                System.arraycopy(decryptedResp, 16, kICCBytes, 0, 16);
+
+                Log.d(TAG, "RND.ICC (verify): " + bytesToHex(rndICCVerify));
+                Log.d(TAG, "RND.IFD (verify): " + bytesToHex(rndIFDVerify));
+                Log.d(TAG, "K.ICC: " + bytesToHex(kICCBytes));
+
+                // Verify challenges match
+                if (!java.util.Arrays.equals(rndICC, rndICCVerify)) {
+                    throw new IOException("RND.ICC verification failed!");
+                }
+                if (!java.util.Arrays.equals(rndIFD, rndIFDVerify)) {
+                    throw new IOException("RND.IFD verification failed!");
+                }
+
+                Log.d(TAG, "✓ Challenge verification successful!");
+                Log.d(TAG, "✓ BAC COMPLETE - Secure channel established");
+
+                // Now we can read passport data with secure messaging
+                // TODO: Implement secure messaging for data reading
+                throw new IOException("BAC successful but secure messaging not yet implemented");
 
             } finally {
                 if (passportService != null) {
@@ -632,6 +716,100 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
      */
     private boolean isSuccessSW(byte[] response) {
         return "9000".equals(getSW(response));
+    }
+
+    /**
+     * Derive encryption/MAC key from MRZ key using SHA-1 and DES3
+     */
+    private byte[] deriveKey(byte[] mrzKey, byte mode) throws Exception {
+        // ICAO 9303: K = SHA-1(mrzKey || 00 00 00 mode) truncated to 16 bytes
+        MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+        sha1.update(mrzKey);
+        sha1.update(new byte[] { 0x00, 0x00, 0x00, mode });
+        byte[] hash = sha1.digest();
+
+        byte[] key = new byte[16];
+        System.arraycopy(hash, 0, key, 0, 16);
+
+        // Adjust DES parity bits
+        adjustDESParity(key);
+        return key;
+    }
+
+    /**
+     * Adjust DES parity bits (each byte must have odd parity)
+     */
+    private void adjustDESParity(byte[] key) {
+        for (int i = 0; i < key.length; i++) {
+            int b = key[i] & 0xFE; // Clear parity bit
+            int parity = 0;
+            for (int j = 0; j < 7; j++) {
+                parity ^= (b >> j) & 1;
+            }
+            key[i] = (byte) (b | (parity == 0 ? 1 : 0));
+        }
+    }
+
+    /**
+     * Encrypt data with 3DES CBC (zero IV)
+     */
+    private byte[] encrypt3DES(byte[] data, byte[] key) throws Exception {
+        SecretKeySpec keySpec = new SecretKeySpec(key, "DESede");
+        Cipher cipher = Cipher.getInstance("DESede/CBC/NoPadding");
+        IvParameterSpec iv = new IvParameterSpec(new byte[8]); // Zero IV
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, iv);
+        return cipher.doFinal(data);
+    }
+
+    /**
+     * Decrypt data with 3DES CBC (zero IV)
+     */
+    private byte[] decrypt3DES(byte[] data, byte[] key) throws Exception {
+        SecretKeySpec keySpec = new SecretKeySpec(key, "DESede");
+        Cipher cipher = Cipher.getInstance("DESede/CBC/NoPadding");
+        IvParameterSpec iv = new IvParameterSpec(new byte[8]); // Zero IV
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, iv);
+        return cipher.doFinal(data);
+    }
+
+    /**
+     * Calculate MAC (CBC-MAC with 3DES)
+     */
+    private byte[] calculateMAC(byte[] data, byte[] key) throws Exception {
+        // Pad data to 8-byte blocks
+        int padLen = 8 - (data.length % 8);
+        byte[] paddedData = new byte[data.length + padLen];
+        System.arraycopy(data, 0, paddedData, 0, data.length);
+        paddedData[data.length] = (byte) 0x80; // ISO 9797-1 padding
+
+        // CBC-MAC
+        SecretKeySpec keySpec = new SecretKeySpec(key, "DESede");
+        Cipher cipher = Cipher.getInstance("DESede/CBC/NoPadding");
+        IvParameterSpec iv = new IvParameterSpec(new byte[8]);
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, iv);
+        byte[] encrypted = cipher.doFinal(paddedData);
+
+        // Return last 8 bytes
+        byte[] mac = new byte[8];
+        System.arraycopy(encrypted, encrypted.length - 8, mac, 0, 8);
+        return mac;
+    }
+
+    /**
+     * Build EXTERNAL AUTHENTICATE APDU command
+     */
+    private byte[] buildExternalAuthCmd(byte[] encData, byte[] mac) {
+        // Format: 00 82 00 00 Lc [encData || mac]
+        byte[] cmd = new byte[5 + encData.length + mac.length + 1];
+        cmd[0] = 0x00;
+        cmd[1] = (byte) 0x82;
+        cmd[2] = 0x00;
+        cmd[3] = 0x00;
+        cmd[4] = (byte) (encData.length + mac.length);
+        System.arraycopy(encData, 0, cmd, 5, encData.length);
+        System.arraycopy(mac, 0, cmd, 5 + encData.length, mac.length);
+        cmd[cmd.length - 1] = 0x28; // Le = 40 bytes expected
+        return cmd;
     }
 
     @Override
