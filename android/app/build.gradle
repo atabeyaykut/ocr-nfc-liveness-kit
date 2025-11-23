@@ -125,6 +125,10 @@ dependencies {
   implementation "org.bouncycastle:bcprov-jdk15on:1.70"
   implementation "org.bouncycastle:bcpkix-jdk15on:1.70"
   
+  // JMRTD for ePassport/NFC BAC/PACE authentication
+  implementation "org.jmrtd:jmrtd:0.7.34"
+  implementation "net.sf.scuba:scuba-sc-android:0.0.23"
+  
   // OkHttp3 for secure networking with certificate pinning
   implementation "com.squareup.okhttp3:okhttp:4.12.0"
 
