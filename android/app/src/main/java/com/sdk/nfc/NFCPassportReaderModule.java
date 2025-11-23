@@ -244,7 +244,29 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                     : (mrzSeed.hasKey("expiryDate") ? mrzSeed.getString("expiryDate") : "");
             Log.d(TAG, "✓ expiryDate extracted: '" + expiryDate + "'");
 
-            Log.d(TAG, "BAC params - Doc: " + documentNo + ", Birth: " + birthDate + ", Expiry: " + expiryDate);
+            // Extract MRZ check digits (CRITICAL for BAC!)
+            String docCheckDigit = "";
+            String birthCheckDigit = "";
+            String expiryCheckDigit = "";
+
+            if (mrzSeed.hasKey("mrzCheckDigits")) {
+                ReadableMap checkDigits = mrzSeed.getMap("mrzCheckDigits");
+                if (checkDigits != null) {
+                    docCheckDigit = checkDigits.hasKey("documentNumber") ? checkDigits.getString("documentNumber") : "";
+                    birthCheckDigit = checkDigits.hasKey("birthDate") ? checkDigits.getString("birthDate") : "";
+                    expiryCheckDigit = checkDigits.hasKey("expiryDate") ? checkDigits.getString("expiryDate") : "";
+                    Log.d(TAG, "✓ Check digits - Doc: '" + docCheckDigit + "', Birth: '" + birthCheckDigit
+                            + "', Expiry: '" + expiryCheckDigit + "'");
+                }
+            }
+
+            // Append check digits for BAC (REQUIRED!)
+            String documentNoWithCheck = documentNo + docCheckDigit;
+            String birthDateWithCheck = birthDate + birthCheckDigit;
+            String expiryDateWithCheck = expiryDate + expiryCheckDigit;
+
+            Log.d(TAG, "BAC params WITH check digits - Doc: " + documentNoWithCheck + ", Birth: " + birthDateWithCheck
+                    + ", Expiry: " + expiryDateWithCheck);
 
             // Validate inputs
             if (documentNo.isEmpty() || birthDate.length() != 6 || expiryDate.length() != 6) {
@@ -252,10 +274,10 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                         + birthDate + ", Expiry: " + expiryDate);
             }
 
-            Log.d(TAG, "Creating BAC key from MRZ data");
+            Log.d(TAG, "Creating BAC key from MRZ data WITH check digits");
 
-            // Create BAC key using JMRTD
-            BACKeySpec bacKey = new BACKey(documentNo, birthDate, expiryDate);
+            // Create BAC key using JMRTD - WITH check digits appended
+            BACKeySpec bacKey = new BACKey(documentNoWithCheck, birthDateWithCheck, expiryDateWithCheck);
             Log.d(TAG, "✓ BAC key created successfully");
 
             // Initialize IsoDep
