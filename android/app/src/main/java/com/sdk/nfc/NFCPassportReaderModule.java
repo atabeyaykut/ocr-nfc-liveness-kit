@@ -284,6 +284,17 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
 
             Log.d(TAG, "Creating BAC key - JMRTD will calculate check digits automatically");
 
+            // Debug: Calculate check digits manually to verify
+            String docCheckDigit = calculateCheckDigit(documentNo);
+            String birthCheckDigit = calculateCheckDigit(birthDate);
+            String expiryCheckDigit = calculateCheckDigit(expiryDate);
+
+            Log.d(TAG, "=== CALCULATED CHECK DIGITS ===");
+            Log.d(TAG, "  Doc check digit: '" + docCheckDigit + "' (expected from MRZ: ?)");
+            Log.d(TAG, "  Birth check digit: '" + birthCheckDigit + "' (expected from MRZ: 0)");
+            Log.d(TAG, "  Expiry check digit: '" + expiryCheckDigit + "' (expected from MRZ: 2)");
+            Log.d(TAG, "=== end check digits ===");
+
             // Create BAC key using JMRTD - check digits calculated internally
             BACKeySpec bacKey = new BACKey(documentNo, birthDate, expiryDate);
             Log.d(TAG, "✓ BAC key created successfully");
@@ -556,6 +567,38 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
             Log.e(TAG, "Error converting date format: " + date, e);
             return date;
         }
+    }
+
+    /**
+     * Calculate MRZ check digit according to ICAO 9303
+     */
+    private String calculateCheckDigit(String input) {
+        if (input == null || input.isEmpty()) {
+            return "0";
+        }
+
+        int[] weights = { 7, 3, 1 };
+        int sum = 0;
+
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            int value;
+
+            if (c >= '0' && c <= '9') {
+                value = c - '0';
+            } else if (c >= 'A' && c <= 'Z') {
+                value = c - 'A' + 10;
+            } else if (c == '<') {
+                value = 0;
+            } else {
+                // Invalid character, skip
+                continue;
+            }
+
+            sum += value * weights[i % 3];
+        }
+
+        return String.valueOf(sum % 10);
     }
 
     @Override
