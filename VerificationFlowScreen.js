@@ -27,6 +27,32 @@ const { NFCReaderModule } = require('./modules/nfc/NFCReaderModule');
 
 const { width: screenWidth } = Dimensions.get('window');
 
+// Manual NFC debug toggle (only for local testing)
+const USE_MANUAL_NFC_DEBUG = true;
+const MANUAL_NFC_TEST_DATA = {
+    tcNo: '10945153402',
+    name: 'ATABEY',
+    surname: 'AYKUT',
+    birthDate: '980917',
+    validUntil: '330806',
+    expiryDate: '330806',
+    documentNo: 'A43D64618',
+    serialNo: 'A43D64618',
+    gender: 'M',
+    nationality: 'TUR',
+    mrzCheckDigits: {
+        documentNo: '1',
+        birthDate: '0',
+        expiryDate: '2',
+        composite: '4',
+    },
+    mrzRawLines: [
+        'I<TURA43D646181<10945153402<<<',
+        '9809170M3308062TUR<<<<<<<<<<<4',
+        'AYKUT<<ATABEY<<<<<<<<<<<<<<<<<',
+    ],
+};
+
 const CAPTURE_SEQUENCE_COUNT = 3;
 const CAPTURE_DELAY_MS = 200;
 const SIDE = {
@@ -267,39 +293,14 @@ const VerificationFlowScreen = ({ navigation }) => {
 
             addLog('➡️ NFC başlatılıyor...');
 
-            // ============================================
-            // 🧪 MANUEL TEST VERİLERİ - BAC DEBUG
-            // ============================================
-            // OCR'dan gelen gerçek veriyi kullanmak için:
-            // startNfcFlow(result.data);
+            // Hızlı NFC testi için manuel veri seçimi
+            const dataToSend = USE_MANUAL_NFC_DEBUG ? MANUAL_NFC_TEST_DATA : result.data;
 
-            // Manuel test verisi kullanmak için aşağıdaki test verisini düzenleyin:
-            /* const manualTestData = {
-                tcNo: '10945153402',              // 11 haneli TC No
-                name: 'ATABEY',                   // İsim (BÜYÜK HARF)
-                surname: 'AYKUT',                // Soyisim (BÜYÜK HARF)
-                birthDate: '980917',              // YYMMDD formatında (örn: 1 Ocak 1990)
-                validUntil: '330806',             // YYMMDD formatında (örn: 1 Ocak 2030)
-                documentNo: 'A43D64618',          // Belge/Seri No (örn: U12345678)
-                serialNo: 'A43D64618',            // Seri No
-                gender: 'E',                      // E veya K
-                nationality: 'TUR',               // 3 haneli ülke kodu
-                mrzCheckDigits: {                 // MRZ check digit'leri (opsiyonel)
-                    documentNumber: '1',
-                    birthDate: '0',
-                    expiryDate: '2'
-                }
-            }; */
-
-            // 🔴 HANGİ VERİYİ KULLANMAK İSTİYORSUNUZ?
-            // Seçenek 1: OCR'dan gelen gerçek veri (ŞU AN AKTİF) ✅
-            const dataToSend = result.data;
-
-            // Seçenek 2: Manuel test verisi (DEVRE DIŞI)
-            // const dataToSend = manualTestData;
-
-            addLog('✅ OCR VERİSİ KULLANILIYOR!');
-            // ============================================
+            if (USE_MANUAL_NFC_DEBUG) {
+                addLog('🧪 MANUEL NFC TEST VERİSİ KULLANILIYOR!');
+            } else {
+                addLog('✅ OCR VERİSİ KULLANILIYOR!');
+            }
 
             // Start NFC flow
             setTimeout(() => {
