@@ -27,21 +27,56 @@ class MockNFCReader {
   async readNFCData(options = {}) {
     console.log(`\n📡 Reading NFC Data (timeout: ${options.timeout || 10000}ms)...`);
     this.status = 'scanning';
-    
+
     await this.delay(500);
     console.log('🔍 Scanning for NFC card...');
-    
+
     await this.delay(1000);
     console.log('📖 Card detected, reading data...');
     this.status = 'reading';
-    
+
     await this.delay(1500);
     console.log('⚙️ Processing data...');
     this.status = 'processing';
-    
+
     await this.delay(500);
-    
-    const mockData = {
+
+    // Gerçek test verisini kullan
+    const useRealData = options.useRealData || false;
+
+    const mockData = useRealData ? {
+      // Gerçek MRZ verilerine dayalı test datası
+      firstName: 'ATABEY',
+      lastName: 'AYKUT',
+      idNumber: '10945153402',
+      birthDate: '17.09.1998',
+      birthPlace: 'İSTANBUL',
+      nationality: 'T.C.',
+      gender: 'E',
+      serialNumber: 'A43D646181',
+      documentNumber: 'A43D646181',
+      issueDate: '01.01.2023',
+      expiryDate: '06.08.2033',
+      cardType: 'Turkish ID Card',
+      mrz: {
+        line1: 'I<TURA43D646181<10945153402<<<',
+        line2: '9809170M3308062TUR<<<<<<<<<<<4',
+        line3: 'AYKUT<<ATABEY<<<<<<<<<<<<<<<<<'
+      },
+      nfcData: {
+        uid: '04:E1:F2:A3:B4:C5:D6',
+        technology: 'IsoDep',
+        readTime: new Date().toISOString(),
+        signalStrength: Math.floor(Math.random() * 20) + 75
+      },
+      verification: {
+        isValid: true,
+        checksum: 'VALID',
+        digitalSignature: 'VERIFIED',
+        readMethod: 'REAL_MRZ_TEST',
+        mrzMatch: true
+      }
+    } : {
       firstName: 'AHMET',
       lastName: 'YILMAZ',
       idNumber: '12345678901',
@@ -67,10 +102,10 @@ class MockNFCReader {
         readMethod: 'MOCK_TEST'
       }
     };
-    
+
     this.status = 'success';
     console.log('✅ Read complete!\n');
-    
+
     return mockData;
   }
 
@@ -136,15 +171,16 @@ async function showMenu() {
   return new Promise((resolve) => {
     console.log('\n┌─────────────────────────────────────┐');
     console.log('│   NFC TEST MENÜSÜ                   │');
-    console.log('├─────────────────────────────────────┤');
-    console.log('│  1. NFC Oku (5 saniye timeout)     │');
-    console.log('│  2. NFC Oku (10 saniye timeout)    │');
-    console.log('│  3. NFC Oku (15 saniye timeout)    │');
-    console.log('│  4. Hızlı Test (3 saniye)          │');
-    console.log('│  5. Çıkış                           │');
-    console.log('└─────────────────────────────────────┘\n');
+    console.log('├─────────────────────────────────────────────┐');
+    console.log('│  1. NFC Oku (5 saniye timeout)            │');
+    console.log('│  2. NFC Oku (10 saniye timeout)           │');
+    console.log('│  3. NFC Oku (15 saniye timeout)           │');
+    console.log('│  4. Hızlı Test (3 saniye)                 │');
+    console.log('│  5. 🆔 GERÇEK MRZ TEST (kendi bilgin)  │');
+    console.log('│  6. Çıkış                                  │');
+    console.log('└─────────────────────────────────────────────┘\n');
 
-    rl.question('Seçiminiz (1-5): ', (answer) => {
+    rl.question('Seçiminiz (1-6): ', (answer) => {
       rl.close();
       resolve(answer);
     });
@@ -160,16 +196,16 @@ async function runNFCTest() {
   console.log('╚══════════════════════════════════════════════════════════╝\n');
 
   const nfcReader = new MockNFCReader();
-  
+
   try {
     // Initialize NFC
     await nfcReader.startNFC();
-    
+
     // Interactive loop
     let running = true;
     while (running) {
       const choice = await showMenu();
-      
+
       switch (choice) {
         case '1':
           try {
@@ -179,7 +215,7 @@ async function runNFCTest() {
             console.error('❌ Error:', error.message);
           }
           break;
-          
+
         case '2':
           try {
             const data = await nfcReader.readNFCData({ timeout: 10000 });
@@ -188,7 +224,7 @@ async function runNFCTest() {
             console.error('❌ Error:', error.message);
           }
           break;
-          
+
         case '3':
           try {
             const data = await nfcReader.readNFCData({ timeout: 15000 });
@@ -197,7 +233,7 @@ async function runNFCTest() {
             console.error('❌ Error:', error.message);
           }
           break;
-          
+
         case '4':
           try {
             const data = await nfcReader.readNFCData({ timeout: 3000 });
@@ -206,23 +242,45 @@ async function runNFCTest() {
             console.error('❌ Error:', error.message);
           }
           break;
-          
+
         case '5':
+          try {
+            console.log('\n🆔 Gerçek MRZ verileriniz kullanılıyor...');
+            console.log('📍 MRZ: I<TURA43D646181<10945153402<<<');
+            console.log('📍 Ad Soyad: ATABEY AYKUT');
+            console.log('📍 TC No: 10945153402\n');
+            const data = await nfcReader.readNFCData({ timeout: 10000, useRealData: true });
+            displayNFCData(data);
+            if (data.mrz) {
+              console.log('\n┌──────────────────────────────────────────────────────────┐');
+              console.log('│               MRZ BİLGİLERİ                              │');
+              console.log('├──────────────────────────────────────────────────────────┤');
+              console.log(`│  Satır 1: ${data.mrz.line1}       │`);
+              console.log(`│  Satır 2: ${data.mrz.line2}       │`);
+              console.log(`│  Satır 3: ${data.mrz.line3}       │`);
+              console.log('└──────────────────────────────────────────────────────────┘\n');
+            }
+          } catch (error) {
+            console.error('❌ Error:', error.message);
+          }
+          break;
+
+        case '6':
           console.log('\n👋 Çıkılıyor...\n');
           running = false;
           break;
-          
+
         default:
-          console.log('\n⚠️  Geçersiz seçim! Lütfen 1-5 arası bir sayı girin.\n');
+          console.log('\n⚠️  Geçersiz seçim! Lütfen 1-6 arası bir sayı girin.\n');
       }
     }
-    
+
     // Cleanup
     await nfcReader.stopNFC();
-    
+
     console.log('✅ Test tamamlandı!\n');
     process.exit(0);
-    
+
   } catch (error) {
     console.error('\n❌ Test başarısız:', error.message);
     process.exit(1);
