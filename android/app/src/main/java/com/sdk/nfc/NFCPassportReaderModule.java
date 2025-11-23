@@ -234,7 +234,9 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
 
         try {
             // Extract MRZ components
-            String documentNo = mrzSeed.hasKey("documentNo") ? mrzSeed.getString("documentNo") : "";
+            // For Turkish ID cards, use TC No as document number for BAC authentication
+            String documentNo = mrzSeed.hasKey("tcNo") ? mrzSeed.getString("tcNo")
+                    : (mrzSeed.hasKey("documentNo") ? mrzSeed.getString("documentNo") : "");
             Log.d(TAG, "✓ documentNo extracted: '" + documentNo + "'");
 
             String birthDate = mrzSeed.hasKey("birthDate") ? mrzSeed.getString("birthDate") : "";
