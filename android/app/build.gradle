@@ -80,7 +80,14 @@ android {
         signingConfig signingConfigs.release
         minifyEnabled true
         shrinkResources true
-        proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        // Use optimize version for better compatibility with React Native
+        proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        
+        // Ensure JS bundle is included
+        bundleInRelease = true
+        
+        // Disable code obfuscation for better debugging (optional)
+        // minifyEnabled false
     }
   }
 
