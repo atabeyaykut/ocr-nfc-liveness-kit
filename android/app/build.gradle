@@ -3,7 +3,7 @@
 
 plugins {
   id 'com.android.application'
-  // id 'com.facebook.react'  // Commented out - not required for native modules
+  id 'com.facebook.react'
   id 'jacoco'
 }
 
@@ -32,8 +32,12 @@ android {
 
   // Add Hermes configuration for Reanimated compatibility
   project.ext.react = [
-    enableHermes: true,
-    hermesCommand: "../../node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc"
+    entryFile      : "index.js",
+    bundleCommand  : "bundle",
+    bundleInDebug  : true,
+    bundleInRelease: true,
+    enableHermes   : true,
+    hermesCommand  : "../../node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc"
   ]
 
   buildFeatures {
