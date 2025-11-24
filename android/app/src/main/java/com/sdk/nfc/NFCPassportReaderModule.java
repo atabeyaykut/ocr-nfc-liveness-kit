@@ -28,9 +28,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.security.spec.AlgorithmParameterSpec;
-import java.util.List;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -248,9 +249,14 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
             passportService.doBAC(bacKey);
             Log.e(TAG, "[CRITICAL] ✓ BAC authentication successful via JMRTD");
 
-            WritableMap passportData = readPassportDataWithJMRTD(passportService);
-            Log.d(TAG, "✓ Passport data read via JMRTD");
-            sendSuccessEvent(passportData);
+            try {
+                WritableMap passportData = readPassportDataWithJMRTD(passportService);
+                Log.d(TAG, "✓ Passport data read via JMRTD");
+                sendSuccessEvent(passportData);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to parse passport data", e);
+                sendErrorEvent("NFC verisi okunamadı: " + e.getMessage());
+            }
 
         } catch (IllegalArgumentException e) {
             Log.e(TAG, "Invalid MRZ data", e);
@@ -294,8 +300,6 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
             return true;
         } catch (GeneralSecurityException e) {
             Log.e(TAG, "PACE key derivation failed", e);
-        } catch (IOException e) {
-            Log.e(TAG, "PACE I/O error", e);
         }
         return false;
     }
@@ -308,7 +312,7 @@ public class NFCPassportReaderModule extends ReactContextBaseJavaModule {
                 return null;
             }
             CardAccessFile cardAccessFile = new CardAccessFile(inputStream);
-            List<SecurityInfo> infos = cardAccessFile.getSecurityInfos();
+            Collection<SecurityInfo> infos = cardAccessFile.getSecurityInfos();
             if (infos == null) {
                 return null;
             }
