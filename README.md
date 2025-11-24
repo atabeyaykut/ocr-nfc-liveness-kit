@@ -227,6 +227,23 @@ Add permissions to `android/app/src/main/AndroidManifest.xml`:
 
 ## 🎮 Demo Applications
 
+### 📦 Standalone Android Build (Metro-Suz)
+
+Metro sunucusuna ihtiyaç duymayan tam bağımsız bir APK üretmek için:
+
+1. Gereksinimler: `npm install` sonrası `android` klasöründe gerekli SDK ayarlarının tamamlandığından emin olun.
+2. Aşağıdaki komutu çalıştırın. JS bundle otomatik olarak derlemeye gömülecek, Metro açılmayacaktır:
+   ```bash
+   npm run android:standalone
+   ```
+3. Çıktı dosyası `android/app/build/outputs/apk/release/` altında (`*-armeabi-v7a-release.apk`, `*-arm64-v8a-release.apk` ve `*-universal-release.apk`).
+4. İstediğiniz APK’yı cihaza yükleyin:
+   ```bash
+   adb install -r android/app/build/outputs/apk/release/app-universal-release.apk
+   ```
+
+> Not: Debug build’leri de bundle içerir; Metro’ya bağlanmaya çalışmaz. Yeni JS değişiklikleri için komutu yeniden çalıştırmanız yeterlidir.
+
 ### Liveness Detection Demo
 ```bash
 # Run the final demo with sequential commands

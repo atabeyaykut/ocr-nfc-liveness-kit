@@ -11,6 +11,7 @@
   "scripts": {
     "test": "jest",
     "android": "react-native run-android",
+    "android:standalone": "cd android && ./gradlew clean assembleRelease",
     "ios": "react-native run-ios",
     "start": "react-native start",
     "lint": "eslint .",

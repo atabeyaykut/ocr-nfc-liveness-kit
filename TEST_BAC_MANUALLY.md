@@ -44,11 +44,20 @@ A43D646181 + 980917 + 330806
 ### 3. Manuel Test
 
 ```bash
-# 1. Build
-cd android && ./gradlew clean assembleDebug
+## Adımlar
 
-# 2. Install
-adb install app/build/outputs/apk/debug/app-debug.apk
+1. `npm install`
+2. `cd android`
+3. `./gradlew clean`
+4. `../node_modules/.bin/react-native start`
+5. `../node_modules/.bin/react-native run-android`
+
+### Metro Olmadan Standalone APK
+
+```
+npm run android:standalone
+adb install -r android/app/build/outputs/apk/release/app-universal-release.apk
+```
 
 # 3. Native logları izle
 adb logcat -s NFCPassportReader:D
