@@ -35,7 +35,7 @@ android {
     entryFile      : "index.js",
     bundleCommand  : "bundle",
     bundleInDebug  : true,
-    bundleInRelease: true,
+    bundleInRelease: true,  // Ensure JS bundle is included in release APK
     enableHermes   : true,
     hermesCommand  : "../../node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc"
   ]
@@ -82,12 +82,6 @@ android {
         shrinkResources true
         // Use optimize version for better compatibility with React Native
         proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        
-        // Ensure JS bundle is included
-        bundleInRelease = true
-        
-        // Disable code obfuscation for better debugging (optional)
-        // minifyEnabled false
     }
   }
 
