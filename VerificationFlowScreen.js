@@ -24,79 +24,22 @@ import LivenessModule from './modules/liveness/LivenessModule';
 
 const OCRReaderModule = require('./modules/ocr/OCRReaderModule').default || require('./modules/ocr/OCRReaderModule');
 const { NFCReaderModule } = require('./modules/nfc/NFCReaderModule');
-const mockNFCData = require('./mock/nfcData');
-const MRZParser = require('./utils/mrzParser');
 
 const { width: screenWidth } = Dimensions.get('window');
 
-// Manual NFC debug toggle (only for local testing)
-const USE_MANUAL_NFC_DEBUG = true;
-
-const FALLBACK_MANUAL_NFC_TEST_DATA = {
-    tcNo: '10945153402',
-    name: 'ATABEY',
-    surname: 'AYKUT',
-    birthDate: '980917',
-    validUntil: '330806',
-    expiryDate: '330806',
-    documentNo: 'A43D64618',
-    serialNo: 'A43D64618',
-    gender: 'M',
-    nationality: 'TUR',
-    mrzCheckDigits: {
-        documentNo: '1',
-        birthDate: '0',
-        expiryDate: '2',
-        composite: '4',
-    },
-    mrzRawLines: [
-        'I<TURA43D646181<10945153402<<<',
-        '9809170M3308062TUR<<<<<<<<<<<4',
-        'AYKUT<<ATABEY<<<<<<<<<<<<<<<<<',
-    ],
-};
-
-const buildManualNfcTestData = () => {
-    const realTest = mockNFCData?.realTest;
-    if (!realTest) {
-        return null;
-    }
-
-    const { cardData = {}, mrz = {}, parsedMRZ } = realTest;
-    let parsed = parsedMRZ;
-
-    if ((!parsed || !parsed.documentNumber) && mrz.line1 && mrz.line2 && mrz.line3) {
-        parsed = MRZParser.parse(mrz.line1, mrz.line2, mrz.line3);
-    }
-
-    if (!parsed) {
-        return null;
-    }
-
-    const documentNumber = (parsed.documentNumber || cardData.documentNumber || '').replace(/<+/g, '');
-
-    // MRZ formatındaki tarihler zaten YYMMDD formatında (örn: '980917', '330806')
-    // Java tarafı bu formatı bekliyor
-    const testData = {
-        tcNo: parsed.idNumber || cardData.idNumber,
-        name: cardData.firstName || (parsed.givenNames || '').split(' ')[0] || parsed.givenNames,
-        surname: cardData.lastName || parsed.surname,
-        birthDate: parsed.birthDate, // MRZ format: YYMMDD
-        validUntil: parsed.expiryDate, // MRZ format: YYMMDD
-        expiryDate: parsed.expiryDate, // MRZ format: YYMMDD
-        documentNo: documentNumber || cardData.serialNumber,
-        serialNo: cardData.serialNumber || documentNumber,
-        gender: realTest.parsedMRZ?.gender || 'M',
-        nationality: parsed.nationality || cardData.nationality,
-        mrzCheckDigits: parsed.checksums,
-        mrzRawLines: [mrz.line1, mrz.line2, mrz.line3].filter(Boolean),
-    };
-
-    console.log('[VerificationFlow] 🔐 buildManualNfcTestData output:', JSON.stringify(testData, null, 2));
-    return testData;
-};
-
-const MANUAL_NFC_TEST_DATA = buildManualNfcTestData() || FALLBACK_MANUAL_NFC_TEST_DATA;
+const SHARED_FIELDS = [
+    { key: 'tcNo', label: 'TC No' },
+    { key: 'documentNo', label: 'Belge No' },
+    { key: 'serialNo', label: 'Seri No' },
+    { key: 'name', label: 'Ad' },
+    { key: 'surname', label: 'Soyad' },
+    { key: 'fullName', label: 'Ad Soyad' },
+    { key: 'birthDate', label: 'Doğum Tarihi' },
+    { key: 'validUntil', label: 'Geçerlilik' },
+    { key: 'expiryDate', label: 'Bitiş Tarihi' },
+    { key: 'nationality', label: 'Uyruk' },
+    { key: 'gender', label: 'Cinsiyet' },
+];
 
 const DISPLAY_TRUNCATE_LENGTH = 180;
 const LOG_TRUNCATE_LENGTH = 90;
@@ -166,6 +109,7 @@ const VerificationFlowScreen = ({ navigation }) => {
     const [ocrResult, setOcrResult] = useState(null);
     const [nfcResult, setNfcResult] = useState(null);
     const [livenessResult, setLivenessResult] = useState(null);
+    const [nfcComparison, setNfcComparison] = useState([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [captureCount, setCaptureCount] = useState(0);
@@ -181,6 +125,28 @@ const VerificationFlowScreen = ({ navigation }) => {
         const timestamp = new Date().toLocaleTimeString('tr-TR');
         setLogs((prev) => [{ timestamp, message, data }, ...prev].slice(0, 30));
     }, []);
+
+    const normalizeForCompare = useCallback((value) => {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        return String(value).replace(/\s+/g, '').toLowerCase();
+    }, []);
+
+    const buildComparison = useCallback((ocrData = {}, nfcData = {}) => {
+        return SHARED_FIELDS.map(({ key, label }) => {
+            const ocrValue = ocrData[key] ?? (key === 'fullName' ? `${ocrData.name || ''} ${ocrData.surname || ''}`.trim() : undefined);
+            const nfcValue = nfcData[key];
+            const isMatch = normalizeForCompare(ocrValue) !== '' && normalizeForCompare(ocrValue) === normalizeForCompare(nfcValue);
+            return {
+                key,
+                label,
+                ocrValue: ocrValue ?? '-',
+                nfcValue: nfcValue ?? '-',
+                isMatch,
+            };
+        });
+    }, [normalizeForCompare]);
 
     const checkCameraPermission = useCallback(async () => {
         try {
@@ -389,18 +355,9 @@ const VerificationFlowScreen = ({ navigation }) => {
 
             addLog('➡️ NFC başlatılıyor...');
 
-            // Hızlı NFC testi için manuel veri seçimi
-            const dataToSend = USE_MANUAL_NFC_DEBUG ? MANUAL_NFC_TEST_DATA : result.data;
-
-            if (USE_MANUAL_NFC_DEBUG) {
-                addLog('🧪 MANUEL NFC TEST VERİSİ KULLANILIYOR!');
-            } else {
-                addLog('✅ OCR VERİSİ KULLANILIYOR!');
-            }
-
             // Start NFC flow
             setTimeout(() => {
-                startNfcFlow(dataToSend);
+                startNfcFlow(result.data);
             }, 1500);
         } catch (error) {
             console.error('[OCR] Error:', error);
@@ -443,6 +400,23 @@ const VerificationFlowScreen = ({ navigation }) => {
                 Object.entries(parsedFields).forEach(([key, value]) => {
                     addLog(`   • ${key}: ${formatLogValue(value)}`);
                 });
+
+                if (ocrResult?.data) {
+                    const comparison = buildComparison(ocrResult.data, parsedFields);
+                    setNfcComparison(comparison);
+
+                    const mismatches = comparison.filter(item => !item.isMatch);
+                    if (mismatches.length === 0) {
+                        addLog('✅ OCR ve NFC ortak alanları eşleşti');
+                    } else {
+                        addLog(`⚠️ ${mismatches.length} alan eşleşmedi:`);
+                        mismatches.forEach(item => {
+                            addLog(`   • ${item.label}: OCR="${item.ocrValue}" vs NFC="${item.nfcValue}"`);
+                        });
+                    }
+                } else {
+                    setNfcComparison([]);
+                }
 
                 setNfcResult({
                     ...result,
@@ -496,83 +470,6 @@ const VerificationFlowScreen = ({ navigation }) => {
             addLog(`❌ NFC hatası: ${error.message}`);
             Alert.alert('NFC Hatası', error.message);
             startLivenessFlow();
-        }
-    }, [addLog]);
-
-    // Test NFC only (without OCR)
-    const testNFCOnly = useCallback(async () => {
-        try {
-            setCurrentPhase('nfc');
-            addLog('🧪 NFC TEST MODU - Sadece NFC okuma');
-
-            const isSupported = await NfcManager.isSupported();
-            if (!isSupported) {
-                addLog('❌ NFC desteklenmiyor');
-                Alert.alert('NFC Desteklenmiyor', 'Bu cihaz NFC desteklemiyor.');
-                return;
-            }
-
-            const isEnabled = await NfcManager.isEnabled();
-            if (!isEnabled) {
-                addLog('⚠️ NFC kapalı');
-                Alert.alert('NFC Kapalı', 'NFC ayarlardan açılmalı.',
-                    [
-                        { text: 'İptal', style: 'cancel' },
-                        { text: 'Ayarlar', onPress: () => NfcManager.goToNfcSetting() }
-                    ]
-                );
-                return;
-            }
-
-            nfcModuleRef.current.onNFCResult((result) => {
-                addLog('✅ NFC TEST BAŞARILI!');
-                addLog('📋 NFC Sonuçları:');
-                console.log('[NFC TEST] Full Result:', JSON.stringify(result, null, 2));
-
-                // Log all fields
-                if (result.documentNo) addLog(`  • Document No: ${result.documentNo}`);
-                if (result.name) addLog(`  • Ad: ${result.name}`);
-                if (result.surname) addLog(`  • Soyad: ${result.surname}`);
-                if (result.birthDate) addLog(`  • Doğum: ${result.birthDate}`);
-                if (result.nationality) addLog(`  • Uyruk: ${result.nationality}`);
-                if (result.gender) addLog(`  • Cinsiyet: ${result.gender}`);
-                if (result.validUntil) addLog(`  • Geçerlilik: ${result.validUntil}`);
-
-                setNfcResult(result);
-                nfcModuleRef.current.stopNFC();
-
-                Alert.alert(
-                    '✅ NFC Okuma Başarılı',
-                    `Ad Soyad: ${result.name} ${result.surname}\nTC No: ${result.documentNo || 'N/A'}\nDoğum: ${result.birthDate || 'N/A'}`,
-                    [{ text: 'Tamam', onPress: () => setCurrentPhase('idle') }]
-                );
-            });
-
-            nfcModuleRef.current.onNFCError((error) => {
-                addLog(`❌ NFC TEST HATASI: ${error.error}`);
-                console.error('[NFC TEST] Error:', error);
-                Alert.alert('NFC Hatası', error.error, [
-                    { text: 'Tamam', onPress: () => setCurrentPhase('idle') }
-                ]);
-            });
-
-            nfcModuleRef.current.onNFCStarted(() => {
-                addLog('📱 NFC dinleniyor - kartı yaklaştırın');
-                setDetectionHint('Kartı telefonun arkasına yaklaştırın...');
-            });
-
-            // Test için dummy MRZ data (gerçek kart okuma yapacak ama OCR olmadan)
-            await nfcModuleRef.current.startNFC({
-                cardType: 'tc_kimlik',
-                readTimeout: 60000,
-                mrzSeed: {}, // Boş - kart kendi MRZ'sini okuyacak
-            });
-        } catch (error) {
-            console.error('[NFC TEST] Error:', error);
-            addLog(`❌ NFC TEST hatası: ${error.message}`);
-            Alert.alert('NFC Hatası', error.message, [
-                { text: 'Tamam', onPress: () => setCurrentPhase('idle') }
-            ]);
         }
     }, [addLog]);
 
@@ -665,13 +562,7 @@ const VerificationFlowScreen = ({ navigation }) => {
                 <Text style={styles.primaryButtonText}>Doğrulamayı Başlat</Text>
             </TouchableOpacity>
 
-            {/* NFC Test Button */}
-            <TouchableOpacity
-                style={[styles.primaryButton, { backgroundColor: '#3B82F6', marginTop: 12 }]}
-                onPress={testNFCOnly}
-            >
-                <Text style={styles.primaryButtonText}>🧪 Sadece NFC Test Et</Text>
-            </TouchableOpacity>
+            {/* NFC Test Button Removed - flow requires OCR data */}
 
             <View style={styles.infoBox}>
                 <Text style={styles.infoText}>
@@ -722,6 +613,24 @@ const VerificationFlowScreen = ({ navigation }) => {
                         <Text style={styles.captureCounterText}>
                             📸 {captureCount}/{CAPTURE_SEQUENCE_COUNT}
                         </Text>
+                    </View>
+                )}
+
+                {nfcComparison.length > 0 && (
+                    <View style={styles.resultCard}>
+                        <Text style={styles.resultCardTitle}>🔍 OCR vs NFC Karşılaştırma</Text>
+                        {nfcComparison.map(({ key, label, ocrValue, nfcValue, isMatch }) => (
+                            <View key={key} style={styles.comparisonRow}>
+                                <View style={styles.comparisonLabelWrap}>
+                                    <Text style={[styles.comparisonBadge, isMatch ? styles.matchBadge : styles.mismatchBadge]}>
+                                        {isMatch ? '✓' : '✗'}
+                                    </Text>
+                                    <Text style={styles.resultLabel}>{label}</Text>
+                                </View>
+                                <Text style={styles.comparisonValue}>OCR: {formatDisplayValue(ocrValue)}</Text>
+                                <Text style={styles.comparisonValue}>NFC: {formatDisplayValue(nfcValue)}</Text>
+                            </View>
+                        ))}
                     </View>
                 )}
 
@@ -1028,6 +937,26 @@ const styles = StyleSheet.create({
         marginTop: 4,
         fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
     },
+    comparisonRow: {
+        marginBottom: 12,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(148,163,184,0.2)'
+    },
+    comparisonLabelWrap: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+    comparisonBadge: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        textAlign: 'center',
+        textAlignVertical: 'center',
+        color: '#0F172A',
+        fontWeight: 'bold',
+        marginRight: 8
+    },
+    matchBadge: { backgroundColor: '#4ADE80' },
+    mismatchBadge: { backgroundColor: '#F87171' },
+    comparisonValue: { color: '#E2E8F0', fontSize: 12, marginBottom: 2 },
     warningText: { color: '#F59E0B', fontSize: 13, marginTop: 8, fontWeight: '600' },
     logsContainer: {
         maxHeight: 200,
