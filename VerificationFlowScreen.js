@@ -98,6 +98,57 @@ const buildManualNfcTestData = () => {
 
 const MANUAL_NFC_TEST_DATA = buildManualNfcTestData() || FALLBACK_MANUAL_NFC_TEST_DATA;
 
+const DISPLAY_TRUNCATE_LENGTH = 180;
+const LOG_TRUNCATE_LENGTH = 90;
+
+const truncateValue = (value, maxLength) => {
+    if (typeof value !== 'string') {
+        return value;
+    }
+    if (value.length <= maxLength) {
+        return value;
+    }
+    return `${value.slice(0, Math.max(0, maxLength - 3))}... (${value.length} chars)`;
+};
+
+const formatDisplayValue = (value) => {
+    if (value === null || value === undefined) {
+        return '-';
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return '-';
+        }
+        return truncateValue(trimmed, DISPLAY_TRUNCATE_LENGTH);
+    }
+
+    if (Array.isArray(value)) {
+        if (value.length === 0) {
+            return '-';
+        }
+        return truncateValue(value.map((item) => formatDisplayValue(item)).join(', '), DISPLAY_TRUNCATE_LENGTH);
+    }
+
+    if (typeof value === 'object') {
+        if (Object.keys(value).length === 0) {
+            return '-';
+        }
+        return JSON.stringify(value, null, 2);
+    }
+
+    return String(value);
+};
+
+const formatLogValue = (value) => {
+    const formatted = formatDisplayValue(value);
+    if (typeof formatted !== 'string') {
+        return formatted;
+    }
+    return truncateValue(formatted, LOG_TRUNCATE_LENGTH);
+};
+
 const CAPTURE_SEQUENCE_COUNT = 3;
 const CAPTURE_DELAY_MS = 200;
 const SIDE = {
@@ -386,8 +437,17 @@ const VerificationFlowScreen = ({ navigation }) => {
             }
 
             nfcModuleRef.current.onNFCResult((result) => {
+                const parsedFields = result?.parsedFields || result?.data || result || {};
                 addLog('✅ NFC başarılı');
-                setNfcResult(result);
+                addLog('📡 NFC alanları JS tarafında:');
+                Object.entries(parsedFields).forEach(([key, value]) => {
+                    addLog(`   • ${key}: ${formatLogValue(value)}`);
+                });
+
+                setNfcResult({
+                    ...result,
+                    parsedFields,
+                });
                 nfcModuleRef.current.stopNFC();
                 startLivenessFlow();
             });
@@ -739,69 +799,83 @@ const VerificationFlowScreen = ({ navigation }) => {
     };
 
     // Render completed
-    const renderCompletedScreen = () => (
-        <ScrollView style={styles.completedContainer}>
-            <Text style={styles.title}>✅ Doğrulama Tamamlandı</Text>
+    const renderCompletedScreen = () => {
+        const nfcFields = nfcResult?.parsedFields || {};
+        const nfcFieldEntries = Object.entries(nfcFields);
 
-            {ocrResult && (
-                <View style={styles.resultCard}>
-                    <Text style={styles.resultCardTitle}>📸 OCR Sonuçları</Text>
-                    <Text style={styles.resultText}>TC: {ocrResult.data?.tcNo || '-'}</Text>
-                    <Text style={styles.resultText}>Ad: {ocrResult.data?.name || '-'}</Text>
-                    <Text style={styles.resultText}>Soyad: {ocrResult.data?.surname || '-'}</Text>
-                    <Text style={styles.resultText}>Doğum: {ocrResult.data?.birthDate || '-'}</Text>
-                    <Text style={styles.resultText}>
-                        Güven: %{ocrResult.data?.confidence || 0} |
-                        Tamamlanma: %{ocrResult.data?.completeness || 0}
-                    </Text>
-                    {ocrResult.data?.conflicts && ocrResult.data.conflicts.length > 0 && (
-                        <Text style={styles.warningText}>
-                            ⚠️ {ocrResult.data.conflicts.length} çelişki bulundu
+        return (
+            <ScrollView style={styles.completedContainer}>
+                <Text style={styles.title}>✅ Doğrulama Tamamlandı</Text>
+
+                {ocrResult && (
+                    <View style={styles.resultCard}>
+                        <Text style={styles.resultCardTitle}>📸 OCR Sonuçları</Text>
+                        <Text style={styles.resultText}>TC: {ocrResult.data?.tcNo || '-'}</Text>
+                        <Text style={styles.resultText}>Ad: {ocrResult.data?.name || '-'}</Text>
+                        <Text style={styles.resultText}>Soyad: {ocrResult.data?.surname || '-'}</Text>
+                        <Text style={styles.resultText}>Doğum: {ocrResult.data?.birthDate || '-'}</Text>
+                        <Text style={styles.resultText}>
+                            Güven: %{ocrResult.data?.confidence || 0} |
+                            Tamamlanma: %{ocrResult.data?.completeness || 0}
                         </Text>
-                    )}
-                </View>
-            )}
-
-            {nfcResult && (
-                <View style={styles.resultCard}>
-                    <Text style={styles.resultCardTitle}>📡 NFC Sonuçları</Text>
-                    <Text style={styles.resultText}>
-                        TC: {nfcResult.parsedFields?.tcNo || '-'}
-                    </Text>
-                    <Text style={styles.resultText}>
-                        Ad Soyad: {nfcResult.parsedFields?.fullName || '-'}
-                    </Text>
-                </View>
-            )}
-
-            {livenessResult && (
-                <View style={styles.resultCard}>
-                    <Text style={styles.resultCardTitle}>👤 Liveness Sonucu</Text>
-                    {livenessResult.skipped ? (
-                        <Text style={styles.warningText}>Atlandı</Text>
-                    ) : livenessResult.success ? (
-                        <>
-                            <Text style={styles.resultText}>
-                                ✅ Canlılık doğrulandı
+                        {ocrResult.data?.conflicts && ocrResult.data.conflicts.length > 0 && (
+                            <Text style={styles.warningText}>
+                                ⚠️ {ocrResult.data.conflicts.length} çelişki bulundu
                             </Text>
-                            <Text style={styles.resultText}>
-                                Benzerlik: %{livenessResult.similarity}
-                            </Text>
-                            <Text style={styles.resultText}>
-                                Komut sayısı: {livenessResult.commands}
-                            </Text>
-                        </>
-                    ) : (
-                        <Text style={styles.warningText}>Başarısız</Text>
-                    )}
-                </View>
-            )}
+                        )}
+                    </View>
+                )}
 
-            <TouchableOpacity style={styles.secondaryButton} onPress={resetVerification}>
-                <Text style={styles.secondaryButtonText}>Yeniden Başlat</Text>
-            </TouchableOpacity>
-        </ScrollView>
-    );
+                {nfcResult && (
+                    <View style={styles.resultCard}>
+                        <Text style={styles.resultCardTitle}>📡 NFC Sonuçları</Text>
+                        {nfcFieldEntries.length === 0 && (
+                            <Text style={styles.resultText}>NFC verisi alınamadı</Text>
+                        )}
+                        {nfcFieldEntries.map(([key, value]) => {
+                            const formattedValue = formatDisplayValue(value);
+                            const isMultiline = typeof formattedValue === 'string' && formattedValue.includes('\n');
+                            return (
+                                <View key={key} style={styles.resultRow}>
+                                    <Text style={styles.resultLabel}>{key}</Text>
+                                    <Text style={isMultiline ? styles.resultMonoValue : styles.resultValue}>
+                                        {formattedValue}
+                                    </Text>
+                                </View>
+                            );
+                        })}
+                    </View>
+                )}
+
+                {livenessResult && (
+                    <View style={styles.resultCard}>
+                        <Text style={styles.resultCardTitle}>👤 Liveness Sonucu</Text>
+                        {livenessResult.skipped ? (
+                            <Text style={styles.warningText}>Atlandı</Text>
+                        ) : livenessResult.success ? (
+                            <>
+                                <Text style={styles.resultText}>
+                                    ✅ Canlılık doğrulandı
+                                </Text>
+                                <Text style={styles.resultText}>
+                                    Benzerlik: %{livenessResult.similarity}
+                                </Text>
+                                <Text style={styles.resultText}>
+                                    Komut sayısı: {livenessResult.commands}
+                                </Text>
+                            </>
+                        ) : (
+                            <Text style={styles.warningText}>Başarısız</Text>
+                        )}
+                    </View>
+                )}
+
+                <TouchableOpacity style={styles.secondaryButton} onPress={resetVerification}>
+                    <Text style={styles.secondaryButtonText}>Yeniden Başlat</Text>
+                </TouchableOpacity>
+            </ScrollView>
+        );
+    };
 
     // Render logs
     const renderLogs = () => (
@@ -945,6 +1019,15 @@ const styles = StyleSheet.create({
     },
     resultCardTitle: { fontSize: 16, fontWeight: 'bold', color: '#60A5FA', marginBottom: 10 },
     resultText: { color: '#E2E8F0', fontSize: 13, marginBottom: 4 },
+    resultRow: { marginBottom: 12 },
+    resultLabel: { color: '#94A3B8', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
+    resultValue: { color: '#E2E8F0', fontSize: 14, fontWeight: '600' },
+    resultMonoValue: {
+        color: '#E2E8F0',
+        fontSize: 12,
+        marginTop: 4,
+        fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+    },
     warningText: { color: '#F59E0B', fontSize: 13, marginTop: 8, fontWeight: '600' },
     logsContainer: {
         maxHeight: 200,
