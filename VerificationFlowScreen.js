@@ -135,12 +135,30 @@ const VerificationFlowScreen = ({ navigation, route }) => {
                 addLog('📸 NFC fotoğrafı route params\'tan alındı');
                 addLog(`URI: ${photoUri.substring(0, 60)}...`);
                 setBiometricPhotoUri(photoUri);
+                // Direkt liveness'a geç (route params durumu)
                 setCurrentPhase('liveness');
             } else {
                 addLog('⚠️ NFC fotoğraf URI\'si bulunamadı');
             }
         }
     }, [route.params?.nfcPhoto, addLog]);
+
+    useEffect(() => {
+        if (biometricPhotoUri &&
+            currentPhase === 'nfc' &&
+            nfcResult) {
+
+            addLog('👁️ biometricPhotoUri hazır, liveness başlatılıyor...');
+            addLog(`📸 Photo URI: ${biometricPhotoUri.substring(0, 60)}...`);
+
+            // Kısa bir delay ile liveness'a geç
+            const timer = setTimeout(() => {
+                setCurrentPhase('liveness');
+            }, 300);
+
+            return () => clearTimeout(timer);
+        }
+    }, [biometricPhotoUri, currentPhase, nfcResult, addLog]);
 
     const normalizeForCompare = useCallback((value) => {
         if (value === null || value === undefined) {
@@ -440,35 +458,41 @@ const VerificationFlowScreen = ({ navigation, route }) => {
                 });
 
                 // NFC'den gelen fotoğrafı biometricPhotoUri'ye ata
+                let photoWasSet = false;
                 if (result.photo || result.photoUri || result.photoBase64) {
                     const photoUri = result.photo?.uri || result.photoUri || result.photo;
                     if (photoUri) {
                         setBiometricPhotoUri(photoUri);
                         addLog(`📸 NFC fotoğrafı alındı: ${photoUri.substring(0, 50)}...`);
+                        photoWasSet = true;
                     } else if (result.photoBase64) {
                         // Base64 ise data URI'ye çevir
                         const dataUri = `data:image/jpeg;base64,${result.photoBase64}`;
                         setBiometricPhotoUri(dataUri);
                         addLog('📸 NFC fotoğrafı alındı (base64)');
+                        photoWasSet = true;
                     } else {
                         addLog('⚠️ NFC fotoğraf formatı tanınamadı');
                     }
                 } else {
-                    addLog('⚠️ NFC sonucunda fotoğraf bulunamadı');
+                    addLog('⚠️ NFC sonuçunda fotoğraf bulunamadı');
                 }
 
                 nfcModuleRef.current.stopNFC();
 
-                // Fotoğraf set edildikten sonra liveness'a geç (async state için delay)
-                setTimeout(() => {
-                    startLivenessFlow();
-                }, 500);
+                // Fotoğraf set edilmediyse direkt completed'a geç
+                if (!photoWasSet) {
+                    addLog('⚠️ Fotoğraf olmadan liveness atlanıyor');
+                    setCurrentPhase('completed');
+                }
+                // Fotoğraf set edildiyse useEffect otomatik liveness'a geçecek
             });
 
             nfcModuleRef.current.onNFCError((error) => {
                 addLog(`❌ NFC hatası: ${error.error}`);
                 Alert.alert('NFC Hatası', error.error);
-                startLivenessFlow();
+                // Hata durumunda completed'a geç
+                setCurrentPhase('completed');
             });
 
             nfcModuleRef.current.onNFCStarted(() => {
@@ -508,29 +532,18 @@ const VerificationFlowScreen = ({ navigation, route }) => {
             console.error('[NFC] Error:', error);
             addLog(`❌ NFC hatası: ${error.message}`);
             Alert.alert('NFC Hatası', error.message);
-            startLivenessFlow();
+            // Hata durumunda completed'a geç
+            setCurrentPhase('completed');
         }
     }, [addLog]);
 
-    // Start liveness flow (ACTIVATED)
+    // Start liveness flow - artık sadece manuel başlatma için (useEffect otomatik yapıyor)
     const startLivenessFlow = useCallback(() => {
-        addLog('👁️ Liveness testi başlatılıyor...');
-        addLog('📸 NFC fotoğrafı ile karşılaştırma yapılacak');
+        addLog('👁️ Liveness testi manuel başlatılıyor...');
 
-        // NFC fotoğrafı var mı kontrol et
-        if (!biometricPhotoUri) {
-            addLog('⚠️ NFC fotoğrafı bulunamadı, liveness atlanıyor');
-            Alert.alert(
-                'Uyarı',
-                'NFC fotoğrafı bulunamadı. Liveness testi atlanıyor.',
-                [{ text: 'Tamam', onPress: () => setCurrentPhase('completed') }]
-            );
-            return;
-        }
-
-        // Liveness phase'e geç
+        // Liveness phase'e geç (biometricPhotoUri kontrolü useEffect'te)
         setCurrentPhase('liveness');
-    }, [addLog, biometricPhotoUri]);
+    }, [addLog]);
 
     // Liveness success handler
     const handleLivenessSuccess = useCallback((result) => {
