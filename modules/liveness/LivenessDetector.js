@@ -12,8 +12,8 @@ const {
   getHeadMovementSequence,
 } = require("./commands");
 const {
-  validateResponse: mockValidateResponse,
-  validateCommandSequence,
+  validateRealTimeResponse,
+  validateLivenessResult,
 } = require("./validator");
 const FaceDetector = require("./detector");
 
@@ -272,22 +272,16 @@ class LivenessDetector {
         this.onProgress("Yanıt doğrulanıyor...");
       }
 
-      let validationResult;
-
-      if (this.realTimeMode && captureData.realTimeDetection) {
-        // Use real-time face detection data
-        validationResult = await this._validateRealTimeResponse(
-          captureData,
-          commandType
-        );
-      } else {
-        // Fallback to mock validator
-        validationResult = await mockValidateResponse(commandType, {
-          captureData,
+      // Use real-time face detection validation
+      const validationResult = await validateRealTimeResponse(
+        captureData,
+        commandType,
+        {
           retryCount: this.retryCount,
           maxRetries: this.config.maxRetries,
-        });
-      }
+          enableAntiSpoofing: true
+        }
+      );
 
       Logger.info("Response validation completed", validationResult);
 
@@ -302,8 +296,7 @@ class LivenessDetector {
 
         if (this.onProgress) {
           this.onProgress(
-            `Tekrar deneyin (${this.retryCount}/${this.config.maxRetries}): ${
-              validationResult.error || "Hareket algılanamadı"
+            `Tekrar deneyin (${this.retryCount}/${this.config.maxRetries}): ${validationResult.error || "Hareket algılanamadı"
             }`
           );
         }
@@ -475,7 +468,7 @@ class LivenessDetector {
     }
 
     for (const command of commandSequence) {
-      if (!this.isProcessing) {break;} // Stop if test was cancelled
+      if (!this.isProcessing) { break; } // Stop if test was cancelled
 
       Logger.info(
         `Executing real-time command ${command.sequenceId}/${commandCount}:`,
@@ -517,7 +510,7 @@ class LivenessDetector {
     // Validate entire sequence
     if (this.completedInstructions.length > 0) {
       Logger.info(
-        `Mock liveness detection completed with ${this.completedInstructions.length} instructions`
+        `Liveness detection completed with ${this.completedInstructions.length} instructions`
       );
     }
   }
@@ -545,11 +538,9 @@ class LivenessDetector {
       command,
       instruction: command.instruction,
       commandType: command.type,
-      imageData: `mock_image_data_${command.type}_${Date.now()}`,
       timestamp: new Date().toISOString(),
       quality: this.config.captureQuality,
       sequenceId: command.sequenceId || 1,
-      mockCapture: true,
     };
 
     this.capturedImages.push(captureData);
