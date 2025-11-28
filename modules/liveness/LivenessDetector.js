@@ -16,6 +16,7 @@ const {
   validateLivenessResult,
 } = require("./validator");
 const FaceDetector = require("./detector");
+const FaceComparison = require("./faceComparison");
 
 // Liveness Test Status Constants
 const LIVENESS_STATUS = {
@@ -50,6 +51,9 @@ const LIVENESS_CONFIG = {
   maxRetries: 3,
   enableFaceDetection: true,
   enableMotionDetection: true,
+  enableFaceComparison: true, // NFC ile karşılaştırma
+  capturePhotosForComparison: true, // Karşılaştırma için fotoğraf çek
+  photoCaptureInterval: 2, // Her 2 komuttan 1 fotoğraf çek
 };
 
 /**
@@ -72,6 +76,11 @@ class LivenessDetector {
     this.detectionTimeout = null;
     this.realTimeMode = config.realTimeMode !== false; // Default to true
 
+    // Face comparison for NFC verification
+    this.faceComparison = this.config.enableFaceComparison ? new FaceComparison() : null;
+    this.nfcPhotoUri = null;
+    this.capturedPhotosForComparison = [];
+
     // Callback functions
     this.onStatusChange = null;
     this.onInstructionGiven = null;
@@ -80,6 +89,8 @@ class LivenessDetector {
     this.onError = null;
     this.onProgress = null;
     this.onMotionDetected = null; // Day 9: New callback
+    this.onPhotoCapture = null; // Photo capture callback
+    this.onFaceComparisonComplete = null; // Face comparison result callback
 
     Logger.info("LivenessDetector initialized", {
       config: this.config,
@@ -886,6 +897,169 @@ class LivenessDetector {
 
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
+
+  /**
+   * NFC'den gelen fotoğrafı yükle (Face Comparison için)
+   * @param {string} nfcPhotoUri - NFC fotoğraf URI (pasaport fotoğrafı)
+   * @returns {Promise<object>} Yükleme sonucu
+   */
+  async loadNFCPhoto(nfcPhotoUri) {
+    try {
+      if (!this.faceComparison) {
+        throw new Error('Face comparison özelliği aktif değil');
+      }
+
+      Logger.info('Loading NFC photo for comparison...', { uri: nfcPhotoUri });
+
+      this.nfcPhotoUri = nfcPhotoUri;
+      const result = await this.faceComparison.loadNFCPhoto(nfcPhotoUri);
+
+      if (this.onProgress) {
+        this.onProgress('NFC fotoğrafı yüklendi ve analiz edildi');
+      }
+
+      return {
+        success: true,
+        faceDetected: true,
+        confidence: result.face.confidence,
+        landmarkCount: Object.keys(result.landmarks).length,
+        timestamp: new Date().toISOString(),
+      };
+
+    } catch (error) {
+      Logger.error('NFC photo loading failed:', error);
+      if (this.onError) {
+        this.onError(error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Liveness sırasında fotoğraf çek ve karşılaştırma için sakla
+   * @param {object} cameraRef - Camera reference
+   * @param {object} metadata - Fotoğraf metadata
+   * @returns {Promise<object>} Fotoğraf sonucu
+   */
+  async capturePhotoForComparison(cameraRef, metadata = {}) {
+    try {
+      if (!this.config.capturePhotosForComparison || !this.faceComparison) {
+        return null;
+      }
+
+      Logger.info('Capturing photo for face comparison...', metadata);
+
+      // Camera snapshot çek
+      const photo = await cameraRef.current.takePhoto({
+        qualityPrioritization: 'quality',
+        flash: 'off',
+        skipMetadata: true,
+      });
+
+      const photoUri = Platform.OS === 'android'
+        ? `file://${photo.path}`
+        : photo.path;
+
+      // Face comparison modülüne ekle
+      const result = await this.faceComparison.addLivenessPhoto(photoUri, metadata);
+
+      if (result) {
+        this.capturedPhotosForComparison.push({
+          uri: photoUri,
+          metadata,
+          faceData: result,
+          timestamp: Date.now(),
+        });
+
+        Logger.info('Photo captured for comparison', {
+          totalPhotos: this.capturedPhotosForComparison.length,
+          command: metadata.command,
+        });
+
+        if (this.onPhotoCapture) {
+          this.onPhotoCapture({
+            uri: photoUri,
+            metadata,
+            totalPhotos: this.capturedPhotosForComparison.length,
+          });
+        }
+      }
+
+      return result;
+
+    } catch (error) {
+      Logger.error('Photo capture failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Liveness tamamlandıktan sonra NFC ile karşılaştır
+   * @returns {Promise<object>} Karşılaştırma sonucu
+   */
+  async compareWithNFC() {
+    try {
+      if (!this.faceComparison) {
+        throw new Error('Face comparison özelliği aktif değil');
+      }
+
+      if (!this.nfcPhotoUri) {
+        throw new Error('NFC fotoğrafı yüklenmemiş. Önce loadNFCPhoto() çağırın');
+      }
+
+      Logger.info('Starting face comparison with NFC photo...');
+
+      if (this.onProgress) {
+        this.onProgress('Yüz karşılaştırması yapılıyor...');
+      }
+
+      const comparisonResult = await this.faceComparison.comparePhotos();
+
+      Logger.info('Face comparison completed', {
+        passed: comparisonResult.passed,
+        score: comparisonResult.averageScore,
+      });
+
+      if (this.onFaceComparisonComplete) {
+        this.onFaceComparisonComplete(comparisonResult);
+      }
+
+      if (this.onProgress) {
+        const status = comparisonResult.passed ? '✅ Eşleşme başarılı' : '❌ Eşleşme başarısız';
+        this.onProgress(`${status} (Skor: ${(comparisonResult.averageScore * 100).toFixed(1)}%)`);
+      }
+
+      return comparisonResult;
+
+    } catch (error) {
+      Logger.error('Face comparison failed:', error);
+      if (this.onError) {
+        this.onError(error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * NFC ile karşılaştırma durumunu kontrol et
+   * @returns {object} Durum bilgisi
+   */
+  getFaceComparisonStatus() {
+    if (!this.faceComparison) {
+      return {
+        enabled: false,
+        ready: false,
+      };
+    }
+
+    return {
+      enabled: true,
+      nfcPhotoLoaded: this.faceComparison.isNFCPhotoLoaded(),
+      livenessCapturedCount: this.faceComparison.getLivenessPhotoCount(),
+      ready: this.faceComparison.isNFCPhotoLoaded() &&
+        this.faceComparison.getLivenessPhotoCount() >= 3,
+    };
+  }
 }
 
 module.exports = LivenessDetector;
@@ -893,3 +1067,4 @@ module.exports.LIVENESS_STATUS = LIVENESS_STATUS;
 module.exports.LIVENESS_INSTRUCTIONS = LIVENESS_INSTRUCTIONS;
 module.exports.LIVENESS_CONFIG = LIVENESS_CONFIG;
 module.exports.FaceDetector = FaceDetector;
+module.exports.FaceComparison = FaceComparison;
