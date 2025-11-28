@@ -99,7 +99,7 @@ const SIDE = {
     BACK: 'back'
 };
 
-const VerificationFlowScreen = ({ navigation }) => {
+const VerificationFlowScreen = ({ navigation, route }) => {
     const [currentPhase, setCurrentPhase] = useState('idle'); // idle, ocr_front, ocr_back, processing, nfc, liveness, completed
     const [currentSide, setCurrentSide] = useState(SIDE.FRONT);
     const [logs, setLogs] = useState([]);
@@ -125,6 +125,22 @@ const VerificationFlowScreen = ({ navigation }) => {
         const timestamp = new Date().toLocaleTimeString('tr-TR');
         setLogs((prev) => [{ timestamp, message, data }, ...prev].slice(0, 30));
     }, []);
+
+    useEffect(() => {
+        if (route.params?.nfcPhoto) {
+            const nfcPhoto = route.params.nfcPhoto;
+            const photoUri = nfcPhoto.uri || nfcPhoto.photoUri || nfcPhoto;
+
+            if (photoUri) {
+                addLog('📸 NFC fotoğrafı route params\'tan alındı');
+                addLog(`URI: ${photoUri.substring(0, 60)}...`);
+                setBiometricPhotoUri(photoUri);
+                setCurrentPhase('liveness');
+            } else {
+                addLog('⚠️ NFC fotoğraf URI\'si bulunamadı');
+            }
+        }
+    }, [route.params?.nfcPhoto, addLog]);
 
     const normalizeForCompare = useCallback((value) => {
         if (value === null || value === undefined) {
@@ -422,8 +438,31 @@ const VerificationFlowScreen = ({ navigation }) => {
                     ...result,
                     parsedFields,
                 });
+
+                // NFC'den gelen fotoğrafı biometricPhotoUri'ye ata
+                if (result.photo || result.photoUri || result.photoBase64) {
+                    const photoUri = result.photo?.uri || result.photoUri || result.photo;
+                    if (photoUri) {
+                        setBiometricPhotoUri(photoUri);
+                        addLog(`📸 NFC fotoğrafı alındı: ${photoUri.substring(0, 50)}...`);
+                    } else if (result.photoBase64) {
+                        // Base64 ise data URI'ye çevir
+                        const dataUri = `data:image/jpeg;base64,${result.photoBase64}`;
+                        setBiometricPhotoUri(dataUri);
+                        addLog('📸 NFC fotoğrafı alındı (base64)');
+                    } else {
+                        addLog('⚠️ NFC fotoğraf formatı tanınamadı');
+                    }
+                } else {
+                    addLog('⚠️ NFC sonucunda fotoğraf bulunamadı');
+                }
+
                 nfcModuleRef.current.stopNFC();
-                startLivenessFlow();
+
+                // Fotoğraf set edildikten sonra liveness'a geç (async state için delay)
+                setTimeout(() => {
+                    startLivenessFlow();
+                }, 500);
             });
 
             nfcModuleRef.current.onNFCError((error) => {
