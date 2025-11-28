@@ -70,20 +70,50 @@ const FullVerificationScreen = ({ navigation, route }) => {
         if (sourceStep === 'ocr') {
           markStepInProgress('nfc');
           addLog('MRZ verisi doğrulandı, NFC adımına yönlendiriliyor...');
-        } else if (sourceStep === 'nfc') {
-          markStepInProgress('liveness');
-          addLog('NFC tamamlandı, Liveness testine yönlendiriliyor...');
-          // NFC'den fotoğraf varsa liveness'a gönder
-          setTimeout(() => {
-            navigation.navigate('VerificationFlow');
-          }, 1000);
         }
+        // NFC için liveness başlatma useEffect'te yapılacak (state güncellenince)
 
         navigation.setParams({ returnParams: null });
       }
     }, [route.params?.returnParams, updateStepResult, addLog, navigation, markStepInProgress])
   );
 
+  // NFC tamamlandığında otomatik liveness başlat
+  useEffect(() => {
+    if (steps.nfc.status === STEP_STATUS.COMPLETED &&
+      steps.nfc.result &&
+      steps.liveness.status === STEP_STATUS.PENDING) {
+
+      // State güncellendiğinden emin olmak için kısa bir delay
+      const timer = setTimeout(() => {
+        addLog('NFC verisi işlendi, Liveness testine yönlendiriliyor...');
+        markStepInProgress('liveness');
+
+        // NFC fotoğrafı kontrolü
+        if (steps.nfc.result.photo) {
+          addLog(`NFC fotoğrafı bulundu: ${steps.nfc.result.photo.uri || 'URI mevcut'}`);
+          navigation.navigate('VerificationFlow', {
+            nfcPhoto: steps.nfc.result.photo,
+            returnTo: 'FullVerification',
+            returnParams: { sourceStep: 'liveness' },
+          });
+        } else {
+          addLog('⚠️ NFC fotoğrafı bulunamadı!');
+          Alert.alert(
+            'Uyarı',
+            'NFC fotoğrafı bulunamadı. Liveness testi için NFC fotoğrafı gereklidir.',
+            [
+              { text: 'Tamam', onPress: () => markStepInProgress('liveness') },
+            ]
+          );
+        }
+      }, 800); // 800ms bekle - state update için
+
+      return () => clearTimeout(timer);
+    }
+  }, [steps.nfc.status, steps.nfc.result, steps.liveness.status, addLog, markStepInProgress, navigation]);
+
+  // OCR ve NFC sonuçları hazır olduğunda consistency report oluştur
   useEffect(() => {
     if (steps.ocr.result && steps.nfc.result) {
       const mrzNormalized = normalizeMrzDataFromOCR(steps.ocr.result);
@@ -93,8 +123,9 @@ const FullVerificationScreen = ({ navigation, route }) => {
         nfcData: nfcNormalized,
       });
       setConsistencyReport(report);
+      addLog('✅ OCR-NFC karşılaştırması tamamlandı');
     }
-  }, [steps.ocr.result, steps.nfc.result]);
+  }, [steps.ocr.result, steps.nfc.result, addLog]);
 
   const allStepsCompleted = useMemo(
     () =>
