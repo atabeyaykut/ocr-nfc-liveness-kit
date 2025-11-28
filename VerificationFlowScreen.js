@@ -473,21 +473,25 @@ const VerificationFlowScreen = ({ navigation }) => {
         }
     }, [addLog]);
 
-    // Start liveness flow (DEACTIVATED - skip liveness)
+    // Start liveness flow (ACTIVATED)
     const startLivenessFlow = useCallback(() => {
-        addLog('⏭️ Liveness atlandı (deaktif)');
-        addLog('✅ Doğrulama tamamlandı!');
+        addLog('👁️ Liveness testi başlatılıyor...');
+        addLog('📸 NFC fotoğrafı ile karşılaştırma yapılacak');
 
-        // Skip liveness and go directly to completed
-        setLivenessResult({ success: true, skipped: true, similarity: 100 });
-        setCurrentPhase('completed');
+        // NFC fotoğrafı var mı kontrol et
+        if (!biometricPhotoUri) {
+            addLog('⚠️ NFC fotoğrafı bulunamadı, liveness atlanıyor');
+            Alert.alert(
+                'Uyarı',
+                'NFC fotoğrafı bulunamadı. Liveness testi atlanıyor.',
+                [{ text: 'Tamam', onPress: () => setCurrentPhase('completed') }]
+            );
+            return;
+        }
 
-        Alert.alert(
-            '✅ Doğrulama Başarılı',
-            'OCR ve NFC işlemleri tamamlandı.\n(Liveness testi deaktif)',
-            [{ text: 'Tamam' }]
-        );
-    }, [addLog]);
+        // Liveness phase'e geç
+        setCurrentPhase('liveness');
+    }, [addLog, biometricPhotoUri]);
 
     // Liveness success handler
     const handleLivenessSuccess = useCallback((result) => {

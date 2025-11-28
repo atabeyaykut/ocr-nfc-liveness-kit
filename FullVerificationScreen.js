@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   buildCoreConsistencyReport,
@@ -70,6 +70,13 @@ const FullVerificationScreen = ({ navigation, route }) => {
         if (sourceStep === 'ocr') {
           markStepInProgress('nfc');
           addLog('MRZ verisi doğrulandı, NFC adımına yönlendiriliyor...');
+        } else if (sourceStep === 'nfc') {
+          markStepInProgress('liveness');
+          addLog('NFC tamamlandı, Liveness testine yönlendiriliyor...');
+          // NFC'den fotoğraf varsa liveness'a gönder
+          setTimeout(() => {
+            navigation.navigate('VerificationFlow');
+          }, 1000);
         }
 
         navigation.setParams({ returnParams: null });
@@ -116,6 +123,23 @@ const FullVerificationScreen = ({ navigation, route }) => {
     });
   };
 
+  const handleLaunchLiveness = () => {
+    if (!steps.nfc.result || !steps.nfc.result.photo) {
+      Alert.alert(
+        'Uyarı',
+        'Liveness testi için önce NFC okuması yapmalısınız. NFC fotoğrafı gereklidir.',
+        [{ text: 'Tamam' }]
+      );
+      return;
+    }
+    addLog('Liveness testi başlatılıyor...');
+    navigation.navigate('VerificationFlow', {
+      nfcPhoto: steps.nfc.result.photo,
+      returnTo: 'FullVerification',
+      returnParams: { sourceStep: 'liveness' },
+    });
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
@@ -134,10 +158,38 @@ const FullVerificationScreen = ({ navigation, route }) => {
           <Text style={styles.secondaryButtonText}>Sadece NFC Test Et</Text>
         </TouchableOpacity>
 
+        {steps.nfc.status === STEP_STATUS.COMPLETED && (
+          <TouchableOpacity
+            style={[styles.secondaryButton, { backgroundColor: '#059669', borderColor: '#10B981' }]}
+            onPress={handleLaunchLiveness}
+          >
+            <Text style={styles.secondaryButtonText}>👁️ Liveness Testi Başlat</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Step Status Indicators */}
+        <View style={styles.stepIndicators}>
+          <View style={[styles.stepBadge, steps.ocr.status === STEP_STATUS.COMPLETED && styles.stepCompleted]}>
+            <Text style={styles.stepBadgeText}>
+              {steps.ocr.status === STEP_STATUS.COMPLETED ? '✅' : steps.ocr.status === STEP_STATUS.IN_PROGRESS ? '⏳' : '⏸️'} OCR
+            </Text>
+          </View>
+          <View style={[styles.stepBadge, steps.nfc.status === STEP_STATUS.COMPLETED && styles.stepCompleted]}>
+            <Text style={styles.stepBadgeText}>
+              {steps.nfc.status === STEP_STATUS.COMPLETED ? '✅' : steps.nfc.status === STEP_STATUS.IN_PROGRESS ? '⏳' : '⏸️'} NFC
+            </Text>
+          </View>
+          <View style={[styles.stepBadge, steps.liveness.status === STEP_STATUS.COMPLETED && styles.stepCompleted]}>
+            <Text style={styles.stepBadgeText}>
+              {steps.liveness.status === STEP_STATUS.COMPLETED ? '✅' : steps.liveness.status === STEP_STATUS.IN_PROGRESS ? '⏳' : '⏸️'} Liveness
+            </Text>
+          </View>
+        </View>
+
         {allStepsCompleted && (
           <View style={styles.summaryBadge}>
             <Text style={styles.summaryTitle}>✅ Doğrulama Tamamlandı</Text>
-            <Text style={styles.summaryText}>OCR ve NFC sonuçları başarıyla eşlendi.</Text>
+            <Text style={styles.summaryText}>OCR, NFC ve Liveness testleri başarıyla tamamlandı.</Text>
           </View>
         )}
       </View>
@@ -224,5 +276,29 @@ const styles = StyleSheet.create({
   summaryText: {
     color: '#D1FAE5',
     fontSize: 14,
+  },
+  stepIndicators: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  stepBadge: {
+    backgroundColor: 'rgba(71, 85, 105, 0.3)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#475569',
+  },
+  stepCompleted: {
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    borderColor: '#22C55E',
+  },
+  stepBadgeText: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
