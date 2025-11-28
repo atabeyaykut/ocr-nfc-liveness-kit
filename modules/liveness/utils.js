@@ -21,7 +21,7 @@ const FrameAnalysis = {
 
     const contourPoints = face.contours.face;
     let complexity = 0;
-    
+
     // Calculate variance in contour point distances
     for (let i = 1; i < contourPoints.length; i++) {
       const prev = contourPoints[i - 1];
@@ -47,12 +47,12 @@ const FrameAnalysis = {
 
     const landmarks = Object.values(face.landmarks);
     const zValues = landmarks.map(landmark => landmark.z || 0);
-    
+
     if (zValues.length < 2) return 0;
 
     const mean = zValues.reduce((sum, z) => sum + z, 0) / zValues.length;
     const variance = zValues.reduce((sum, z) => sum + Math.pow(z - mean, 2), 0) / zValues.length;
-    
+
     return Math.min(Math.sqrt(variance) / 50, 1);
   },
 
@@ -62,18 +62,9 @@ const FrameAnalysis = {
    * @returns {object} - Texture analysis results
    */
   analyzeTexture(frameData) {
-    // Simulate texture analysis (in real implementation, would analyze pixel patterns)
-    const mockVariance = Math.random() * 0.5 + 0.3;
-    const mockPixelation = Math.random() * 0.4 + 0.2;
-    const mockReflection = Math.random() * 0.3 + 0.1;
-
-    return {
-      variance: mockVariance,
-      pixelationScore: mockPixelation,
-      reflectionScore: mockReflection,
-      isScreenLike: mockPixelation > 0.8 || mockReflection > 0.7,
-      isPrintLike: mockVariance < 0.25
-    };
+    // TODO: Implement real texture analysis using pixel pattern detection
+    // This requires advanced image processing algorithms
+    throw new Error('Texture analysis not yet implemented. Use ML Kit face detection instead.');
   },
 
   /**
@@ -289,36 +280,11 @@ const ValidationUtils = {
       duration,
       isTooFast: duration < minTime,
       isTooSlow: duration > maxTime,
-      reason: duration < minTime ? 'Too fast' : 
-              duration > maxTime ? 'Too slow' : 'Valid timing'
+      reason: duration < minTime ? 'Too fast' :
+        duration > maxTime ? 'Too slow' : 'Valid timing'
     };
   },
 
-  /**
-   * Generate mock validation result for testing
-   * @param {string} commandType - Command type
-   * @param {number} baseSuccess - Base success probability
-   * @returns {object} - Mock validation result
-   */
-  generateMockResult(commandType, baseSuccess = 0.8) {
-    const confidence = Math.random() * 0.3 + baseSuccess;
-    const isValid = confidence > 0.6;
-
-    return {
-      isValid,
-      confidence,
-      commandType,
-      detectionType: `mock_${commandType}`,
-      timestamp: Date.now(),
-      mockData: true,
-      factors: {
-        faceDetection: Math.random() * 0.4 + 0.6,
-        motionDetection: confidence,
-        antiSpoofing: Math.random() * 0.3 + 0.7,
-        temporalConsistency: Math.random() * 0.2 + 0.8
-      }
-    };
-  }
 };
 
 module.exports = {
