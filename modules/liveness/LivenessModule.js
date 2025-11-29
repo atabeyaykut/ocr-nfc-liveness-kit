@@ -97,7 +97,7 @@ export const LivenessModule = ({
 
             startFaceDetection();
         }
-    }, [currentCommandIndex, startFaceDetection]);
+    }, [currentCommandIndex, startFaceDetection, testStarted]); // Added testStarted to re-start detection after countdown
 
     const startLivenessTest = useCallback(() => {
         Logger.info('[Liveness] Test hazırlanıyor - yüz algılanması bekleniyor');
@@ -188,12 +188,20 @@ export const LivenessModule = ({
 
                     // If countdown is running, don't validate commands yet
                     if (countdown !== null || !testStarted) {
+                        // DEBUG: Log why validation is skipped
+                        if (Math.random() < 0.1) {
+                            Logger.info('[Liveness] Validation skipped:', {
+                                countdown,
+                                testStarted,
+                                reason: countdown !== null ? 'countdown running' : 'test not started'
+                            });
+                        }
                         return;
                     }
 
-                    // DEBUG: Log face properties for first detection
+                    // DEBUG: Log face properties for first validation
                     if (!detectedFace) {
-                        Logger.info('[Liveness] Face detected! Properties:', {
+                        Logger.info('[Liveness] Test çalışıyor! Face detected! Properties:', {
                             headEulerAngleY: face.headEulerAngleY,
                             headEulerAngleX: face.headEulerAngleX,
                             smilingProbability: face.smilingProbability,
