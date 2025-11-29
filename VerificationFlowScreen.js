@@ -433,6 +433,15 @@ const VerificationFlowScreen = ({ navigation, route }) => {
             nfcModuleRef.current.onNFCResult((result) => {
                 const parsedFields = result?.parsedFields || result?.data || result || {};
                 addLog('✅ NFC başarılı');
+
+                // DEBUG: Tüm result objesini logla
+                addLog('🔍 DEBUG - NFC Result Keys: ' + Object.keys(result).join(', '));
+                addLog('🔍 DEBUG - Has photo: ' + (!!result.photo));
+                addLog('🔍 DEBUG - Has photoUri: ' + (!!result.photoUri));
+                addLog('🔍 DEBUG - Has photoBase64: ' + (!!result.photoBase64));
+                addLog('🔍 DEBUG - ParsedFields has photo: ' + (!!parsedFields.photo));
+                addLog('🔍 DEBUG - ParsedFields has photoBase64: ' + (!!parsedFields.photoBase64));
+
                 addLog('📡 NFC alanları JS tarafında:');
                 Object.entries(parsedFields).forEach(([key, value]) => {
                     addLog(`   • ${key}: ${formatLogValue(value)}`);
@@ -459,23 +468,41 @@ const VerificationFlowScreen = ({ navigation, route }) => {
                 let photoWasSet = false;
                 let extractedPhotoUri = null;
 
-                if (result.photo || result.photoUri || result.photoBase64) {
-                    const photoUri = result.photo?.uri || result.photoUri || result.photo;
-                    if (photoUri) {
+                // Çoklu kaynak kontrolü: result veya parsedFields içinde olabilir
+                const photoFromResult = result.photo || result.photoUri || result.photoBase64;
+                const photoFromParsed = parsedFields.photo || parsedFields.photoUri || parsedFields.photoBase64;
+
+                const photoSource = photoFromResult || photoFromParsed;
+
+                if (photoSource) {
+                    // URI formatında mı kontrol et
+                    const photoUri = photoSource?.uri || photoSource;
+
+                    if (typeof photoUri === 'string' && photoUri.startsWith('file://')) {
+                        // File URI
                         extractedPhotoUri = photoUri;
-                        addLog(`📸 NFC fotoğrafı alındı: ${photoUri.substring(0, 50)}...`);
+                        addLog(`📸 NFC fotoğrafı alındı (file): ${photoUri.substring(0, 50)}...`);
                         photoWasSet = true;
-                    } else if (result.photoBase64) {
-                        // Base64 ise data URI'ye çevir
-                        const dataUri = `data:image/jpeg;base64,${result.photoBase64}`;
+                    } else if (typeof photoUri === 'string' && photoUri.startsWith('data:image')) {
+                        // Data URI (zaten base64)
+                        extractedPhotoUri = photoUri;
+                        addLog('📸 NFC fotoğrafı alındı (data URI)');
+                        photoWasSet = true;
+                    } else if (typeof photoUri === 'string' && photoUri.length > 100) {
+                        // Raw base64 string (base64 görünüyor)
+                        const dataUri = `data:image/jpeg;base64,${photoUri}`;
                         extractedPhotoUri = dataUri;
-                        addLog('📸 NFC fotoğrafı alındı (base64)');
+                        addLog('📸 NFC fotoğrafı alındı (base64): ' + photoUri.substring(0, 30) + '...');
                         photoWasSet = true;
                     } else {
-                        addLog('⚠️ NFC fotoğraf formatı tanınamadı');
+                        addLog('⚠️ NFC fotoğraf formatı tanınamadı: ' + typeof photoUri);
+                        addLog('⚠️ Photo value: ' + String(photoUri).substring(0, 100));
                     }
                 } else {
                     addLog('⚠️ NFC sonuçunda fotoğraf bulunamadı');
+                    addLog('⚠️ result.photo: ' + result.photo);
+                    addLog('⚠️ parsedFields.photo: ' + parsedFields.photo);
+                    addLog('⚠️ parsedFields.photoBase64: ' + parsedFields.photoBase64);
                 }
 
                 nfcModuleRef.current.stopNFC();
