@@ -20,14 +20,24 @@ import Logger from '../../utils/logger';
 import BehavioralBiometrics from './BehavioralBiometrics';
 
 const LIVENESS_COMMANDS = [
-    { type: 'look_straight', text: 'Düz bakın 👀', duration: 2000, validation: (face) => Math.abs(face.headEulerAngleY) < 10 && Math.abs(face.headEulerAngleX) < 10 },
-    { type: 'smile', text: 'Gülümseyin 😊', duration: 3000, validation: (face) => face.smilingProbability > 0.7 },
-    { type: 'turn_left', text: 'Başınızı sola çevirin ←', duration: 3000, validation: (face) => face.headEulerAngleY < -20 },
-    { type: 'turn_right', text: 'Başınızı sağa çevirin →', duration: 3000, validation: (face) => face.headEulerAngleY > 20 },
-    { type: 'tilt_up', text: 'Başınızı yukarı kaldırın ↑', duration: 3000, validation: (face) => face.headEulerAngleX < -15 },
-    { type: 'tilt_down', text: 'Başınızı aşağı eğin ↓', duration: 3000, validation: (face) => face.headEulerAngleX > 15 },
-    { type: 'blink', text: 'Göz kırpın 👁️', duration: 2000, validation: (face) => face.leftEyeOpenProbability < 0.2 && face.rightEyeOpenProbability < 0.2 },
-    { type: 'open_mouth', text: 'Ağzınızı açın 😮', duration: 2000, validation: (face) => face.smilingProbability < 0.3 && Math.abs(face.headEulerAngleY) < 10 },
+    {
+        type: 'look_straight', text: 'Düz bakın 👀', duration: 2000, validation: (face) => {
+            // Fallback: if head pose unavailable, check if eyes are looking forward
+            if (face.headEulerAngleY !== undefined && face.headEulerAngleX !== undefined) {
+                return Math.abs(face.headEulerAngleY) < 10 && Math.abs(face.headEulerAngleX) < 10;
+            }
+            // Fallback: Both eyes open = looking straight
+            return (face.leftEyeOpenProbability || 0) > 0.5 && (face.rightEyeOpenProbability || 0) > 0.5;
+        }
+    },
+    {
+        type: 'blink', text: 'Göz kırpın 👁️', duration: 2000, validation: (face) =>
+            (face.leftEyeOpenProbability || 1) < 0.2 && (face.rightEyeOpenProbability || 1) < 0.2
+    },
+    {
+        type: 'smile', text: 'Gülümseyin �', duration: 3000, validation: (face) =>
+            (face.smilingProbability || 0) > 0.7
+    },
 ];
 
 /**
@@ -124,12 +134,13 @@ export const LivenessModule = ({
                     ? photoPath
                     : `file://${photoPath}`;
 
-                // Detect face
+                // Detect face with head pose tracking
                 const faces = await FaceDetection.detect(normalizedPath, {
-                    performanceMode: 'fast',
+                    performanceMode: 'accurate',  // 'accurate' for better head pose
                     landmarkMode: 'all',
                     contourMode: 'all',
                     classificationMode: 'all',
+                    trackingEnabled: true,  // Enable face tracking for head pose
                 });
 
                 if (faces && faces.length > 0) {
