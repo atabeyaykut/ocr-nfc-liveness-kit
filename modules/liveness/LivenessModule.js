@@ -529,9 +529,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     faceCircle: {
-        width: 250,
-        height: 250,
-        borderRadius: 125,
+        width: 320,
+        height: 320,
+        borderRadius: 160,
         borderWidth: 3,
         borderColor: '#00FF00',
         borderStyle: 'dashed',
