@@ -71,14 +71,14 @@ const CHALLENGES = {
     },
     LOOKUP: {
         id: 'lookUp',
-        instruction: 'Yukarı bakın',
-        voice: 'Lütfen yukarı bakın',
+        instruction: 'Başınızı yukarı kaldırın',
+        voice: 'Lütfen başınızı yukarı kaldırın',
         duration: 3000,
     },
     LOOKDOWN: {
         id: 'lookDown',
-        instruction: 'Aşağı bakın',
-        voice: 'Lütfen aşağı bakın',
+        instruction: 'Başınızı aşağı eğin',
+        voice: 'Lütfen başınızı aşağı eğin',
         duration: 3000,
     },
     TILTHEAD: {
@@ -362,18 +362,18 @@ class LivenessDetectionModule {
                 break;
 
             case 'lookUp':
-                // Detect head tilted up (looking up) - reduced threshold
+                // Detect head tilted up - easier threshold (10° instead of 12°)
                 const xAngleUp = face.xAngle;
-                if (xAngleUp !== undefined && xAngleUp < -12) {
+                if (xAngleUp !== undefined && xAngleUp < -10) {
                     console.log(`✅ lookUp detected: xAngle=${xAngleUp.toFixed(1)}°`);
                     return true;
                 }
                 break;
 
             case 'lookDown':
-                // Detect head tilted down (looking down) - reduced threshold
+                // Detect head tilted down - easier threshold (10° instead of 12°)
                 const xAngleDown = face.xAngle;
-                if (xAngleDown !== undefined && xAngleDown > 12) {
+                if (xAngleDown !== undefined && xAngleDown > 10) {
                     console.log(`✅ lookDown detected: xAngle=${xAngleDown.toFixed(1)}°`);
                     return true;
                 }
