@@ -44,11 +44,14 @@ export const LivenessModule = ({
     const device = useCameraDevice('front');
     const livenessModule = useRef(new LivenessDetectionModule()).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
+    const lastFaceLogTime = useRef(0); // Throttle face detection logs
 
     useEffect(() => {
         let isMounted = true;
+        Logger.info('[LivenessWrapper] 📷 Component mounted, initializing...');
 
         // Initialize camera
+        Logger.info('[LivenessWrapper] 📷 Activating camera...');
         setIsCameraActive(true);
 
         // Setup callbacks
@@ -91,17 +94,24 @@ export const LivenessModule = ({
 
         livenessModule.onChallengeChanged((challenge) => {
             if (isMounted) {
+                Logger.info(`[LivenessWrapper] 🎯 Challenge changed: "${challenge.instruction}"`);
                 setCurrentChallenge(challenge);
                 animateFaceBox();
                 // Update challenge index
-                setChallengeIndex((prev) => prev + 1);
+                setChallengeIndex((prev) => {
+                    const newIndex = prev + 1;
+                    Logger.info(`[LivenessWrapper] 📊 Challenge progress: ${newIndex}/${totalChallenges}`);
+                    return newIndex;
+                });
             }
         });
 
         // Start test after 3 second countdown
+        Logger.info('[LivenessWrapper] ⏱️ Starting 3 second countdown...');
         let count = 3;
         const countdownInterval = setInterval(() => {
             count--;
+            Logger.info(`[LivenessWrapper] 🔢 Countdown: ${count}`);
             if (isMounted) {
                 setCountdown(count);
             }
@@ -109,6 +119,7 @@ export const LivenessModule = ({
             if (count <= 0) {
                 clearInterval(countdownInterval);
                 if (isMounted) {
+                    Logger.info('[LivenessWrapper] ▶️ Countdown complete, starting test');
                     setCountdown(null);
                     startTest();
                 }
@@ -117,6 +128,7 @@ export const LivenessModule = ({
 
         // Cleanup
         return () => {
+            Logger.info('[LivenessWrapper] 🧹 Component unmounting, cleaning up...');
             isMounted = false;
             setIsCameraActive(false);
             livenessModule.stopLiveness();
@@ -124,8 +136,9 @@ export const LivenessModule = ({
             try {
                 Tts.stop();
             } catch (error) {
-                // Ignore
+                Logger.error('[LivenessWrapper] ⚠️ Error stopping TTS:', error);
             }
+            Logger.info('[LivenessWrapper] ✅ Cleanup complete');
         };
     }, []);
 
@@ -146,21 +159,25 @@ export const LivenessModule = ({
 
     const startTest = async () => {
         try {
-            Logger.info('[LivenessWrapper] Liveness testi başlatılıyor...');
+            Logger.info('[LivenessWrapper] 🚀 Liveness testi başlatılıyor...');
             setIsDetecting(true);
 
             // Start with head movement challenges only:
             // düz bakma, sağa, sola, yukarı, aşağı
-            await livenessModule.startLiveness([
+            const challenges = [
                 'lookStraight',
                 'turnHeadRight',
                 'turnHeadLeft',
                 'lookUp',
                 'lookDown'
-            ]);
+            ];
+            Logger.info('[LivenessWrapper] 📋 Challenges:', challenges);
+            await livenessModule.startLiveness(challenges);
+            Logger.info('[LivenessWrapper] ✅ Test başlatıldı');
         } catch (error) {
-            Logger.error('[LivenessWrapper] Test başlatma hatası:', error);
+            Logger.error('[LivenessWrapper] ❌ Test başlatma hatası:', error);
             if (onError) {
+                Logger.info('[LivenessWrapper] 📢 Calling onError callback');
                 onError(error);
             }
         }
@@ -173,10 +190,16 @@ export const LivenessModule = ({
             return;
         }
 
+        Logger.info(`[LivenessWrapper] 🔍 Starting face detection for: "${currentChallenge.instruction}"`);
         let isActive = true;
 
         const detectFace = async () => {
-            if (!isActive || !cameraRef.current) return;
+            if (!isActive || !cameraRef.current) {
+                if (!cameraRef.current) {
+                    Logger.error('[LivenessWrapper] ❌ Camera ref not available');
+                }
+                return;
+            }
 
             try {
                 const photo = await cameraRef.current.takePhoto({
@@ -195,31 +218,55 @@ export const LivenessModule = ({
                     classificationMode: 'all',
                 });
 
+                // Throttle logs to every 2 seconds
+                const now = Date.now();
+                const shouldLog = now - lastFaceLogTime.current > 2000;
+
+                if (shouldLog) {
+                    Logger.info(`[LivenessWrapper] 👤 Detected ${faces.length} face(s)`);
+                    lastFaceLogTime.current = now;
+                }
+
                 if (isActive) {
                     const detected = faces && faces.length > 0;
                     setFaceDetected(detected);
 
                     if (detected) {
                         // Convert ML Kit faces to expected format
-                        const faceData = faces.map(face => ({
-                            bounds: face.frame,
-                            smilingProbability: face.smilingProbability,
-                            leftEyeOpenProbability: face.leftEyeOpenProbability,
-                            rightEyeOpenProbability: face.rightEyeOpenProbability,
-                            // FIX: Correct ML Kit angle mapping
-                            // headEulerAngleX = Pitch (up/down), headEulerAngleY = Yaw (left/right)
-                            xAngle: face.headEulerAngleX || 0,  // Pitch - yukarı/aşağı
-                            yAngle: face.headEulerAngleY || 0,  // Yaw - sola/sağa
-                            zAngle: face.headEulerAngleZ || 0,  // Roll - yana eğilme
-                        }));
+                        const faceData = faces.map(face => {
+                            const data = {
+                                bounds: face.frame,
+                                smilingProbability: face.smilingProbability,
+                                leftEyeOpenProbability: face.leftEyeOpenProbability,
+                                rightEyeOpenProbability: face.rightEyeOpenProbability,
+                                // FIX: Correct ML Kit angle mapping
+                                // headEulerAngleX = Pitch (up/down), headEulerAngleY = Yaw (left/right)
+                                xAngle: face.headEulerAngleX || 0,  // Pitch - yukarı/aşağı
+                                yAngle: face.headEulerAngleY || 0,  // Yaw - sola/sağa
+                                zAngle: face.headEulerAngleZ || 0,  // Roll - yana eğilme
+                            };
+
+                            if (shouldLog) {
+                                Logger.info(`[LivenessWrapper] 📍 Face: x=${data.xAngle.toFixed(1)}°, y=${data.yAngle.toFixed(1)}°, z=${data.zAngle.toFixed(1)}°`);
+                            }
+                            return data;
+                        });
 
                         livenessModule.processFaceData(faceData);
                     } else {
+                        if (shouldLog) {
+                            Logger.info('[LivenessWrapper] ⚠️ No face in frame');
+                        }
                         livenessModule.processFaceData([]);
                     }
                 }
             } catch (error) {
-                Logger.error('[LivenessWrapper] Face detection error:', error);
+                Logger.error('[LivenessWrapper] ❌ Face detection error:', error);
+                Logger.error('[LivenessWrapper] ❌ Error details:', {
+                    message: error.message,
+                    code: error.code,
+                    stack: error.stack?.split('\n')[0]
+                });
             }
 
             // Continue detection
@@ -231,6 +278,7 @@ export const LivenessModule = ({
         detectFace();
 
         return () => {
+            Logger.info('[LivenessWrapper] 🛝 Stopping face detection');
             isActive = false;
         };
     }, [isDetecting, isCameraActive, currentChallenge]);

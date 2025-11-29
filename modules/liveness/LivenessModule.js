@@ -112,34 +112,45 @@ class LivenessDetectionModule {
     // API Methods
     startLiveness = async (challenges = ['lookStraight', 'turnHeadRight', 'turnHeadLeft', 'lookUp', 'lookDown']) => {
         try {
+            console.log('[LivenessModule] 🚀 Starting liveness test...');
+            console.log('[LivenessModule] 📋 Requested challenges:', challenges);
+
             // Validate challenges
             this.challenges = challenges.map(c => {
                 const challenge = Object.values(CHALLENGES).find(ch => ch.id === c);
                 if (!challenge) {
+                    console.error(`[LivenessModule] ❌ Invalid challenge: ${c}`);
                     throw new Error(`Invalid challenge: ${c}`);
                 }
+                console.log(`[LivenessModule] ✅ Challenge validated: ${c} - "${challenge.instruction}"`);
                 return challenge;
             });
 
             this.currentChallengeIndex = 0;
             this.results = [];
+            console.log(`[LivenessModule] 📊 Total challenges to complete: ${this.challenges.length}`);
 
             // Initialize TTS
+            console.log('[LivenessModule] 🔊 Initializing TTS...');
             await this.initializeTTS();
 
             if (this.callbacks.onStarted) {
+                console.log('[LivenessModule] 📢 Calling onStarted callback');
                 this.callbacks.onStarted();
             }
 
             // Start first challenge
+            console.log('[LivenessModule] ▶️ Starting first challenge...');
             await this.startNextChallenge();
 
         } catch (error) {
+            console.error('[LivenessModule] ❌ Error starting liveness:', error);
             this.handleError(error);
         }
     };
 
     stopLiveness = () => {
+        console.log('[LivenessModule] ⏹️ Stopping liveness test...');
         // 🔧 FIX: Handle TTS stop promise rejection
         try {
             Tts.stop().catch(() => {
@@ -150,8 +161,10 @@ class LivenessDetectionModule {
         }
         this.challenges = [];
         this.currentChallengeIndex = 0;
+        console.log('[LivenessModule] ✅ Liveness stopped and reset');
 
         if (this.callbacks.onStopped) {
+            console.log('[LivenessModule] 📢 Calling onStopped callback');
             this.callbacks.onStopped();
         }
     };
@@ -178,29 +191,38 @@ class LivenessDetectionModule {
 
     // Private Methods
     initializeTTS = async () => {
+        console.log('[LivenessModule] 🔊 Initializing TTS engine...');
         // 🔧 FIX: Properly handle all TTS promise rejections
         try {
             await Tts.getInitStatus();
 
             // Check if TTS is available
             const voices = await Tts.voices();
+            console.log(`[LivenessModule] 🗣️ Available voices: ${voices.length}`);
             const turkishVoice = voices.find(v => v.language === 'tr-TR');
 
             if (turkishVoice) {
+                console.log(`[LivenessModule] ✅ Turkish voice found: ${turkishVoice.name}`);
                 await Tts.setDefaultVoice(turkishVoice.id);
+            } else {
+                console.log('[LivenessModule] ⚠️ No Turkish voice found, using default');
             }
 
             this.ttsEnabled = true;
+            console.log('[LivenessModule] ✅ TTS enabled successfully');
         } catch (error) {
             // Catch ALL TTS errors here - no rethrow
-            console.log('TTS not available (running on emulator or no TTS engine), continuing without voice');
+            console.log('[LivenessModule] ⚠️ TTS not available (running on emulator or no TTS engine), continuing without voice');
             this.ttsEnabled = false;
         }
     };
 
     startNextChallenge = async () => {
+        console.log(`[LivenessModule] 🎯 Challenge index: ${this.currentChallengeIndex}/${this.challenges.length}`);
+
         if (this.currentChallengeIndex >= this.challenges.length) {
             // All challenges completed
+            console.log('[LivenessModule] 🎊 All challenges completed!');
             this.completeDetection();
             return;
         }
@@ -209,19 +231,26 @@ class LivenessDetectionModule {
         this.challengeStartTime = Date.now();
         this.noFaceDetectionCount = 0; // Reset no-face counter
 
+        console.log(`[LivenessModule] 🎯 Starting challenge ${this.currentChallengeIndex + 1}/${this.challenges.length}: "${challenge.instruction}"`);
+        console.log(`[LivenessModule] ⏱️ Challenge timeout: ${challenge.duration + 2000}ms`);
+
         // Speak instruction
         if (this.ttsEnabled) {
+            console.log(`[LivenessModule] 🔊 Speaking: "${challenge.voice}"`);
             try {
                 // 🔧 FIX: Handle promise rejection
                 Tts.speak(challenge.voice).catch(() => {
-                    // TTS failed, continue without voice
+                    console.log('[LivenessModule] ⚠️ TTS speak failed');
                 });
             } catch (error) {
-                // TTS not available
+                console.log('[LivenessModule] ⚠️ TTS not available');
             }
+        } else {
+            console.log('[LivenessModule] 🔇 TTS disabled, skipping voice instruction');
         }
 
         if (this.callbacks.onChallengeChanged) {
+            console.log('[LivenessModule] 📢 Calling onChallengeChanged callback');
             this.callbacks.onChallengeChanged(challenge);
         }
 
@@ -239,7 +268,7 @@ class LivenessDetectionModule {
             // If no face detected for too long (10 consecutive checks), fail the challenge
             if (this.noFaceDetectionCount > 10 && this.currentChallengeIndex < this.challenges.length) {
                 const challenge = this.challenges[this.currentChallengeIndex];
-                console.log('Challenge failed: No face detected');
+                console.log(`[LivenessModule] ❌ Challenge failed: No face detected for ${this.noFaceDetectionCount} frames`);
                 this.challengeCompleted(challenge, false);
             }
             return;
@@ -378,13 +407,18 @@ class LivenessDetectionModule {
     };
 
     challengeCompleted = (challenge, success) => {
+        const duration = Date.now() - this.challengeStartTime;
+        console.log(`[LivenessModule] ${success ? '✅' : '❌'} Challenge "${challenge.instruction}" ${success ? 'COMPLETED' : 'FAILED'} in ${duration}ms`);
+
         // Record result
         this.results.push({
             challenge: challenge.id,
             success: success,
             timestamp: Date.now(),
-            duration: Date.now() - this.challengeStartTime,
+            duration: duration,
         });
+
+        console.log(`[LivenessModule] 📊 Progress: ${this.results.filter(r => r.success).length}/${this.results.length} successful`);
 
         // Move to next challenge
         this.currentChallengeIndex++;
@@ -400,16 +434,22 @@ class LivenessDetectionModule {
         if (this.currentChallengeIndex < this.challenges.length &&
             this.challenges[this.currentChallengeIndex].id === challenge.id) {
             // Challenge failed due to timeout
+            console.log(`[LivenessModule] ⏱️ TIMEOUT: Challenge "${challenge.instruction}" took too long`);
             this.challengeCompleted(challenge, false);
         }
     };
 
     completeDetection = () => {
+        console.log('[LivenessModule] 🏁 Completing detection...');
+
         // Calculate overall score
         const successCount = this.results.filter(r => r.success).length;
         const totalCount = this.results.length;
         const score = totalCount > 0 ? (successCount / totalCount) * 100 : 0;
         const passed = score >= 60; // 60% threshold (3/5 challenges must succeed)
+
+        console.log(`[LivenessModule] 📊 Final Score: ${successCount}/${totalCount} = ${Math.round(score)}%`);
+        console.log(`[LivenessModule] ${passed ? '✅ PASSED' : '❌ FAILED'} (threshold: 60%)`);
 
         const response = {
             passed: passed,
@@ -424,11 +464,15 @@ class LivenessDetectionModule {
         };
 
         if (this.callbacks.onResult) {
+            console.log('[LivenessModule] 📢 Calling onResult callback with:', response);
             this.callbacks.onResult(response);
+        } else {
+            console.log('[LivenessModule] ⚠️ No onResult callback registered');
         }
     };
 
     handleError = (error) => {
+        console.error('[LivenessModule] ❌ Error occurred:', error);
         const errorResponse = {
             success: false,
             error: error.message || 'Liveness detection error',
@@ -436,7 +480,10 @@ class LivenessDetectionModule {
         };
 
         if (this.callbacks.onError) {
+            console.log('[LivenessModule] 📢 Calling onError callback');
             this.callbacks.onError(errorResponse);
+        } else {
+            console.log('[LivenessModule] ⚠️ No onError callback registered');
         }
     };
 }
