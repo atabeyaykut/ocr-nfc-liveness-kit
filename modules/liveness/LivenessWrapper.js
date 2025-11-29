@@ -249,13 +249,31 @@ export const LivenessModule = ({
                         { transform: [{ scale: pulseAnim }] }
                     ]}
                 >
-                    <View style={[styles.faceCorner, styles.faceCornerTopLeft]} />
-                    <View style={[styles.faceCorner, styles.faceCornerTopRight]} />
-                    <View style={[styles.faceCorner, styles.faceCornerBottomLeft]} />
-                    <View style={[styles.faceCorner, styles.faceCornerBottomRight]} />
+                    <View style={[
+                        styles.faceCorner,
+                        styles.faceCornerTopLeft,
+                        { borderColor: faceDetected ? '#00FF00' : '#FF0000' }
+                    ]} />
+                    <View style={[
+                        styles.faceCorner,
+                        styles.faceCornerTopRight,
+                        { borderColor: faceDetected ? '#00FF00' : '#FF0000' }
+                    ]} />
+                    <View style={[
+                        styles.faceCorner,
+                        styles.faceCornerBottomLeft,
+                        { borderColor: faceDetected ? '#00FF00' : '#FF0000' }
+                    ]} />
+                    <View style={[
+                        styles.faceCorner,
+                        styles.faceCornerBottomRight,
+                        { borderColor: faceDetected ? '#00FF00' : '#FF0000' }
+                    ]} />
 
-                    {faceDetected && (
+                    {faceDetected ? (
                         <Text style={styles.faceHint}>✓ Yüz algılandı</Text>
+                    ) : (
+                        <Text style={[styles.faceHint, styles.faceHintWarning]}>⚠ Yüzünüzü çerçeveye yerleştirin</Text>
                     )}
                 </Animated.View>
 
@@ -347,8 +365,8 @@ const styles = StyleSheet.create({
         position: 'absolute',
         width: 40,
         height: 40,
-        borderColor: '#00FF00',
         borderWidth: 3,
+        // borderColor dinamik olarak inline verilecek (yeşil/kırmızı)
     },
     faceCornerTopLeft: {
         top: -2,
@@ -388,6 +406,10 @@ const styles = StyleSheet.create({
         paddingHorizontal: 15,
         paddingVertical: 5,
         borderRadius: 15,
+    },
+    faceHintWarning: {
+        backgroundColor: 'rgba(255,0,0,0.7)',
+        color: '#FFF',
     },
     challengeContainer: {
         position: 'absolute',
