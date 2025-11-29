@@ -54,7 +54,20 @@ export const LivenessModule = ({
         // Setup callbacks
         livenessModule.onLivenessResult((result) => {
             if (isMounted) {
-                Logger.info('[LivenessWrapper] Test başarılı:', result);
+                Logger.info('[LivenessWrapper] Test tamamlandı');
+                Logger.info(`[LivenessWrapper] Durum: ${result.passed ? 'BAŞARILI' : 'BAŞARISIZ'}`);
+                Logger.info(`[LivenessWrapper] Skor: ${result.score}%`);
+
+                if (result.details) {
+                    Logger.info(`[LivenessWrapper] Başarılı: ${result.details.successfulChallenges}/${result.details.totalChallenges}`);
+
+                    if (result.details.challenges) {
+                        result.details.challenges.forEach((ch, idx) => {
+                            Logger.info(`[LivenessWrapper] ${idx + 1}. ${ch.challenge}: ${ch.success ? '✓' : '✗'} (${ch.duration}ms)`);
+                        });
+                    }
+                }
+
                 setIsDetecting(false);
                 setIsCameraActive(false);
                 setCurrentChallenge(null);

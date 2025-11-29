@@ -582,15 +582,52 @@ const VerificationFlowScreen = ({ navigation, route }) => {
 
     // Liveness success handler
     const handleLivenessSuccess = useCallback((result) => {
-        addLog(`✅ Liveness başarılı! Benzerlik: %${result.similarity}`);
+        addLog('=== 🎭 LIVENESS TEST SONUÇLARI ===');
+        addLog(`Durum: ${result.passed ? '✅ BAŞARILI' : '❌ BAŞARISIZ'}`);
+        addLog(`Skor: ${result.score}%`);
+
+        if (result.details) {
+            addLog(`\nChallenge Detayları:`);
+            addLog(`- Toplam: ${result.details.totalChallenges}`);
+            addLog(`- Başarılı: ${result.details.successfulChallenges}`);
+            addLog(`- Başarısız: ${result.details.failedChallenges}`);
+
+            if (result.details.challenges && result.details.challenges.length > 0) {
+                addLog(`\nChallenge Sonuçları:`);
+                result.details.challenges.forEach((challenge, index) => {
+                    const status = challenge.success ? '✅' : '❌';
+                    const duration = challenge.duration ? `(${(challenge.duration / 1000).toFixed(1)}s)` : '';
+                    addLog(`  ${index + 1}. ${challenge.challenge}: ${status} ${duration}`);
+                });
+            }
+        }
+
+        if (result.similarity !== undefined) {
+            addLog(`\nYüz Benzerliği: %${result.similarity}`);
+        }
+
+        addLog('================================\n');
+
         setLivenessResult(result);
         setCurrentPhase('completed');
     }, [addLog]);
 
     // Liveness error handler
     const handleLivenessError = useCallback((error) => {
-        addLog(`❌ Liveness hatası: ${error.message}`);
-        Alert.alert('Liveness Hatası', error.message, [
+        addLog('=== ❌ LIVENESS TEST HATASI ===');
+        addLog(`Hata: ${error.message || error.error || 'Bilinmeyen hata'}`);
+
+        if (error.code) {
+            addLog(`Hata Kodu: ${error.code}`);
+        }
+
+        if (error.details) {
+            addLog(`Detaylar: ${JSON.stringify(error.details, null, 2)}`);
+        }
+
+        addLog('================================\n');
+
+        Alert.alert('Liveness Hatası', error.message || error.error, [
             { text: 'Tekrar Dene', onPress: () => setCurrentPhase('liveness') },
             { text: 'Atla', onPress: () => setCurrentPhase('completed') }
         ]);
@@ -598,7 +635,9 @@ const VerificationFlowScreen = ({ navigation, route }) => {
 
     // Liveness cancel handler
     const handleLivenessCancel = useCallback(() => {
-        addLog('Liveness iptal edildi');
+        addLog('=== ⚠️ LIVENESS TEST İPTAL EDİLDİ ===');
+        addLog('Kullanıcı testi iptal etti');
+        addLog('================================\n');
         setCurrentPhase('completed');
     }, [addLog]);
 
