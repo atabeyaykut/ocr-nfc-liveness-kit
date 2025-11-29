@@ -55,12 +55,14 @@ export const LivenessModule = ({
 }) => {
     const [currentCommandIndex, setCurrentCommandIndex] = useState(0);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [statusMessage, setStatusMessage] = useState('Hazırlanıyor...');
+    const [statusMessage, setStatusMessage] = useState('Kamerayı açın ve yüzünüzü konumlandırın...');
     const [detectedFace, setDetectedFace] = useState(null);
     const [similarity, setSimilarity] = useState(null);
     const [commandPassed, setCommandPassed] = useState(false);
     const [lightingQuality, setLightingQuality] = useState('checking');
     const [faceDepthMap, setFaceDepthMap] = useState(null);
+    const [countdown, setCountdown] = useState(null);
+    const [testStarted, setTestStarted] = useState(false);
 
     const cameraRef = useRef(null);
     const device = useCameraDevice('front');
@@ -69,6 +71,7 @@ export const LivenessModule = ({
     const behavioralRef = useRef(new BehavioralBiometrics());
     const commandStartTimeRef = useRef(null);
     const lastLightingWarningRef = useRef(0);
+    const firstFaceDetectedRef = useRef(false);
 
     const currentCommand = LIVENESS_COMMANDS[currentCommandIndex];
 
@@ -97,7 +100,7 @@ export const LivenessModule = ({
     }, [currentCommandIndex, startFaceDetection]);
 
     const startLivenessTest = useCallback(() => {
-        Logger.info('[Liveness] Test başlatıldı');
+        Logger.info('[Liveness] Test hazırlanıyor - yüz algılanması bekleniyor');
         // Reset behavioral biometrics session in soft mode
         try {
             if (behavioralRef.current) {
@@ -106,14 +109,42 @@ export const LivenessModule = ({
         } catch (resetError) {
             Logger.warn('[Liveness] Behavioral reset failed:', resetError);
         }
-        commandStartTimeRef.current = Date.now();
-        setStatusMessage(LIVENESS_COMMANDS[0].text);
 
-        // Start face detection for first command
+        setStatusMessage('Yüzünüzü kameraya yerleştirin...');
+
+        // Start face detection (will trigger countdown when face detected)
         setTimeout(() => {
             startFaceDetection();
         }, 500);
     }, [startFaceDetection]);
+
+    // Countdown before starting test
+    const startCountdown = useCallback(() => {
+        setCountdown(3);
+        setStatusMessage('Hazırlanın! Test başlıyor...');
+
+        const countdownInterval = setInterval(() => {
+            setCountdown((prev) => {
+                if (prev === null) {
+                    clearInterval(countdownInterval);
+                    return null;
+                }
+
+                if (prev === 1) {
+                    clearInterval(countdownInterval);
+                    // Countdown finished - start test
+                    Logger.info('[Liveness] Countdown bitti, test başlıyor!');
+                    setTestStarted(true);
+                    setCountdown(null);
+                    commandStartTimeRef.current = Date.now();
+                    setStatusMessage(LIVENESS_COMMANDS[0].text);
+                    return null;
+                }
+
+                return prev - 1;
+            });
+        }, 1000);
+    }, []);
 
     // Real-time face detection
     const startFaceDetection = useCallback(() => {
@@ -146,6 +177,19 @@ export const LivenessModule = ({
                 if (faces && faces.length > 0) {
                     const face = faces[0];
                     setDetectedFace(face);
+
+                    // First face detection - start countdown
+                    if (!firstFaceDetectedRef.current && !testStarted) {
+                        firstFaceDetectedRef.current = true;
+                        Logger.info('[Liveness] İlk yüz algılandı! Countdown başlıyor...');
+                        startCountdown();
+                        return; // Exit early, commands will start after countdown
+                    }
+
+                    // If countdown is running, don't validate commands yet
+                    if (countdown !== null || !testStarted) {
+                        return;
+                    }
 
                     // DEBUG: Log face properties for first detection
                     if (!detectedFace) {
@@ -221,7 +265,7 @@ export const LivenessModule = ({
                 Logger.error('[Liveness] Detection error:', error);
             }
         }, 500); // Check every 500ms
-    }, [currentCommand, currentCommandIndex, isProcessing, commandPassed]);
+    }, [currentCommand, currentCommandIndex, isProcessing, commandPassed, countdown, testStarted, startCountdown]);
 
     // Check lighting conditions
     const checkLightingQuality = useCallback((face) => {
@@ -519,9 +563,26 @@ export const LivenessModule = ({
 
                 <View style={styles.faceGuide}>
                     <View style={styles.faceCircle} />
+
+                    {/* Countdown Display */}
+                    {countdown !== null && (
+                        <View style={styles.countdownOverlay}>
+                            <Text style={styles.countdownNumber}>{countdown}</Text>
+                            <Text style={styles.countdownText}>Test başlıyor...</Text>
+                        </View>
+                    )}
                 </View>
 
                 <View style={styles.instructionBar}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.instructionText}>{statusMessage}</Text>
+                        {testStarted && !commandPassed && (
+                            <Text style={styles.instructionHint}>
+                                Komutları yerine getirin
+                            </Text>
+                        )}
+                    </View>
+                    {commandPassed && <Text style={styles.checkMark}>✓</Text>}
                     {similarity !== null && (
                         <Text style={styles.similarityText}>
                             Benzerlik: %{similarity}
@@ -601,10 +662,35 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         flex: 1,
     },
+    instructionHint: {
+        color: '#AAA',
+        fontSize: 14,
+        marginTop: 5,
+        fontStyle: 'italic',
+    },
     checkMark: {
         fontSize: 24,
         color: '#00FF00',
         marginLeft: 10,
+    },
+    countdownOverlay: {
+        position: 'absolute',
+        alignSelf: 'center',
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        paddingVertical: 30,
+        paddingHorizontal: 50,
+        borderRadius: 20,
+        alignItems: 'center',
+    },
+    countdownNumber: {
+        fontSize: 72,
+        fontWeight: 'bold',
+        color: '#00FF00',
+    },
+    countdownText: {
+        fontSize: 18,
+        color: '#FFF',
+        marginTop: 10,
     },
     debugInfo: {
         position: 'absolute',
