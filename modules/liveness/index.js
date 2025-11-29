@@ -13,6 +13,3 @@ export { default as LivenessDetectionModule } from './LivenessModule';
 
 // React wrapper component
 export { LivenessModule } from './LivenessWrapper';
-
-// Type definitions (if needed)
-export * from './types';
