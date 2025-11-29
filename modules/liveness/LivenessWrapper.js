@@ -12,6 +12,7 @@ import {
     Alert,
     Animated,
     Dimensions,
+    Platform,
 } from 'react-native';
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import Tts from 'react-native-tts';
@@ -34,8 +35,10 @@ export const LivenessModule = ({
     const [isDetecting, setIsDetecting] = useState(false);
     const [currentChallenge, setCurrentChallenge] = useState(null);
     const [faceDetected, setFaceDetected] = useState(false);
-    const [countdown, setCountdown] = useState(null);
+    const [countdown, setCountdown] = useState(3);
     const [isCameraActive, setIsCameraActive] = useState(false);
+    const [challengeIndex, setChallengeIndex] = useState(0);
+    const [totalChallenges] = useState(3);
 
     const cameraRef = useRef(null);
     const device = useCameraDevice('front');
@@ -77,15 +80,27 @@ export const LivenessModule = ({
             if (isMounted) {
                 setCurrentChallenge(challenge);
                 animateFaceBox();
+                // Update challenge index
+                setChallengeIndex((prev) => prev + 1);
             }
         });
 
         // Start test after 3 second countdown
-        setTimeout(() => {
+        let count = 3;
+        const countdownInterval = setInterval(() => {
+            count--;
             if (isMounted) {
-                startTest();
+                setCountdown(count);
             }
-        }, 3000);
+
+            if (count <= 0) {
+                clearInterval(countdownInterval);
+                if (isMounted) {
+                    setCountdown(null);
+                    startTest();
+                }
+            }
+        }, 1000);
 
         // Cleanup
         return () => {
@@ -149,7 +164,12 @@ export const LivenessModule = ({
                     flash: 'off',
                 });
 
-                const faces = await FaceDetection.detect(photo.path, {
+                // Fix Android file path - ML Kit needs file:// prefix
+                const photoPath = Platform.OS === 'android' && !photo.path.startsWith('file://')
+                    ? `file://${photo.path}`
+                    : photo.path;
+
+                const faces = await FaceDetection.detect(photoPath, {
                     performanceMode: 'fast',
                     landmarkMode: 'all',
                     classificationMode: 'all',
@@ -215,6 +235,11 @@ export const LivenessModule = ({
                 {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.title}>👤 Canlılık Testi</Text>
+                    {isDetecting && currentChallenge && (
+                        <Text style={styles.progressText}>
+                            {challengeIndex} / {totalChallenges}
+                        </Text>
+                    )}
                 </View>
 
                 {/* Face Guide */}
@@ -234,8 +259,16 @@ export const LivenessModule = ({
                     )}
                 </Animated.View>
 
+                {/* Countdown */}
+                {countdown !== null && countdown > 0 && (
+                    <View style={styles.countdownContainer}>
+                        <Text style={styles.countdownNumber}>{countdown}</Text>
+                        <Text style={styles.countdownText}>Test başlıyor...</Text>
+                    </View>
+                )}
+
                 {/* Challenge Instruction */}
-                {currentChallenge && (
+                {currentChallenge && countdown === null && (
                     <View style={styles.challengeContainer}>
                         <Text style={styles.challengeInstruction}>
                             {currentChallenge.instruction}
@@ -270,10 +303,36 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: 'bold',
     },
+    progressText: {
+        color: '#00FF00',
+        fontSize: 16,
+        fontWeight: '600',
+        marginTop: 5,
+    },
     errorText: {
         color: '#FFF',
         fontSize: 16,
         textAlign: 'center',
+    },
+    countdownContainer: {
+        position: 'absolute',
+        top: '40%',
+        alignSelf: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        paddingVertical: 30,
+        paddingHorizontal: 50,
+        borderRadius: 20,
+    },
+    countdownNumber: {
+        fontSize: 72,
+        fontWeight: 'bold',
+        color: '#00FF00',
+    },
+    countdownText: {
+        fontSize: 18,
+        color: '#FFF',
+        marginTop: 10,
     },
     faceGuide: {
         position: 'absolute',
