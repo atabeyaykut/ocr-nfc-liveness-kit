@@ -136,13 +136,20 @@ export const LivenessModule = ({
                     const face = faces[0];
                     setDetectedFace(face);
 
+                    // DEBUG: Log face properties for first detection
+                    if (!detectedFace) {
+                        Logger.info('[Liveness] Face detected! Properties:', {
+                            headEulerAngleY: face.headEulerAngleY,
+                            headEulerAngleX: face.headEulerAngleX,
+                            smilingProbability: face.smilingProbability,
+                            leftEyeOpenProbability: face.leftEyeOpenProbability,
+                            rightEyeOpenProbability: face.rightEyeOpenProbability,
+                        });
+                    }
+
                     // Check lighting quality
                     const lighting = checkLightingQuality(face);
                     setLightingQuality(lighting);
-
-                    // Create 3D face map
-                    const depthMap = create3DFaceMap(face);
-                    setFaceDepthMap(depthMap);
 
                     // Warn if lighting is poor (throttled to once per 5 seconds)
                     if (lighting === 'poor' && !commandPassed) {
@@ -155,6 +162,16 @@ export const LivenessModule = ({
 
                     // Check command completion based on face properties
                     const commandCompleted = validateCommand(currentCommand, face);
+
+                    // DEBUG: Log validation result every 10 detections
+                    if (Math.random() < 0.1) {
+                        Logger.info(`[Liveness] Validating ${currentCommand.type}:`, {
+                            completed: commandCompleted,
+                            headY: face.headEulerAngleY?.toFixed(1),
+                            headX: face.headEulerAngleX?.toFixed(1),
+                            smile: face.smilingProbability?.toFixed(2),
+                        });
+                    }
 
                     if (commandCompleted && !commandPassed) {
                         setCommandPassed(true);
@@ -182,6 +199,11 @@ export const LivenessModule = ({
                                 compareFaces(normalizedPath);
                             }
                         }, 500);
+                    }
+                } else {
+                    // No face detected - log occasionally
+                    if (Math.random() < 0.05) {
+                        Logger.warn('[Liveness] No face detected in frame');
                     }
                 }
             } catch (error) {
