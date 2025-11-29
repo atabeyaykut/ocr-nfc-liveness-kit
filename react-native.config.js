@@ -14,7 +14,11 @@ module.exports = {
     },
     '@react-native-ml-kit/face-detection': {
       platforms: {
-        android: null,
+        android: {
+          packageImportPath:
+            'import com.rnmlkit.facedetection.FaceDetectionPackage;',
+          packageInstance: 'new FaceDetectionPackage()',
+        },
         ios: null,
       },
     },
