@@ -23,7 +23,8 @@ class BehavioralBiometrics {
             sessionStart: Date.now()
         };
 
-        Logger.info('[BehavioralBiometrics] Initialized');
+        this.initialized = true;
+        // Removed log spam - only log once during first session
     }
 
     /**
