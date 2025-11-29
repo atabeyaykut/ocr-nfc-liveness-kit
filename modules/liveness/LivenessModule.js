@@ -120,29 +120,27 @@ export const LivenessModule = ({
 
     // Countdown before starting test
     const startCountdown = useCallback(() => {
-        setCountdown(3);
+        let count = 3;
+        setCountdown(count);
         setStatusMessage('Hazırlanın! Test başlıyor...');
 
         const countdownInterval = setInterval(() => {
-            setCountdown((prev) => {
-                if (prev === null) {
-                    clearInterval(countdownInterval);
-                    return null;
-                }
+            count--;
 
-                if (prev === 1) {
-                    clearInterval(countdownInterval);
-                    // Countdown finished - start test
-                    Logger.info('[Liveness] Countdown bitti, test başlıyor!');
-                    setTestStarted(true);
-                    setCountdown(null);
-                    commandStartTimeRef.current = Date.now();
-                    setStatusMessage(LIVENESS_COMMANDS[0].text);
-                    return null;
-                }
+            if (count <= 0) {
+                clearInterval(countdownInterval);
+                Logger.info('[Liveness] Countdown bitti, test başlıyor!');
 
-                return prev - 1;
-            });
+                // Update states
+                setCountdown(null);
+                setTestStarted(true);
+                commandStartTimeRef.current = Date.now();
+                setStatusMessage(LIVENESS_COMMANDS[0].text);
+
+                Logger.info('[Liveness] testStarted = true olarak güncellendi');
+            } else {
+                setCountdown(count);
+            }
         }, 1000);
     }, []);
 
@@ -227,12 +225,16 @@ export const LivenessModule = ({
                     const commandCompleted = validateCommand(currentCommand, face);
 
                     // DEBUG: Log validation result every 10 detections
-                    if (Math.random() < 0.1) {
+                    if (Math.random() < 0.05) {
                         Logger.info(`[Liveness] Validating ${currentCommand.type}:`, {
                             completed: commandCompleted,
+                            commandIndex: currentCommandIndex,
+                            testStarted,
                             headY: face.headEulerAngleY?.toFixed(1),
                             headX: face.headEulerAngleX?.toFixed(1),
                             smile: face.smilingProbability?.toFixed(2),
+                            eyeL: face.leftEyeOpenProbability?.toFixed(2),
+                            eyeR: face.rightEyeOpenProbability?.toFixed(2),
                         });
                     }
 
@@ -253,14 +255,21 @@ export const LivenessModule = ({
 
                         // Move to next command after short delay
                         setTimeout(() => {
-                            if (currentCommandIndex < LIVENESS_COMMANDS.length - 1) {
-                                setCurrentCommandIndex(currentCommandIndex + 1);
-                                setCommandPassed(false);
-                                commandStartTimeRef.current = null;
-                            } else {
-                                // All commands completed - compare with reference photo
-                                compareFaces(normalizedPath);
-                            }
+                            setCurrentCommandIndex((prevIndex) => {
+                                const nextIndex = prevIndex + 1;
+
+                                if (nextIndex < LIVENESS_COMMANDS.length) {
+                                    Logger.info(`[Liveness] Komut ${prevIndex + 1}/${LIVENESS_COMMANDS.length} tamamlandı, sıradaki: ${LIVENESS_COMMANDS[nextIndex].type}`);
+                                    setCommandPassed(false);
+                                    commandStartTimeRef.current = Date.now();
+                                    return nextIndex;
+                                } else {
+                                    // All commands completed - compare with reference photo
+                                    Logger.info('[Liveness] Tüm komutlar tamamlandı!');
+                                    setTimeout(() => compareFaces(normalizedPath), 100);
+                                    return prevIndex;
+                                }
+                            });
                         }, 500);
                     }
                 } else {
