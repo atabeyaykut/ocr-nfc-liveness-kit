@@ -1,5 +1,18 @@
-// Liveness Test Module - Main Entry Point
-// This module handles biometric liveness detection functionality
+/**
+ * Liveness Module - Main Entry Point
+ * 
+ * This module provides liveness detection functionality using:
+ * - LivenessDetectionModule: Core class-based detection engine
+ * - LivenessModule: React wrapper component for VerificationFlowScreen
+ * 
+ * @module liveness
+ */
 
-export { default as LivenessDetector } from './LivenessDetector';
+// Core detection module (class-based)
+export { default as LivenessDetectionModule } from './LivenessModule';
+
+// React wrapper component
+export { LivenessModule } from './LivenessWrapper';
+
+// Type definitions (if needed)
 export * from './types';
