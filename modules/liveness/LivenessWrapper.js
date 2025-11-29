@@ -160,7 +160,6 @@ export const LivenessModule = ({
     const startTest = async () => {
         try {
             Logger.info('[LivenessWrapper] 🚀 Liveness testi başlatılıyor...');
-            setIsDetecting(true);
 
             // Start with head movement challenges only:
             // düz bakma, sağa, sola, yukarı, aşağı
@@ -172,6 +171,10 @@ export const LivenessModule = ({
                 'lookDown'
             ];
             Logger.info('[LivenessWrapper] 📋 Challenges:', challenges);
+
+            // Enable detection BEFORE starting challenges so face detection runs during challenges
+            setIsDetecting(true);
+
             await livenessModule.startLiveness(challenges);
             Logger.info('[LivenessWrapper] ✅ Test başlatıldı');
         } catch (error) {
@@ -185,12 +188,13 @@ export const LivenessModule = ({
 
     // Real face detection using ML Kit
     useEffect(() => {
-        if (!isDetecting || !isCameraActive || !currentChallenge) {
+        if (!isDetecting || !isCameraActive) {
             setFaceDetected(false);
             return;
         }
 
-        Logger.info(`[LivenessWrapper] 🔍 Starting face detection for: "${currentChallenge.instruction}"`);
+        const challengeInfo = currentChallenge ? `"${currentChallenge.instruction}"` : "waiting...";
+        Logger.info(`[LivenessWrapper] 🔍 Starting face detection for: ${challengeInfo}`);
         let isActive = true;
 
         const detectFace = async () => {
@@ -233,13 +237,9 @@ export const LivenessModule = ({
                     setFaceDetected(detected);
 
                     if (detected) {
-                        // DEBUG: Log raw face object first time
+                        // DEBUG: Log raw face angles for troubleshooting
                         if (shouldLog && faces[0]) {
-                            Logger.info(`[LivenessWrapper] 🔍 DEBUG - Raw face object keys:`, Object.keys(faces[0]));
-                            Logger.info(`[LivenessWrapper] 🔍 DEBUG - headEulerAngleX:`, faces[0].headEulerAngleX);
-                            Logger.info(`[LivenessWrapper] 🔍 DEBUG - headEulerAngleY:`, faces[0].headEulerAngleY);
-                            Logger.info(`[LivenessWrapper] 🔍 DEBUG - headEulerAngleZ:`, faces[0].headEulerAngleZ);
-                            Logger.info(`[LivenessWrapper] 🔍 DEBUG - Full face:`, JSON.stringify(faces[0], null, 2));
+                            Logger.info(`[LivenessWrapper] 📊 ML Kit angles - rotationX: ${faces[0].rotationX?.toFixed(1)}°, rotationY: ${faces[0].rotationY?.toFixed(1)}°, rotationZ: ${faces[0].rotationZ?.toFixed(1)}°`);
                         }
 
                         // Convert ML Kit faces to expected format
@@ -291,7 +291,7 @@ export const LivenessModule = ({
             Logger.info('[LivenessWrapper] 🛝 Stopping face detection');
             isActive = false;
         };
-    }, [isDetecting, isCameraActive, currentChallenge]);
+    }, [isDetecting, isCameraActive]);
 
     if (!device) {
         return (

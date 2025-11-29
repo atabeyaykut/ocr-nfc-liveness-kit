@@ -336,18 +336,18 @@ class LivenessDetectionModule {
                 break;
 
             case 'turnHeadLeft':
-                // Detect head turned left - reduced threshold for easier detection
+                // Detect head turned left - ML Kit: positive yAngle = left turn
                 const yAngleLeft = face.yAngle;
-                if (yAngleLeft !== undefined && yAngleLeft < -20) {
+                if (yAngleLeft !== undefined && yAngleLeft > 20) {
                     console.log(`✅ turnHeadLeft detected: yAngle=${yAngleLeft.toFixed(1)}°`);
                     return true;
                 }
                 break;
 
             case 'turnHeadRight':
-                // Detect head turned right - reduced threshold for easier detection
+                // Detect head turned right - ML Kit: negative yAngle = right turn
                 const yAngleRight = face.yAngle;
-                if (yAngleRight !== undefined && yAngleRight > 20) {
+                if (yAngleRight !== undefined && yAngleRight < -20) {
                     console.log(`✅ turnHeadRight detected: yAngle=${yAngleRight.toFixed(1)}°`);
                     return true;
                 }
