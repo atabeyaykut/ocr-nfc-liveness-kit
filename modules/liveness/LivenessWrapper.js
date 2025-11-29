@@ -54,6 +54,24 @@ export const LivenessModule = ({
         Logger.info('[LivenessWrapper] 📷 Activating camera...');
         setIsCameraActive(true);
 
+        // Warm up camera during countdown by taking dummy photos
+        const warmupCamera = async () => {
+            await new Promise(resolve => setTimeout(resolve, 500)); // Wait for camera to activate
+            if (cameraRef.current && isMounted) {
+                try {
+                    Logger.info('[LivenessWrapper] 🔥 Warming up camera...');
+                    // Take 2 quick dummy photos to initialize camera hardware
+                    await cameraRef.current.takePhoto({ qualityPrioritization: 'speed', flash: 'off' });
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    await cameraRef.current.takePhoto({ qualityPrioritization: 'speed', flash: 'off' });
+                    Logger.info('[LivenessWrapper] ✅ Camera warm-up complete');
+                } catch (error) {
+                    Logger.warn('[LivenessWrapper] ⚠️ Camera warm-up failed, continuing anyway');
+                }
+            }
+        };
+        warmupCamera();
+
         // Setup callbacks
         livenessModule.onLivenessResult((result) => {
             if (isMounted) {
@@ -105,6 +123,10 @@ export const LivenessModule = ({
                 });
             }
         });
+
+        // Enable face detection BEFORE countdown to pre-warm everything
+        Logger.info('[LivenessWrapper] 🔍 Pre-enabling face detection for faster start');
+        setIsDetecting(true);
 
         // Start test after 3 second countdown
         Logger.info('[LivenessWrapper] ⏱️ Starting 3 second countdown...');
@@ -172,9 +194,7 @@ export const LivenessModule = ({
             ];
             Logger.info('[LivenessWrapper] 📋 Challenges:', challenges);
 
-            // Enable detection BEFORE starting challenges so face detection runs during challenges
-            setIsDetecting(true);
-
+            // Note: isDetecting already set to true during countdown for faster response
             await livenessModule.startLiveness(challenges);
             Logger.info('[LivenessWrapper] ✅ Test başlatıldı');
         } catch (error) {
