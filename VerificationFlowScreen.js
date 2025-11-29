@@ -20,7 +20,7 @@ import {
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import NfcManager from 'react-native-nfc-manager';
-import LivenessModule from './modules/liveness/LivenessModule';
+import { LivenessModule } from './modules/liveness/LivenessWrapper';
 
 const OCRReaderModule = require('./modules/ocr/OCRReaderModule').default || require('./modules/ocr/OCRReaderModule');
 const { NFCReaderModule } = require('./modules/nfc/NFCReaderModule');
