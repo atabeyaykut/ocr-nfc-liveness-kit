@@ -58,6 +58,7 @@ export const LivenessModule = ({
     const detectionIntervalRef = useRef(null);
     const behavioralRef = useRef(new BehavioralBiometrics());
     const commandStartTimeRef = useRef(null);
+    const lastLightingWarningRef = useRef(0);
 
     const currentCommand = LIVENESS_COMMANDS[currentCommandIndex];
 
@@ -75,9 +76,15 @@ export const LivenessModule = ({
             setStatusMessage(currentCommand.text);
             // Start timing for behavioral biometrics (reaction time)
             commandStartTimeRef.current = Date.now();
+
+            // Cleanup previous interval
+            if (detectionIntervalRef.current) {
+                clearInterval(detectionIntervalRef.current);
+            }
+
             startFaceDetection();
         }
-    }, [currentCommandIndex]);
+    }, [currentCommandIndex, startFaceDetection]);
 
     const startLivenessTest = useCallback(() => {
         Logger.info('[Liveness] Test başlatıldı');
@@ -89,9 +96,14 @@ export const LivenessModule = ({
         } catch (resetError) {
             Logger.warn('[Liveness] Behavioral reset failed:', resetError);
         }
-        commandStartTimeRef.current = null;
-        setStatusMessage('Kameraya bakın...');
-    }, []);
+        commandStartTimeRef.current = Date.now();
+        setStatusMessage(LIVENESS_COMMANDS[0].text);
+
+        // Start face detection for first command
+        setTimeout(() => {
+            startFaceDetection();
+        }, 500);
+    }, [startFaceDetection]);
 
     // Real-time face detection
     const startFaceDetection = useCallback(() => {
@@ -132,9 +144,13 @@ export const LivenessModule = ({
                     const depthMap = create3DFaceMap(face);
                     setFaceDepthMap(depthMap);
 
-                    // Warn if lighting is poor
+                    // Warn if lighting is poor (throttled to once per 5 seconds)
                     if (lighting === 'poor' && !commandPassed) {
-                        Logger.warn('[Liveness] Poor lighting detected');
+                        const now = Date.now();
+                        if (now - lastLightingWarningRef.current > 5000) {
+                            Logger.warn('[Liveness] Poor lighting detected');
+                            lastLightingWarningRef.current = now;
+                        }
                     }
 
                     // Check command completion based on face properties
@@ -529,8 +545,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     faceCircle: {
-        width: 320,
-        height: 320,
+        width: 300,
+        height: 400,
         borderRadius: 160,
         borderWidth: 3,
         borderColor: '#00FF00',
