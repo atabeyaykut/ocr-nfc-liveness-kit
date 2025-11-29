@@ -106,6 +106,7 @@ class LivenessDetectionModule {
         this.challengeStartTime = null;
         this.ttsEnabled = true;
         this.noFaceDetectionCount = 0;
+        this.lastDebugLogTime = 0; // For throttling debug logs
     }
 
     // API Methods
@@ -248,6 +249,13 @@ class LivenessDetectionModule {
         this.noFaceDetectionCount = 0; // Reset counter when face is detected
         const face = faces[0];
 
+        // Debug log angles every 1 second
+        const now = Date.now();
+        if (now - this.lastDebugLogTime > 1000) {
+            console.log(`📐 Face angles: x=${face.xAngle?.toFixed(1) || 'N/A'}°, y=${face.yAngle?.toFixed(1) || 'N/A'}°, z=${face.zAngle?.toFixed(1) || 'N/A'}°`);
+            this.lastDebugLogTime = now;
+        }
+
         // Check if we have an active challenge
         if (this.currentChallengeIndex >= this.challenges.length) {
             return;
@@ -276,8 +284,9 @@ class LivenessDetectionModule {
                 const yAngleStraight = face.yAngle;
 
                 if (xAngleStraight !== undefined && yAngleStraight !== undefined) {
-                    // Both angles should be close to 0 (within ±10 degrees)
-                    if (Math.abs(xAngleStraight) < 10 && Math.abs(yAngleStraight) < 10) {
+                    // Both angles should be close to 0 (within ±15 degrees for easier detection)
+                    if (Math.abs(xAngleStraight) < 15 && Math.abs(yAngleStraight) < 15) {
+                        console.log(`✅ lookStraight detected: x=${xAngleStraight.toFixed(1)}°, y=${yAngleStraight.toFixed(1)}°`);
                         return true;
                     }
                 }
@@ -305,17 +314,19 @@ class LivenessDetectionModule {
                 break;
 
             case 'turnHeadLeft':
-                // Detect head turned left - must turn clearly
+                // Detect head turned left - reduced threshold for easier detection
                 const yAngleLeft = face.yAngle;
-                if (yAngleLeft !== undefined && yAngleLeft < -25) {
+                if (yAngleLeft !== undefined && yAngleLeft < -20) {
+                    console.log(`✅ turnHeadLeft detected: yAngle=${yAngleLeft.toFixed(1)}°`);
                     return true;
                 }
                 break;
 
             case 'turnHeadRight':
-                // Detect head turned right - must turn clearly
+                // Detect head turned right - reduced threshold for easier detection
                 const yAngleRight = face.yAngle;
-                if (yAngleRight !== undefined && yAngleRight > 25) {
+                if (yAngleRight !== undefined && yAngleRight > 20) {
+                    console.log(`✅ turnHeadRight detected: yAngle=${yAngleRight.toFixed(1)}°`);
                     return true;
                 }
                 break;
@@ -334,17 +345,19 @@ class LivenessDetectionModule {
                 return false;
 
             case 'lookUp':
-                // Detect head tilted up (looking up)
+                // Detect head tilted up (looking up) - reduced threshold
                 const xAngleUp = face.xAngle;
-                if (xAngleUp !== undefined && xAngleUp < -15) {
+                if (xAngleUp !== undefined && xAngleUp < -12) {
+                    console.log(`✅ lookUp detected: xAngle=${xAngleUp.toFixed(1)}°`);
                     return true;
                 }
                 break;
 
             case 'lookDown':
-                // Detect head tilted down (looking down)
+                // Detect head tilted down (looking down) - reduced threshold
                 const xAngleDown = face.xAngle;
-                if (xAngleDown !== undefined && xAngleDown > 15) {
+                if (xAngleDown !== undefined && xAngleDown > 12) {
+                    console.log(`✅ lookDown detected: xAngle=${xAngleDown.toFixed(1)}°`);
                     return true;
                 }
                 break;
