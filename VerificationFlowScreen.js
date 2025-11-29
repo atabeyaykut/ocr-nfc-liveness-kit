@@ -410,8 +410,11 @@ const VerificationFlowScreen = ({ navigation, route }) => {
             const isSupported = await NfcManager.isSupported();
             if (!isSupported) {
                 addLog('❌ NFC desteklenmiyor');
-                Alert.alert('NFC Desteklenmiyor', 'Bu cihaz NFC desteklemiyor.');
-                startLivenessFlow();
+                Alert.alert(
+                    'NFC Desteklenmiyor',
+                    'Bu cihaz NFC desteklemiyor. Liveness atlanıyor.',
+                    [{ text: 'Tamam', onPress: () => setCurrentPhase('completed') }]
+                );
                 return;
             }
 
@@ -420,7 +423,7 @@ const VerificationFlowScreen = ({ navigation, route }) => {
                 addLog('⚠️ NFC kapalı');
                 Alert.alert('NFC Kapalı', 'NFC ayarlardan açılmalı.',
                     [
-                        { text: 'İptal', onPress: () => startLivenessFlow() },
+                        { text: 'İptal', onPress: () => setCurrentPhase('completed') },
                         { text: 'Ayarlar', onPress: () => NfcManager.goToNfcSetting() }
                     ]
                 );
@@ -452,23 +455,20 @@ const VerificationFlowScreen = ({ navigation, route }) => {
                     setNfcComparison([]);
                 }
 
-                setNfcResult({
-                    ...result,
-                    parsedFields,
-                });
-
-                // NFC'den gelen fotoğrafı biometricPhotoUri'ye ata
+                // NFC'den gelen fotoğrafı biometricPhotoUri'ye ata (önce fotoğraf)
                 let photoWasSet = false;
+                let extractedPhotoUri = null;
+
                 if (result.photo || result.photoUri || result.photoBase64) {
                     const photoUri = result.photo?.uri || result.photoUri || result.photo;
                     if (photoUri) {
-                        setBiometricPhotoUri(photoUri);
+                        extractedPhotoUri = photoUri;
                         addLog(`📸 NFC fotoğrafı alındı: ${photoUri.substring(0, 50)}...`);
                         photoWasSet = true;
                     } else if (result.photoBase64) {
                         // Base64 ise data URI'ye çevir
                         const dataUri = `data:image/jpeg;base64,${result.photoBase64}`;
-                        setBiometricPhotoUri(dataUri);
+                        extractedPhotoUri = dataUri;
                         addLog('📸 NFC fotoğrafı alındı (base64)');
                         photoWasSet = true;
                     } else {
@@ -484,8 +484,16 @@ const VerificationFlowScreen = ({ navigation, route }) => {
                 if (!photoWasSet) {
                     addLog('⚠️ Fotoğraf olmadan liveness atlanıyor');
                     setCurrentPhase('completed');
+                    return;
                 }
-                // Fotoğraf set edildiyse useEffect otomatik liveness'a geçecek
+
+                // BATCH STATE UPDATE: İkisini birlikte güncelle (React 18+ otomatik batch yapar)
+                setBiometricPhotoUri(extractedPhotoUri);
+                setNfcResult({
+                    ...result,
+                    parsedFields,
+                });
+                // useEffect her iki state de hazır olunca tetiklenecek
             });
 
             nfcModuleRef.current.onNFCError((error) => {
