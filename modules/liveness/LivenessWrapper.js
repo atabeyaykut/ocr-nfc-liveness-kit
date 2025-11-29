@@ -249,11 +249,11 @@ export const LivenessModule = ({
                                 smilingProbability: face.smilingProbability,
                                 leftEyeOpenProbability: face.leftEyeOpenProbability,
                                 rightEyeOpenProbability: face.rightEyeOpenProbability,
-                                // FIX: Correct ML Kit angle mapping
-                                // headEulerAngleX = Pitch (up/down), headEulerAngleY = Yaw (left/right)
-                                xAngle: face.headEulerAngleX || 0,  // Pitch - yukarı/aşağı
-                                yAngle: face.headEulerAngleY || 0,  // Yaw - sola/sağa
-                                zAngle: face.headEulerAngleZ || 0,  // Roll - yana eğilme
+                                // FIX: ML Kit uses "rotation" not "headEulerAngle"
+                                // rotationX = Pitch (up/down), rotationY = Yaw (left/right), rotationZ = Roll
+                                xAngle: face.rotationX || 0,  // Pitch - yukarı/aşağı
+                                yAngle: face.rotationY || 0,  // Yaw - sola/sağa
+                                zAngle: face.rotationZ || 0,  // Roll - yana eğilme
                             };
 
                             if (shouldLog) {
