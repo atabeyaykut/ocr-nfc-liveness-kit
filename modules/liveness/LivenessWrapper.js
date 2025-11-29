@@ -38,7 +38,7 @@ export const LivenessModule = ({
     const [countdown, setCountdown] = useState(3);
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [challengeIndex, setChallengeIndex] = useState(0);
-    const [totalChallenges] = useState(3);
+    const [totalChallenges] = useState(5);
 
     const cameraRef = useRef(null);
     const device = useCameraDevice('front');
@@ -149,8 +149,15 @@ export const LivenessModule = ({
             Logger.info('[LivenessWrapper] Liveness testi başlatılıyor...');
             setIsDetecting(true);
 
-            // Start with default challenges: blink, turnHeadLeft, smile
-            await livenessModule.startLiveness(['blink', 'turnHeadLeft', 'smile']);
+            // Start with head movement challenges only:
+            // düz bakma, sağa, sola, yukarı, aşağı
+            await livenessModule.startLiveness([
+                'lookStraight',
+                'turnHeadRight',
+                'turnHeadLeft',
+                'lookUp',
+                'lookDown'
+            ]);
         } catch (error) {
             Logger.error('[LivenessWrapper] Test başlatma hatası:', error);
             if (onError) {
