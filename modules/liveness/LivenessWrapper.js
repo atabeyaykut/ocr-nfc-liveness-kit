@@ -213,9 +213,10 @@ export const LivenessModule = ({
                     : photo.path;
 
                 const faces = await FaceDetection.detect(photoPath, {
-                    performanceMode: 'fast',
+                    performanceMode: 'accurate',  // Changed from 'fast' to get better angle detection
                     landmarkMode: 'all',
                     classificationMode: 'all',
+                    contourMode: 'all',  // Added for better face tracking
                 });
 
                 // Throttle logs to every 2 seconds
@@ -232,6 +233,15 @@ export const LivenessModule = ({
                     setFaceDetected(detected);
 
                     if (detected) {
+                        // DEBUG: Log raw face object first time
+                        if (shouldLog && faces[0]) {
+                            Logger.info(`[LivenessWrapper] 🔍 DEBUG - Raw face object keys:`, Object.keys(faces[0]));
+                            Logger.info(`[LivenessWrapper] 🔍 DEBUG - headEulerAngleX:`, faces[0].headEulerAngleX);
+                            Logger.info(`[LivenessWrapper] 🔍 DEBUG - headEulerAngleY:`, faces[0].headEulerAngleY);
+                            Logger.info(`[LivenessWrapper] 🔍 DEBUG - headEulerAngleZ:`, faces[0].headEulerAngleZ);
+                            Logger.info(`[LivenessWrapper] 🔍 DEBUG - Full face:`, JSON.stringify(faces[0], null, 2));
+                        }
+
                         // Convert ML Kit faces to expected format
                         const faceData = faces.map(face => {
                             const data = {
