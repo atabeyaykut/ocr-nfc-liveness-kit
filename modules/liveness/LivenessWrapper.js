@@ -53,10 +53,21 @@ export const LivenessModule = ({
         Logger.info('[LivenessWrapper] 📷 Component mounted, initializing...');
 
         // Setup reference photo for face comparison if provided
-        if (referencePhotoUri) {
-            Logger.info('[LivenessWrapper] 📸 Setting reference photo for face comparison');
-            livenessModule.setReferencePhoto(referencePhotoUri);
-        }
+        const setupReferencePhoto = async () => {
+            if (referencePhotoUri) {
+                try {
+                    Logger.info('[LivenessWrapper] 📸 Setting reference photo for face comparison');
+                    await livenessModule.setReferencePhoto(referencePhotoUri);
+                    Logger.info('[LivenessWrapper] ✅ Reference photo loaded successfully');
+                } catch (error) {
+                    Logger.error('[LivenessWrapper] ❌ Failed to load reference photo:', error);
+                    if (onError) {
+                        onError({ message: 'Reference photo yüklenemedi', error });
+                    }
+                }
+            }
+        };
+        setupReferencePhoto();
 
         // Initialize camera
         Logger.info('[LivenessWrapper] 📷 Activating camera...');
@@ -99,11 +110,19 @@ export const LivenessModule = ({
 
                 // Log face comparison results if enabled
                 if (result.faceComparison && result.faceComparison.enabled) {
-                    Logger.info(`[LivenessWrapper] 📸 Face Comparison: ${result.faceComparison.photosCaptured} photos captured`);
+                    Logger.info(`[LivenessWrapper] 📸 Face Comparison Results:`);
+                    Logger.info(`[LivenessWrapper]   Status: ${result.faceComparison.passed ? '✅ PASSED' : '❌ FAILED'}`);
+                    Logger.info(`[LivenessWrapper]   Average Similarity: ${(result.faceComparison.averageSimilarity * 100).toFixed(1)}%`);
+                    Logger.info(`[LivenessWrapper]   Min Score: ${(result.faceComparison.minScore * 100).toFixed(1)}%`);
+                    Logger.info(`[LivenessWrapper]   Max Score: ${(result.faceComparison.maxScore * 100).toFixed(1)}%`);
+                    Logger.info(`[LivenessWrapper]   Threshold: ${(result.faceComparison.threshold * 100)}%`);
+                    Logger.info(`[LivenessWrapper]   Photos Captured: ${result.faceComparison.photosCaptured}`);
+
                     if (result.faceComparison.photosWithChallenges) {
-                        Logger.info('[LivenessWrapper] Photos captured during challenges:');
+                        Logger.info('[LivenessWrapper] Individual photo scores:');
                         result.faceComparison.photosWithChallenges.forEach((p, idx) => {
-                            Logger.info(`[LivenessWrapper]   ${idx + 1}. ${p.challenge} @ ${new Date(p.timestamp).toLocaleTimeString()}`);
+                            const similarityStr = p.similarity ? `${(p.similarity * 100).toFixed(1)}%` : 'N/A';
+                            Logger.info(`[LivenessWrapper]   ${idx + 1}. ${p.challenge}: ${similarityStr}`);
                         });
                     }
                 }
@@ -145,7 +164,8 @@ export const LivenessModule = ({
 
         livenessModule.onPhotoCapture((data) => {
             if (isMounted) {
-                Logger.info(`[LivenessWrapper] 📸 Photo captured: ${data.photoCount} total (challenge: ${data.challenge})`);
+                const similarityStr = data.similarity ? ` - similarity: ${(data.similarity * 100).toFixed(1)}%` : '';
+                Logger.info(`[LivenessWrapper] 📸 Photo captured: ${data.photoCount} total (challenge: ${data.challenge})${similarityStr}`);
             }
         });
 
@@ -316,7 +336,8 @@ export const LivenessModule = ({
                             if (timeSinceLastCapture > photoCaptureInterval) {
                                 try {
                                     Logger.info('[LivenessWrapper] 📸 Capturing photo for face comparison...');
-                                    livenessModule.capturePhotoForComparison(photo.path, faceData[0]);
+                                    // Pass raw ML Kit face object (faces[0]) for comparison
+                                    livenessModule.capturePhotoForComparison(photo.path, faces[0]);
                                     lastPhotoCaptureTime.current = now;
                                 } catch (captureError) {
                                     Logger.warn('[LivenessWrapper] ⚠️ Photo capture for comparison failed');
