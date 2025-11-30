@@ -100,6 +100,7 @@ class LivenessDetectionModule {
         this.ttsEnabled = true;
         this.noFaceDetectionCount = 0;
         this.lastDebugLogTime = 0; // For throttling debug logs
+        this.challengeTimeoutId = null; // Store timeout ID for cleanup
 
         // Face comparison for NFC verification
         this.capturedPhotos = []; // Photos captured during liveness test
@@ -153,6 +154,13 @@ class LivenessDetectionModule {
 
     stopLiveness = () => {
         console.log('[LivenessModule] ⏹️ Stopping liveness test...');
+
+        // Clear any pending challenge timeout
+        if (this.challengeTimeoutId) {
+            clearTimeout(this.challengeTimeoutId);
+            this.challengeTimeoutId = null;
+        }
+
         // 🔧 FIX: Handle TTS stop promise rejection
         try {
             Tts.stop().catch(() => {
@@ -161,8 +169,11 @@ class LivenessDetectionModule {
         } catch (error) {
             // TTS not available, ignore
         }
+
         this.challenges = [];
         this.currentChallengeIndex = 0;
+        this.results = [];
+        this.capturedPhotos = []; // Clean up captured photos
         console.log('[LivenessModule] ✅ Liveness stopped and reset');
 
         if (this.callbacks.onStopped) {
@@ -459,8 +470,13 @@ class LivenessDetectionModule {
             this.callbacks.onChallengeChanged(challenge);
         }
 
+        // Clear any existing timeout
+        if (this.challengeTimeoutId) {
+            clearTimeout(this.challengeTimeoutId);
+        }
+
         // Set timeout for challenge (increased to 5 seconds)
-        setTimeout(() => {
+        this.challengeTimeoutId = setTimeout(() => {
             this.challengeTimeout(challenge);
         }, challenge.duration + 2000);
     };
@@ -613,6 +629,12 @@ class LivenessDetectionModule {
     };
 
     challengeCompleted = (challenge, success) => {
+        // Clear challenge timeout to prevent duplicate execution
+        if (this.challengeTimeoutId) {
+            clearTimeout(this.challengeTimeoutId);
+            this.challengeTimeoutId = null;
+        }
+
         const duration = Date.now() - this.challengeStartTime;
         console.log(`[LivenessModule] ${success ? '✅' : '❌'} Challenge "${challenge.instruction}" ${success ? 'COMPLETED' : 'FAILED'} in ${duration}ms`);
 
