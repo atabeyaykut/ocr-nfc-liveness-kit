@@ -50,10 +50,11 @@ export const LivenessModule = ({
 
     useEffect(() => {
         let isMounted = true;
+        let countdownIntervalId = null;
         Logger.info('[LivenessWrapper] 📷 Component mounted, initializing...');
 
-        // Setup reference photo for face comparison if provided
-        const setupReferencePhoto = async () => {
+        const initializeAsync = async () => {
+            // Setup reference photo for face comparison if provided (BLOCKING)
             if (referencePhotoUri) {
                 try {
                     Logger.info('[LivenessWrapper] 📸 Setting reference photo for face comparison');
@@ -61,20 +62,20 @@ export const LivenessModule = ({
                     Logger.info('[LivenessWrapper] ✅ Reference photo loaded successfully');
                 } catch (error) {
                     Logger.error('[LivenessWrapper] ❌ Failed to load reference photo:', error);
-                    if (onError) {
+                    if (onError && isMounted) {
                         onError({ message: 'Reference photo yüklenemedi', error });
                     }
+                    return; // Stop initialization if reference photo fails
                 }
             }
-        };
-        setupReferencePhoto();
 
-        // Initialize camera
-        Logger.info('[LivenessWrapper] 📷 Activating camera...');
-        setIsCameraActive(true);
+            if (!isMounted) return;
 
-        // Warm up camera during countdown by taking dummy photos
-        const warmupCamera = async () => {
+            // Initialize camera
+            Logger.info('[LivenessWrapper] 📷 Activating camera...');
+            setIsCameraActive(true);
+
+            // Warm up camera during countdown by taking dummy photos
             await new Promise(resolve => setTimeout(resolve, 500)); // Wait for camera to activate
             if (cameraRef.current && isMounted) {
                 try {
@@ -88,115 +89,126 @@ export const LivenessModule = ({
                     Logger.warn('[LivenessWrapper] ⚠️ Camera warm-up failed, continuing anyway');
                 }
             }
-        };
-        warmupCamera();
 
-        // Setup callbacks
-        livenessModule.onLivenessResult((result) => {
-            if (isMounted) {
-                Logger.info('[LivenessWrapper] Test tamamlandı');
-                Logger.info(`[LivenessWrapper] Durum: ${result.passed ? 'BAŞARILI' : 'BAŞARISIZ'}`);
-                Logger.info(`[LivenessWrapper] Skor: ${result.score}%`);
+            if (!isMounted) return;
 
-                if (result.details) {
-                    Logger.info(`[LivenessWrapper] Başarılı: ${result.details.successfulChallenges}/${result.details.totalChallenges}`);
-
-                    if (result.details.challenges) {
-                        result.details.challenges.forEach((ch, idx) => {
-                            Logger.info(`[LivenessWrapper] ${idx + 1}. ${ch.challenge}: ${ch.success ? '✓' : '✗'} (${ch.duration}ms)`);
-                        });
-                    }
-                }
-
-                // Log face comparison results if enabled
-                if (result.faceComparison && result.faceComparison.enabled) {
-                    Logger.info(`[LivenessWrapper] 📸 Face Comparison Results:`);
-                    Logger.info(`[LivenessWrapper]   Status: ${result.faceComparison.passed ? '✅ PASSED' : '❌ FAILED'}`);
-                    Logger.info(`[LivenessWrapper]   Average Similarity: ${(result.faceComparison.averageSimilarity * 100).toFixed(1)}%`);
-                    Logger.info(`[LivenessWrapper]   Min Score: ${(result.faceComparison.minScore * 100).toFixed(1)}%`);
-                    Logger.info(`[LivenessWrapper]   Max Score: ${(result.faceComparison.maxScore * 100).toFixed(1)}%`);
-                    Logger.info(`[LivenessWrapper]   Threshold: ${(result.faceComparison.threshold * 100)}%`);
-                    Logger.info(`[LivenessWrapper]   Photos Captured: ${result.faceComparison.photosCaptured}`);
-
-                    if (result.faceComparison.photosWithChallenges) {
-                        Logger.info('[LivenessWrapper] Individual photo scores:');
-                        result.faceComparison.photosWithChallenges.forEach((p, idx) => {
-                            const similarityStr = p.similarity ? `${(p.similarity * 100).toFixed(1)}%` : 'N/A';
-                            Logger.info(`[LivenessWrapper]   ${idx + 1}. ${p.challenge}: ${similarityStr}`);
-                        });
-                    }
-                }
-
-                setIsDetecting(false);
-                setIsCameraActive(false);
-                setCurrentChallenge(null);
-
-                if (onSuccess) {
-                    onSuccess(result);
-                }
-            }
-        });
-
-        livenessModule.onLivenessError((error) => {
-            if (isMounted) {
-                Logger.error('[LivenessWrapper] Test hatası:', error);
-                setIsDetecting(false);
-
-                if (onError) {
-                    onError(error);
-                }
-            }
-        });
-
-        livenessModule.onChallengeChanged((challenge) => {
-            if (isMounted) {
-                Logger.info(`[LivenessWrapper] 🎯 Challenge changed: "${challenge.instruction}"`);
-                setCurrentChallenge(challenge);
-                animateFaceBox();
-                // Update challenge index
-                setChallengeIndex((prev) => {
-                    const newIndex = prev + 1;
-                    Logger.info(`[LivenessWrapper] 📊 Challenge progress: ${newIndex}/${totalChallenges}`);
-                    return newIndex;
-                });
-            }
-        });
-
-        livenessModule.onPhotoCapture((data) => {
-            if (isMounted) {
-                const similarityStr = data.similarity ? ` - similarity: ${(data.similarity * 100).toFixed(1)}%` : '';
-                Logger.info(`[LivenessWrapper] 📸 Photo captured: ${data.photoCount} total (challenge: ${data.challenge})${similarityStr}`);
-            }
-        });
-
-        // Enable face detection BEFORE countdown to pre-warm everything
-        Logger.info('[LivenessWrapper] 🔍 Pre-enabling face detection for faster start');
-        setIsDetecting(true);
-
-        // Start test after 3 second countdown
-        Logger.info('[LivenessWrapper] ⏱️ Starting 3 second countdown...');
-        let count = 3;
-        const countdownInterval = setInterval(() => {
-            count--;
-            Logger.info(`[LivenessWrapper] 🔢 Countdown: ${count}`);
-            if (isMounted) {
-                setCountdown(count);
-            }
-
-            if (count <= 0) {
-                clearInterval(countdownInterval);
+            // Setup callbacks
+            livenessModule.onLivenessResult((result) => {
                 if (isMounted) {
-                    Logger.info('[LivenessWrapper] ▶️ Countdown complete, starting test');
-                    setCountdown(null);
-                    startTest();
+                    Logger.info('[LivenessWrapper] Test tamamlandı');
+                    Logger.info(`[LivenessWrapper] Durum: ${result.passed ? 'BAŞARILI' : 'BAŞARISIZ'}`);
+                    Logger.info(`[LivenessWrapper] Skor: ${result.score}%`);
+
+                    if (result.details) {
+                        Logger.info(`[LivenessWrapper] Başarılı: ${result.details.successfulChallenges}/${result.details.totalChallenges}`);
+
+                        if (result.details.challenges) {
+                            result.details.challenges.forEach((ch, idx) => {
+                                Logger.info(`[LivenessWrapper] ${idx + 1}. ${ch.challenge}: ${ch.success ? '✓' : '✗'} (${ch.duration}ms)`);
+                            });
+                        }
+                    }
+
+                    // Log face comparison results if enabled
+                    if (result.faceComparison && result.faceComparison.enabled) {
+                        Logger.info(`[LivenessWrapper] 📸 Face Comparison Results:`);
+                        Logger.info(`[LivenessWrapper]   Status: ${result.faceComparison.passed ? '✅ PASSED' : '❌ FAILED'}`);
+                        Logger.info(`[LivenessWrapper]   Average Similarity: ${(result.faceComparison.averageSimilarity * 100).toFixed(1)}%`);
+                        Logger.info(`[LivenessWrapper]   Min Score: ${(result.faceComparison.minScore * 100).toFixed(1)}%`);
+                        Logger.info(`[LivenessWrapper]   Max Score: ${(result.faceComparison.maxScore * 100).toFixed(1)}%`);
+                        Logger.info(`[LivenessWrapper]   Threshold: ${(result.faceComparison.threshold * 100)}%`);
+                        Logger.info(`[LivenessWrapper]   Photos Captured: ${result.faceComparison.photosCaptured}`);
+
+                        if (result.faceComparison.photosWithChallenges) {
+                            Logger.info('[LivenessWrapper] Individual photo scores:');
+                            result.faceComparison.photosWithChallenges.forEach((p, idx) => {
+                                const similarityStr = p.similarity ? `${(p.similarity * 100).toFixed(1)}%` : 'N/A';
+                                Logger.info(`[LivenessWrapper]   ${idx + 1}. ${p.challenge}: ${similarityStr}`);
+                            });
+                        }
+                    }
+
+                    setIsDetecting(false);
+                    setIsCameraActive(false);
+                    setCurrentChallenge(null);
+
+                    if (onSuccess) {
+                        onSuccess(result);
+                    }
                 }
-            }
-        }, 1000);
+            });
+
+            livenessModule.onLivenessError((error) => {
+                if (isMounted) {
+                    Logger.error('[LivenessWrapper] Test hatası:', error);
+                    setIsDetecting(false);
+
+                    if (onError) {
+                        onError(error);
+                    }
+                }
+            });
+
+            livenessModule.onChallengeChanged((challenge) => {
+                if (isMounted) {
+                    Logger.info(`[LivenessWrapper] 🎯 Challenge changed: "${challenge.instruction}"`);
+                    setCurrentChallenge(challenge);
+                    animateFaceBox();
+                    // Update challenge index
+                    setChallengeIndex((prev) => {
+                        const newIndex = prev + 1;
+                        Logger.info(`[LivenessWrapper] 📊 Challenge progress: ${newIndex}/${totalChallenges}`);
+                        return newIndex;
+                    });
+                }
+            });
+
+            livenessModule.onPhotoCapture((data) => {
+                if (isMounted) {
+                    const similarityStr = data.similarity ? ` - similarity: ${(data.similarity * 100).toFixed(1)}%` : '';
+                    Logger.info(`[LivenessWrapper] 📸 Photo captured: ${data.photoCount} total (challenge: ${data.challenge})${similarityStr}`);
+                }
+            });
+
+            // Enable face detection BEFORE countdown to pre-warm everything
+            Logger.info('[LivenessWrapper] 🔍 Pre-enabling face detection for faster start');
+            setIsDetecting(true);
+
+            // Start test after 3 second countdown
+            Logger.info('[LivenessWrapper] ⏱️ Starting 3 second countdown...');
+            let count = 3;
+            countdownIntervalId = setInterval(() => {
+                count--;
+                Logger.info(`[LivenessWrapper] 🔢 Countdown: ${count}`);
+                if (isMounted) {
+                    setCountdown(count);
+                }
+
+                if (count <= 0) {
+                    clearInterval(countdownIntervalId);
+                    if (isMounted) {
+                        Logger.info('[LivenessWrapper] ▶️ Countdown complete, starting test');
+                        setCountdown(null);
+                        startTest();
+                    }
+                }
+            }, 1000);
+        };
+
+        // Start async initialization
+        initializeAsync();
 
         // Cleanup
         return () => {
             Logger.info('[LivenessWrapper] 🧹 Component unmounting, cleaning up...');
             isMounted = false;
+
+            // Clear countdown interval if still running
+            if (countdownIntervalId) {
+                clearInterval(countdownIntervalId);
+                countdownIntervalId = null;
+            }
+
             setIsCameraActive(false);
             livenessModule.stopLiveness();
 

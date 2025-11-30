@@ -289,8 +289,8 @@ class LivenessDetectionModule {
             let weightSum = 0;
 
             // 1. Landmark similarity (50% weight)
-            if (face1.landmarks && face2.landmarks) {
-                const landmarkScore = this.compareLandmarks(face1.landmarks, face2.landmarks);
+            if (face1.landmarks && face2.landmarks && face1.frame && face2.frame) {
+                const landmarkScore = this.compareLandmarks(face1.landmarks, face2.landmarks, face1.frame, face2.frame);
                 totalScore += landmarkScore * 0.5;
                 weightSum += 0.5;
             }
@@ -320,8 +320,9 @@ class LivenessDetectionModule {
 
     /**
      * Compare facial landmarks (eyes, nose, mouth positions)
+     * Normalizes distance based on face width for resolution independence
      */
-    compareLandmarks = (landmarks1, landmarks2) => {
+    compareLandmarks = (landmarks1, landmarks2, frame1, frame2) => {
         const keyPoints = ['leftEye', 'rightEye', 'noseBase', 'mouthLeft', 'mouthRight'];
         let totalDistance = 0;
         let validPoints = 0;
@@ -345,8 +346,12 @@ class LivenessDetectionModule {
         if (validPoints === 0) return 0;
 
         // Normalize: smaller distance = higher similarity
+        // Use average face width for normalization (resolution independent)
+        const avgFaceWidth = (frame1.width + frame2.width) / 2;
+        const maxAcceptableDistance = avgFaceWidth * 0.5; // 50% of face width
+
         const avgDistance = totalDistance / validPoints;
-        const normalizedDistance = Math.min(avgDistance / 100, 1); // Max distance ~100px
+        const normalizedDistance = Math.min(avgDistance / maxAcceptableDistance, 1);
 
         return 1 - normalizedDistance;
     };
