@@ -217,34 +217,62 @@ class LivenessDetectionModule {
 
         try {
             console.log(`[LivenessModule] 📸 Loading reference photo: ${photoUri}`);
+            console.log(`[LivenessModule] 📱 Platform: ${Platform.OS}`);
 
-            // Fix Android file path
-            const fixedPath = Platform.OS === 'android' && !photoUri.startsWith('file://')
-                ? `file://${photoUri}`
-                : photoUri;
+            // Validate photo URI
+            if (typeof photoUri !== 'string' || photoUri.trim() === '') {
+                throw new Error('Invalid photo URI: URI must be a non-empty string');
+            }
 
-            // Extract face data from NFC photo
-            const faces = await FaceDetection.detect(fixedPath, {
+            // Fix Android file path - remove duplicate file:// prefix
+            let fixedPath = photoUri;
+            if (Platform.OS === 'android') {
+                // Remove all file:// prefixes and add single one
+                fixedPath = photoUri.replace(/^file:\/\/+/g, '');
+                fixedPath = `file://${fixedPath}`;
+                console.log(`[LivenessModule] 🔧 Fixed Android path: ${fixedPath}`);
+            }
+
+            console.log(`[LivenessModule] 🔍 Detecting face in reference photo...`);
+
+            // Extract face data from NFC photo with timeout
+            const detectionPromise = FaceDetection.detect(fixedPath, {
                 performanceMode: 'accurate',
                 landmarkMode: 'all',
                 classificationMode: 'all',
                 contourMode: 'all',
             });
 
+            // Add 10 second timeout
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Face detection timeout (10s)')), 10000)
+            );
+
+            const faces = await Promise.race([detectionPromise, timeoutPromise]);
+
+            console.log(`[LivenessModule] 👤 Detected ${faces?.length || 0} face(s)`);
+
             if (!faces || faces.length === 0) {
-                throw new Error('NFC fotoğrafında yüz algılanamadı');
+                throw new Error('NFC fotoğrafında yüz algılanamadı. Lütfen net bir fotoğraf kullanın.');
             }
 
             // Store first face data as reference
             this.referenceFaceData = faces[0];
             console.log(`[LivenessModule] ✅ Reference face data extracted successfully`);
-            console.log(`[LivenessModule] 📊 Reference face bounds: ${JSON.stringify(this.referenceFaceData.frame)}`);
+            console.log(`[LivenessModule] 📊 Reference face bounds:`, this.referenceFaceData.frame);
+            console.log(`[LivenessModule] 📊 Landmarks count: ${this.referenceFaceData.landmarks?.length || 0}`);
 
         } catch (error) {
-            console.error('[LivenessModule] ❌ Failed to load reference photo:', error);
+            console.error('[LivenessModule] ❌ Failed to load reference photo');
+            console.error('[LivenessModule] ❌ Error type:', error.constructor.name);
+            console.error('[LivenessModule] ❌ Error message:', error.message);
+            console.error('[LivenessModule] ❌ Error stack:', error.stack?.split('\n')[0]);
+
             this.enableFaceComparison = false;
             this.referenceFaceData = null;
-            throw error;
+
+            // Throw with more context
+            throw new Error(`Reference photo hatası: ${error.message}`);
         }
     };
 

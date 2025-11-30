@@ -220,14 +220,26 @@ export const LivenessModule = ({
                 countdownIntervalId = null;
             }
 
-            setIsCameraActive(false);
+            // Stop face detection first
+            setIsDetecting(false);
+
+            // Wait a bit for face detection to stop, then deactivate camera
+            setTimeout(() => {
+                setIsCameraActive(false);
+            }, 100);
+
+            // Stop liveness module
             livenessModule.stopLiveness();
 
+            // Stop TTS
             try {
-                Tts.stop();
+                Tts.stop().catch(() => {
+                    // TTS not available, ignore
+                });
             } catch (error) {
-                Logger.error('[LivenessWrapper] ⚠️ Error stopping TTS:', error);
+                Logger.warn('[LivenessWrapper] ⚠️ Error stopping TTS:', error);
             }
+
             Logger.info('[LivenessWrapper] ✅ Cleanup complete');
         };
     }, []);
@@ -299,10 +311,12 @@ export const LivenessModule = ({
                     flash: 'off',
                 });
 
-                // Fix Android file path - ML Kit needs file:// prefix
-                const photoPath = Platform.OS === 'android' && !photo.path.startsWith('file://')
-                    ? `file://${photo.path}`
-                    : photo.path;
+                // Fix Android file path - ML Kit needs file:// prefix (remove duplicates)
+                let photoPath = photo.path;
+                if (Platform.OS === 'android') {
+                    photoPath = photo.path.replace(/^file:\/\/+/g, '');
+                    photoPath = `file://${photoPath}`;
+                }
 
                 const faces = await FaceDetection.detect(photoPath, {
                     performanceMode: 'accurate',  // Changed from 'fast' to get better angle detection
@@ -360,10 +374,11 @@ export const LivenessModule = ({
                                 try {
                                     Logger.info('[LivenessWrapper] 📸 Capturing photo for face comparison...');
                                     // Pass raw ML Kit face object (faces[0]) for comparison
-                                    livenessModule.capturePhotoForComparison(photo.path, faces[0]);
+                                    // Use photoPath (already fixed for Android) instead of photo.path
+                                    livenessModule.capturePhotoForComparison(photoPath, faces[0]);
                                     lastPhotoCaptureTime.current = now;
                                 } catch (captureError) {
-                                    Logger.warn('[LivenessWrapper] ⚠️ Photo capture for comparison failed');
+                                    Logger.warn('[LivenessWrapper] ⚠️ Photo capture for comparison failed:', captureError);
                                 }
                             }
                         }
