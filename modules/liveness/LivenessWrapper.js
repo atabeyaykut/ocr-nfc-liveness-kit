@@ -62,22 +62,43 @@ export const LivenessModule = ({
     useEffect(() => {
         let isMounted = true;
         let countdownIntervalId = null;
+        Logger.info('[LivenessWrapper] ========================================');
         Logger.info('[LivenessWrapper] 📷 Component mounted, initializing...');
+        Logger.info('[LivenessWrapper] ⏰ Timestamp:', new Date().toISOString());
+        Logger.info('[LivenessWrapper] 📱 Platform:', Platform.OS);
+        Logger.info('[LivenessWrapper] 📸 Reference photo provided:', !!referencePhotoUri);
+        Logger.info('[LivenessWrapper] 📸 Reference photo URI preview:', referencePhotoUri ? referencePhotoUri.substring(0, 80) + '...' : 'N/A');
+        Logger.info('[LivenessWrapper] ========================================');
 
         const initializeAsync = async () => {
             // Setup reference photo for face comparison if provided (BLOCKING)
             if (referencePhotoUri) {
                 try {
+                    Logger.info('[LivenessWrapper] ========================================');
                     Logger.info('[LivenessWrapper] 📸 Setting reference photo for face comparison');
+                    Logger.info('[LivenessWrapper] 📸 URI type:', typeof referencePhotoUri);
+                    Logger.info('[LivenessWrapper] 📸 URI length:', referencePhotoUri.length);
+                    Logger.info('[LivenessWrapper] 📸 Calling livenessModule.setReferencePhoto...');
+
                     await livenessModule.setReferencePhoto(referencePhotoUri);
+
                     Logger.info('[LivenessWrapper] ✅ Reference photo loaded successfully');
+                    Logger.info('[LivenessWrapper] ========================================');
                 } catch (error) {
-                    Logger.error('[LivenessWrapper] ❌ Failed to load reference photo:', error);
+                    Logger.error('[LivenessWrapper] ========================================');
+                    Logger.error('[LivenessWrapper] ❌ Failed to load reference photo');
+                    Logger.error('[LivenessWrapper] ❌ Error type:', error.constructor?.name);
+                    Logger.error('[LivenessWrapper] ❌ Error message:', error.message);
+                    Logger.error('[LivenessWrapper] ❌ Error stack:', error.stack);
+                    Logger.error('[LivenessWrapper] ========================================');
+
                     if (onError && isMounted) {
                         onError({ message: 'Reference photo yüklenemedi', error });
                     }
                     return; // Stop initialization if reference photo fails
                 }
+            } else {
+                Logger.info('[LivenessWrapper] ⚠️ No reference photo provided, face comparison disabled');
             }
 
             if (!isMounted) return;
@@ -369,18 +390,48 @@ export const LivenessModule = ({
                         // Capture photo for face comparison at random intervals
                         if (referencePhotoUri && detected && isDetecting && currentChallenge) {
                             const timeSinceLastCapture = now - lastPhotoCaptureTime.current;
+
+                            if (shouldLog) {
+                                Logger.info('[LivenessWrapper] 📸 Face comparison check:');
+                                Logger.info('[LivenessWrapper] 📸   Reference photo: ✅');
+                                Logger.info('[LivenessWrapper] 📸   Face detected: ✅');
+                                Logger.info('[LivenessWrapper] 📸   Is detecting: ✅');
+                                Logger.info('[LivenessWrapper] 📸   Current challenge:', currentChallenge?.id);
+                                Logger.info('[LivenessWrapper] 📸   Time since last capture:', Math.floor(timeSinceLastCapture / 1000) + 's');
+                                Logger.info('[LivenessWrapper] 📸   Interval threshold:', photoCaptureInterval / 1000 + 's');
+                            }
+
                             // Capture photo every 3 seconds during challenges
                             if (timeSinceLastCapture > photoCaptureInterval) {
                                 try {
-                                    Logger.info('[LivenessWrapper] 📸 Capturing photo for face comparison...');
+                                    Logger.info('[LivenessWrapper] ========================================');
+                                    Logger.info('[LivenessWrapper] 📸 CAPTURING PHOTO FOR FACE COMPARISON');
+                                    Logger.info('[LivenessWrapper] 📸 Photo path:', photoPath);
+                                    Logger.info('[LivenessWrapper] 📸 Challenge:', currentChallenge?.id);
+                                    Logger.info('[LivenessWrapper] 📸 Face frame:', faces[0]?.frame);
+                                    Logger.info('[LivenessWrapper] 📸 Calling capturePhotoForComparison...');
+
                                     // Pass raw ML Kit face object (faces[0]) for comparison
                                     // Use photoPath (already fixed for Android) instead of photo.path
                                     livenessModule.capturePhotoForComparison(photoPath, faces[0]);
+
                                     lastPhotoCaptureTime.current = now;
+                                    Logger.info('[LivenessWrapper] ✅ Photo capture call completed');
+                                    Logger.info('[LivenessWrapper] ========================================');
                                 } catch (captureError) {
-                                    Logger.warn('[LivenessWrapper] ⚠️ Photo capture for comparison failed:', captureError);
+                                    Logger.error('[LivenessWrapper] ========================================');
+                                    Logger.error('[LivenessWrapper] ❌ Photo capture for comparison FAILED');
+                                    Logger.error('[LivenessWrapper] ❌ Error:', captureError.message);
+                                    Logger.error('[LivenessWrapper] ❌ Stack:', captureError.stack);
+                                    Logger.error('[LivenessWrapper] ========================================');
                                 }
                             }
+                        } else if (shouldLog) {
+                            Logger.info('[LivenessWrapper] ⏭️ Skipping photo capture:');
+                            Logger.info('[LivenessWrapper]    Reference photo:', !!referencePhotoUri ? '✅' : '❌');
+                            Logger.info('[LivenessWrapper]    Face detected:', detected ? '✅' : '❌');
+                            Logger.info('[LivenessWrapper]    Is detecting:', isDetecting ? '✅' : '❌');
+                            Logger.info('[LivenessWrapper]    Current challenge:', currentChallenge ? '✅' : '❌');
                         }
                     } else {
                         if (shouldLog) {
