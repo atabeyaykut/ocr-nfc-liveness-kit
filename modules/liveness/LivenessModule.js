@@ -315,13 +315,14 @@ class LivenessDetectionModule {
                 break;
 
             case 'blink':
-                // Detect eye blink - stricter threshold
+                // Detect eye blink - both eyes should be closed
                 const leftEyeOpen = face.leftEyeOpenProbability;
                 const rightEyeOpen = face.rightEyeOpenProbability;
 
                 if (leftEyeOpen !== undefined && rightEyeOpen !== undefined) {
-                    // Both eyes closed (blink detected) - must be clearly closed
-                    if (leftEyeOpen < 0.2 && rightEyeOpen < 0.2) {
+                    // Both eyes closed (blink detected) - relaxed threshold for natural blinks
+                    if (leftEyeOpen < 0.3 && rightEyeOpen < 0.3) {
+                        console.log(`✅ blink detected: left=${leftEyeOpen.toFixed(2)}, right=${rightEyeOpen.toFixed(2)}`);
                         return true;
                     }
                 }
@@ -337,8 +338,9 @@ class LivenessDetectionModule {
 
             case 'turnHeadLeft':
                 // Detect head turned left - ML Kit: positive yAngle = left turn
+                // Reduced threshold to 10° for easier detection with front camera
                 const yAngleLeft = face.yAngle;
-                if (yAngleLeft !== undefined && yAngleLeft > 15) {
+                if (yAngleLeft !== undefined && yAngleLeft > 10) {
                     console.log(`✅ turnHeadLeft detected: yAngle=${yAngleLeft.toFixed(1)}°`);
                     return true;
                 }
@@ -346,8 +348,9 @@ class LivenessDetectionModule {
 
             case 'turnHeadRight':
                 // Detect head turned right - ML Kit: negative yAngle = right turn
+                // Reduced threshold to -10° for easier detection with front camera
                 const yAngleRight = face.yAngle;
-                if (yAngleRight !== undefined && yAngleRight < -15) {
+                if (yAngleRight !== undefined && yAngleRight < -10) {
                     console.log(`✅ turnHeadRight detected: yAngle=${yAngleRight.toFixed(1)}°`);
                     return true;
                 }

@@ -183,14 +183,14 @@ export const LivenessModule = ({
         try {
             Logger.info('[LivenessWrapper] 🚀 Liveness testi başlatılıyor...');
 
-            // Start with head movement challenges only:
-            // düz bakma, sağa, sola, yukarı, aşağı
+            // Use most reliable challenges for better UX:
+            // lookUp removed due to front camera angle issues (users confuse it with turnRight)
             const challenges = [
                 'lookStraight',
-                'turnHeadRight',
                 'turnHeadLeft',
-                'lookUp',
-                'lookDown'
+                'turnHeadRight',
+                'lookDown',
+                'blink'
             ];
             Logger.info('[LivenessWrapper] 📋 Challenges:', challenges);
 
