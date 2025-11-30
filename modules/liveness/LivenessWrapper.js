@@ -452,7 +452,7 @@ export const LivenessModule = ({
 
             // Continue detection
             if (isActive) {
-                setTimeout(detectFace, 500);
+                setTimeout(detectFace, 300); // 300ms for faster frame capture (better blink detection)
             }
         };
 
