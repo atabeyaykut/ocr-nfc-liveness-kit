@@ -101,6 +101,10 @@ class LivenessDetectionModule {
         this.lastDebugLogTime = 0; // For throttling debug logs
         this.challengeTimeoutId = null; // Store timeout ID for cleanup
 
+        // Blink detection state machine
+        this.blinkState = null; // null | 'eyes_open' | 'eyes_closed'
+        this.blinkStateTime = null; // Track when state changed
+
         // Face comparison for NFC verification
         this.capturedPhotos = []; // Photos captured during liveness test
         this.referencePhotoUri = null; // NFC photo for comparison
@@ -623,6 +627,8 @@ class LivenessDetectionModule {
         const challenge = this.challenges[this.currentChallengeIndex];
         this.challengeStartTime = Date.now();
         this.noFaceDetectionCount = 0; // Reset no-face counter
+        this.blinkState = null; // Reset blink state machine for new challenge
+        this.blinkStateTime = null;
 
         console.log(`[LivenessModule] 🎯 Starting challenge ${this.currentChallengeIndex + 1}/${this.challenges.length}: "${challenge.instruction}"`);
         console.log(`[LivenessModule] ⏱️ Challenge timeout: ${challenge.duration + 2000}ms`);
@@ -753,16 +759,31 @@ class LivenessDetectionModule {
                 break;
 
             case 'blink':
-                // Detect eye blink - both eyes should be closed
+                // Detect real eye blink - sequence: eyes_open → eyes_closed → eyes_open
                 const leftEyeOpen = face.leftEyeOpenProbability;
                 const rightEyeOpen = face.rightEyeOpenProbability;
 
                 if (leftEyeOpen !== undefined && rightEyeOpen !== undefined) {
-                    // Both eyes closed (blink detected) - very relaxed threshold (0.7)
-                    // Higher threshold = easier to trigger (considers eyes closed even if slightly open)
-                    if (leftEyeOpen < 0.7 && rightEyeOpen < 0.7) {
-                        console.log(`✅ blink detected: left=${leftEyeOpen.toFixed(2)}, right=${rightEyeOpen.toFixed(2)}`);
-                        return true;
+                    const eyesOpen = leftEyeOpen > 0.5 && rightEyeOpen > 0.5;
+                    const eyesClosed = leftEyeOpen < 0.4 && rightEyeOpen < 0.4;
+
+                    // State machine for blink detection
+                    if (eyesOpen && this.blinkState !== 'eyes_open') {
+                        // Eyes are open - set initial state or detect reopening after blink
+                        if (this.blinkState === 'eyes_closed') {
+                            // BLINK COMPLETED: eyes were closed, now open again!
+                            console.log(`✅ blink detected: full sequence (open→closed→open)`);
+                            console.log(`   Final eye state: L=${leftEyeOpen.toFixed(2)}, R=${rightEyeOpen.toFixed(2)}`);
+                            this.blinkState = null; // Reset for next challenge
+                            return true;
+                        }
+                        this.blinkState = 'eyes_open';
+                        this.blinkStateTime = now;
+                    } else if (eyesClosed && this.blinkState === 'eyes_open') {
+                        // Eyes closed after being open - blink in progress
+                        console.log(`👁️ Blink in progress: L=${leftEyeOpen.toFixed(2)}, R=${rightEyeOpen.toFixed(2)}`);
+                        this.blinkState = 'eyes_closed';
+                        this.blinkStateTime = now;
                     }
                 }
                 break;
