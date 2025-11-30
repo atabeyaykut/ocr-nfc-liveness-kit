@@ -717,6 +717,14 @@ class LivenessDetectionModule {
 
         if (detected) {
             console.log(`[LivenessModule] 🎉 Challenge "${challenge.id}" COMPLETED!`);
+
+            // Capture photo immediately when challenge is completed (if face comparison enabled)
+            if (this.enableFaceComparison && this.referenceFaceData && this.currentFaceData) {
+                console.log('[LivenessModule] 📸 Capturing completion photo...');
+                // We need the photo URI, but we don't have it here
+                // This will be handled by LivenessWrapper's onChallengeCompleted callback
+            }
+
             this.challengeCompleted(challenge, true);
         }
     };
@@ -750,8 +758,8 @@ class LivenessDetectionModule {
                 const rightEyeOpen = face.rightEyeOpenProbability;
 
                 if (leftEyeOpen !== undefined && rightEyeOpen !== undefined) {
-                    // Both eyes closed (blink detected) - relaxed threshold for natural blinks
-                    if (leftEyeOpen < 0.3 && rightEyeOpen < 0.3) {
+                    // Both eyes closed (blink detected) - very relaxed threshold (0.5)
+                    if (leftEyeOpen < 0.5 && rightEyeOpen < 0.5) {
                         console.log(`✅ blink detected: left=${leftEyeOpen.toFixed(2)}, right=${rightEyeOpen.toFixed(2)}`);
                         return true;
                     }
@@ -768,9 +776,9 @@ class LivenessDetectionModule {
 
             case 'turnHeadLeft':
                 // Detect head turned left - ML Kit: positive yAngle = left turn
-                // Reduced threshold to 10° for easier detection with front camera
+                // Very relaxed threshold (5°) for easier detection
                 const yAngleLeft = face.yAngle;
-                if (yAngleLeft !== undefined && yAngleLeft > 10) {
+                if (yAngleLeft !== undefined && yAngleLeft > 5) {
                     console.log(`✅ turnHeadLeft detected: yAngle=${yAngleLeft.toFixed(1)}°`);
                     return true;
                 }
@@ -778,9 +786,9 @@ class LivenessDetectionModule {
 
             case 'turnHeadRight':
                 // Detect head turned right - ML Kit: negative yAngle = right turn
-                // Reduced threshold to -10° for easier detection with front camera
+                // Very relaxed threshold (-5°) for easier detection
                 const yAngleRight = face.yAngle;
-                if (yAngleRight !== undefined && yAngleRight < -10) {
+                if (yAngleRight !== undefined && yAngleRight < -5) {
                     console.log(`✅ turnHeadRight detected: yAngle=${yAngleRight.toFixed(1)}°`);
                     return true;
                 }
@@ -795,18 +803,18 @@ class LivenessDetectionModule {
                 break;
 
             case 'lookUp':
-                // Detect head tilted up - easier threshold (8° for better UX)
+                // Detect head tilted up - very relaxed threshold (-6°)
                 const xAngleUp = face.xAngle;
-                if (xAngleUp !== undefined && xAngleUp < -8) {
+                if (xAngleUp !== undefined && xAngleUp < -6) {
                     console.log(`✅ lookUp detected: xAngle=${xAngleUp.toFixed(1)}°`);
                     return true;
                 }
                 break;
 
             case 'lookDown':
-                // Detect head tilted down - easier threshold (10° instead of 12°)
+                // Detect head tilted down - very relaxed threshold (6°)
                 const xAngleDown = face.xAngle;
-                if (xAngleDown !== undefined && xAngleDown > 10) {
+                if (xAngleDown !== undefined && xAngleDown > 6) {
                     console.log(`✅ lookDown detected: xAngle=${xAngleDown.toFixed(1)}°`);
                     return true;
                 }
