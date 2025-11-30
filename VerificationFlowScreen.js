@@ -104,37 +104,89 @@ const convertPhotoToFileUri = async (photoUri, addLog) => {
         // Already a file URI
         if (photoUri.startsWith('file://')) {
             addLog('✅ Photo already in file:// format');
+
+            // Verify file exists
+            const cleanPath = photoUri.replace('file://', '');
+            const exists = await RNFS.exists(cleanPath);
+            if (!exists) {
+                throw new Error(`File does not exist: ${cleanPath}`);
+            }
+
             return photoUri;
         }
+
+        // Log cache directory for debugging
+        addLog(`📁 Cache directory: ${RNFS.CachesDirectoryPath}`);
 
         // Data URI format (data:image/jpeg;base64,...)
         if (photoUri.startsWith('data:image')) {
             addLog('🔄 Converting data URI to file...');
+
             const base64Data = photoUri.split(',')[1];
-            const filePath = `${RNFS.CachesDirectoryPath}/nfc_photo_${Date.now()}.jpg`;
+            if (!base64Data || base64Data.length < 100) {
+                throw new Error('Invalid data URI: base64 data too short or missing');
+            }
 
+            const timestamp = Date.now();
+            const filePath = `${RNFS.CachesDirectoryPath}/nfc_photo_${timestamp}.jpg`;
+
+            addLog(`📝 Writing to: ${filePath}`);
             await RNFS.writeFile(filePath, base64Data, 'base64');
-            const fileUri = `file://${filePath}`;
 
-            addLog(`✅ Data URI converted: ${filePath}`);
+            // Verify file was written
+            const exists = await RNFS.exists(filePath);
+            if (!exists) {
+                throw new Error(`Failed to write file: ${filePath}`);
+            }
+
+            const stat = await RNFS.stat(filePath);
+            addLog(`✅ File written: ${stat.size} bytes`);
+
+            const fileUri = `file://${filePath}`;
+            addLog(`✅ Data URI converted: ${fileUri}`);
+
             return fileUri;
         }
 
         // Raw base64 (no data:image prefix)
         if (/^[A-Za-z0-9+/=]+$/.test(photoUri.substring(0, 100))) {
             addLog('🔄 Converting raw base64 to file...');
-            const filePath = `${RNFS.CachesDirectoryPath}/nfc_photo_${Date.now()}.jpg`;
 
+            if (photoUri.length < 100) {
+                throw new Error('Invalid base64: data too short');
+            }
+
+            const timestamp = Date.now();
+            const filePath = `${RNFS.CachesDirectoryPath}/nfc_photo_${timestamp}.jpg`;
+
+            addLog(`📝 Writing to: ${filePath}`);
             await RNFS.writeFile(filePath, photoUri, 'base64');
-            const fileUri = `file://${filePath}`;
 
-            addLog(`✅ Base64 converted: ${filePath}`);
+            // Verify file was written
+            const exists = await RNFS.exists(filePath);
+            if (!exists) {
+                throw new Error(`Failed to write file: ${filePath}`);
+            }
+
+            const stat = await RNFS.stat(filePath);
+            addLog(`✅ File written: ${stat.size} bytes`);
+
+            const fileUri = `file://${filePath}`;
+            addLog(`✅ Base64 converted: ${fileUri}`);
+
             return fileUri;
         }
 
         // Absolute path (/data/user/0/...)
         if (photoUri.startsWith('/')) {
             addLog('🔄 Converting absolute path to file URI...');
+
+            // Verify file exists
+            const exists = await RNFS.exists(photoUri);
+            if (!exists) {
+                throw new Error(`File does not exist: ${photoUri}`);
+            }
+
             return `file://${photoUri}`;
         }
 
@@ -143,6 +195,7 @@ const convertPhotoToFileUri = async (photoUri, addLog) => {
 
     } catch (error) {
         addLog(`❌ Photo conversion error: ${error.message}`);
+        addLog(`❌ Error stack: ${error.stack?.split('\n')[0]}`);
         throw error;
     }
 };

@@ -277,7 +277,25 @@ class LivenessDetectionModule {
             }
 
             console.log(`[LivenessModule] 📋 Final format: ${photoFormat}`);
-            console.log(`[LivenessModule] 📋 Final path: ${fixedPath.substring(0, 100)}...`);
+            console.log(`[LivenessModule] 📋 Final path: ${fixedPath}`);
+            console.log(`[LivenessModule] 📋 Path length: ${fixedPath.length}`);
+
+            // Verify file exists (for file:// URIs)
+            if (fixedPath.startsWith('file://')) {
+                const RNFS = require('react-native-fs');
+                const cleanPath = fixedPath.replace('file://', '');
+                console.log(`[LivenessModule] 📂 Checking file: ${cleanPath}`);
+
+                const exists = await RNFS.exists(cleanPath);
+                console.log(`[LivenessModule] 📂 File exists: ${exists}`);
+
+                if (!exists) {
+                    throw new Error(`Reference photo file not found: ${cleanPath}`);
+                }
+
+                const stat = await RNFS.stat(cleanPath);
+                console.log(`[LivenessModule] 📂 File size: ${stat.size} bytes`);
+            }
 
             console.log(`[LivenessModule] 🔍 Detecting face in reference photo...`);
 
