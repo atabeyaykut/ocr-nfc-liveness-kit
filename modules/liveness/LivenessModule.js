@@ -370,18 +370,18 @@ class LivenessDetectionModule {
                     console.log(`[LivenessModule] 📐 Image size: ${this.referencePhotoDimensions.width}x${this.referencePhotoDimensions.height}px`);
                     console.log(`[LivenessModule] 📊 Total pixels: ${this.referencePhotoDimensions.width * this.referencePhotoDimensions.height}`);
                 } else {
-                    console.log(`[LivenessModule] ⚠️ Image dimensions: UNKNOWN`);
+                    console.log(`[LivenessModule] ⚠️ Image dimensions: UNKNOWN (unsupported format?)`);
                 }
 
                 console.log(`[LivenessModule] ⚠️ Possible reasons:`);
-                console.log(`[LivenessModule]    1. Photo too small (passport photos are typically 200-300px)`);
-                console.log(`[LivenessModule]    2. Low quality/resolution`);
-                console.log(`[LivenessModule]    3. Face not clearly visible`);
-                console.log(`[LivenessModule]    4. Photo corruption during NFC read`);
-                console.log(`[LivenessModule]    5. ML Kit settings too strict (try adjusting minFaceSize)`);
+                console.log(`[LivenessModule]    1. Unsupported image format (JPEG2000 should be auto-converted)`);
+                console.log(`[LivenessModule]    2. Photo too small (passport photos are typically 200-300px)`);
+                console.log(`[LivenessModule]    3. Low quality/resolution`);
+                console.log(`[LivenessModule]    4. Face not clearly visible`);
+                console.log(`[LivenessModule]    5. Photo corruption during NFC read`);
                 console.log(`[LivenessModule] ========================================`);
 
-                throw new Error('NFC fotoğrafında yüz algılanamadı. Lütfen net bir fotoğraf kullanın.');
+                throw new Error('NFC fotoğrafında yüz algılanamadı. Format otomatik dönüştürülmüş olmalı, lütfen NFC okuma loglarını kontrol edin.');
             }
 
             // Store first face data as reference
