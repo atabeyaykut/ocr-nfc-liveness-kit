@@ -314,25 +314,29 @@ class LivenessDetectionModule {
                 const stat = await RNFS.stat(cleanPath);
                 console.log(`[LivenessModule] 📂 File size: ${stat.size} bytes`);
 
-                // Get image dimensions for debugging
+                // Get image dimensions for debugging (ALWAYS show, even if face detection fails)
+                let imageDimensions = null;
                 try {
                     const Image = require('react-native').Image;
-                    await new Promise((resolve, reject) => {
+                    imageDimensions = await new Promise((resolve, reject) => {
                         Image.getSize(
                             fixedPath,
                             (width, height) => {
-                                console.log(`[LivenessModule] 📐 Image dimensions: ${width}x${height}`);
-                                resolve();
+                                console.log(`[LivenessModule] 📐 Image dimensions: ${width}x${height}px`);
+                                resolve({ width, height });
                             },
                             (error) => {
                                 console.log(`[LivenessModule] ⚠️ Could not get image dimensions:`, error.message);
-                                resolve(); // Don't fail, just log
+                                resolve(null); // Don't fail, just log
                             }
                         );
                     });
                 } catch (imgError) {
                     console.log(`[LivenessModule] ⚠️ Image.getSize error:`, imgError.message);
                 }
+
+                // Store dimensions for later reference
+                this.referencePhotoDimensions = imageDimensions;
             }
 
             console.log(`[LivenessModule] 🔍 Detecting face in reference photo...`);
@@ -357,12 +361,26 @@ class LivenessDetectionModule {
             console.log(`[LivenessModule] 👤 Detected ${faces?.length || 0} face(s)`);
 
             if (!faces || faces.length === 0) {
-                console.log(`[LivenessModule] ⚠️ No face detected in reference photo`);
-                console.log(`[LivenessModule] ⚠️ This may be due to:`);
-                console.log(`[LivenessModule]    - Photo too small (passport photos are typically small)`);
-                console.log(`[LivenessModule]    - Low quality/resolution`);
-                console.log(`[LivenessModule]    - Face not clearly visible`);
-                console.log(`[LivenessModule]    - Photo corruption during NFC read`);
+                console.log(`[LivenessModule] ========================================`);
+                console.log(`[LivenessModule] ❌ NO FACE DETECTED IN REFERENCE PHOTO`);
+                console.log(`[LivenessModule] ========================================`);
+
+                // Show image info for debugging
+                if (this.referencePhotoDimensions) {
+                    console.log(`[LivenessModule] 📐 Image size: ${this.referencePhotoDimensions.width}x${this.referencePhotoDimensions.height}px`);
+                    console.log(`[LivenessModule] 📊 Total pixels: ${this.referencePhotoDimensions.width * this.referencePhotoDimensions.height}`);
+                } else {
+                    console.log(`[LivenessModule] ⚠️ Image dimensions: UNKNOWN`);
+                }
+
+                console.log(`[LivenessModule] ⚠️ Possible reasons:`);
+                console.log(`[LivenessModule]    1. Photo too small (passport photos are typically 200-300px)`);
+                console.log(`[LivenessModule]    2. Low quality/resolution`);
+                console.log(`[LivenessModule]    3. Face not clearly visible`);
+                console.log(`[LivenessModule]    4. Photo corruption during NFC read`);
+                console.log(`[LivenessModule]    5. ML Kit settings too strict (try adjusting minFaceSize)`);
+                console.log(`[LivenessModule] ========================================`);
+
                 throw new Error('NFC fotoğrafında yüz algılanamadı. Lütfen net bir fotoğraf kullanın.');
             }
 
