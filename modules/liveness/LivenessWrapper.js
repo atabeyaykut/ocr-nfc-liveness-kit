@@ -22,6 +22,17 @@ import Logger from '../../utils/logger';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+// Challenge icons for better UX
+const CHALLENGE_ICONS = {
+    lookStraight: '👀',
+    turnHeadLeft: '👈',
+    turnHeadRight: '👉',
+    lookUp: '⬆️',
+    lookDown: '⬇️',
+    blink: '😉',
+    smile: '😊',
+};
+
 /**
  * Wrapper component that adapts class-based LivenessDetectionModule
  * to props-based interface for VerificationFlowScreen
@@ -461,6 +472,9 @@ export const LivenessModule = ({
                 {/* Challenge Instruction */}
                 {currentChallenge && countdown === null && (
                     <View style={styles.challengeContainer}>
+                        <Text style={styles.challengeIcon}>
+                            {CHALLENGE_ICONS[currentChallenge.id] || '👤'}
+                        </Text>
                         <Text style={styles.challengeInstruction}>
                             {currentChallenge.instruction}
                         </Text>
@@ -468,9 +482,11 @@ export const LivenessModule = ({
                 )}
 
                 {/* Cancel Button */}
-                <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
-                    <Text style={styles.cancelButtonText}>İptal</Text>
-                </TouchableOpacity>
+                {onCancel && (
+                    <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+                        <Text style={styles.cancelButtonText}>İptal</Text>
+                    </TouchableOpacity>
+                )}
             </View>
         </View>
     );
@@ -538,7 +554,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         width: 40,
         height: 40,
-        borderWidth: 3,
+        borderWidth: 2,
         // borderColor dinamik olarak inline verilecek (yeşil/kırmızı)
     },
     faceCornerTopLeft: {
@@ -592,6 +608,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: 'rgba(0,0,0,0.8)',
         paddingVertical: 20,
+    },
+    challengeIcon: {
+        fontSize: 40,
+        marginBottom: 10,
     },
     challengeInstruction: {
         color: '#FFF',
