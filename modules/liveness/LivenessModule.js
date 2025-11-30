@@ -112,7 +112,7 @@ class LivenessDetectionModule {
         this.enableFaceComparison = false;
         this.photoCaptureChance = 0.6; // 60% chance to capture photo during each challenge
         this.currentFaceData = null; // Current face data from processFaceData
-        this.similarityThreshold = 0.40; // 40% minimum similarity for match (lowered due to size differences)
+        this.similarityThreshold = 0.25; // 25% minimum similarity for match (lowered due to basic algorithm)
     }
 
     // API Methods
@@ -767,21 +767,25 @@ class LivenessDetectionModule {
                     const eyesOpen = leftEyeOpen > 0.5 && rightEyeOpen > 0.5;
                     const eyesClosed = leftEyeOpen < 0.4 && rightEyeOpen < 0.4;
 
+                    // Debug: Always log eye state during blink challenge
+                    console.log(` Eye state: L=${leftEyeOpen.toFixed(2)}, R=${rightEyeOpen.toFixed(2)}, State=${this.blinkState || 'null'}`);
+
                     // State machine for blink detection
                     if (eyesOpen && this.blinkState !== 'eyes_open') {
                         // Eyes are open - set initial state or detect reopening after blink
                         if (this.blinkState === 'eyes_closed') {
                             // BLINK COMPLETED: eyes were closed, now open again!
-                            console.log(`✅ blink detected: full sequence (open→closed→open)`);
+                            console.log(` blink detected: full sequence (open→closed→open)`);
                             console.log(`   Final eye state: L=${leftEyeOpen.toFixed(2)}, R=${rightEyeOpen.toFixed(2)}`);
                             this.blinkState = null; // Reset for next challenge
                             return true;
                         }
+                        console.log(` Eyes open confirmed, waiting for blink...`);
                         this.blinkState = 'eyes_open';
                         this.blinkStateTime = now;
                     } else if (eyesClosed && this.blinkState === 'eyes_open') {
                         // Eyes closed after being open - blink in progress
-                        console.log(`👁️ Blink in progress: L=${leftEyeOpen.toFixed(2)}, R=${rightEyeOpen.toFixed(2)}`);
+                        console.log(` Blink in progress: L=${leftEyeOpen.toFixed(2)}, R=${rightEyeOpen.toFixed(2)}`);
                         this.blinkState = 'eyes_closed';
                         this.blinkStateTime = now;
                     }
