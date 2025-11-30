@@ -4,7 +4,6 @@
  * Android 11 uyumlu
  */
 
-import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -491,10 +490,10 @@ class LivenessDetectionModule {
             this.faceDetected = false;
             this.noFaceDetectionCount++;
 
-            // If no face detected for too long (10 consecutive checks), fail the challenge
-            if (this.noFaceDetectionCount > 10 && this.currentChallengeIndex < this.challenges.length) {
+            // If no face detected for too long (20 consecutive checks ~10s), fail the challenge
+            if (this.noFaceDetectionCount > 20 && this.currentChallengeIndex < this.challenges.length) {
                 const challenge = this.challenges[this.currentChallengeIndex];
-                console.log(`[LivenessModule] ❌ Challenge failed: No face detected for ${this.noFaceDetectionCount} frames`);
+                console.log(`[LivenessModule] ❌ Challenge failed: No face detected for ${this.noFaceDetectionCount} frames (~${(this.noFaceDetectionCount * 0.5).toFixed(1)}s)`);
                 this.challengeCompleted(challenge, false);
             }
             return;
