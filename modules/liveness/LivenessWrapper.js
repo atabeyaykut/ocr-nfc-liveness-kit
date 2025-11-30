@@ -450,9 +450,11 @@ export const LivenessModule = ({
                 });
             }
 
-            // Continue detection
+            // Continue detection with adaptive interval
             if (isActive) {
-                setTimeout(detectFace, 300); // 300ms for faster frame capture (better blink detection)
+                // Use faster interval (200ms) for blink detection, normal (300ms) for others
+                const interval = currentChallenge?.id === 'blink' ? 200 : 300;
+                setTimeout(detectFace, interval);
             }
         };
 
