@@ -20,6 +20,7 @@ import {
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import NfcManager from 'react-native-nfc-manager';
+import RNFS from 'react-native-fs';
 import { LivenessModule } from './modules/liveness/LivenessWrapper';
 
 const OCRReaderModule = require('./modules/ocr/OCRReaderModule').default || require('./modules/ocr/OCRReaderModule');
@@ -90,6 +91,60 @@ const formatLogValue = (value) => {
         return formatted;
     }
     return truncateValue(formatted, LOG_TRUNCATE_LENGTH);
+};
+
+/**
+ * Convert data URI or base64 to file URI for ML Kit
+ * @param {string} photoUri - Photo URI (data:image/..., base64, or file://)
+ * @param {function} addLog - Log function
+ * @returns {Promise<string>} File URI (file://...)
+ */
+const convertPhotoToFileUri = async (photoUri, addLog) => {
+    try {
+        // Already a file URI
+        if (photoUri.startsWith('file://')) {
+            addLog('✅ Photo already in file:// format');
+            return photoUri;
+        }
+
+        // Data URI format (data:image/jpeg;base64,...)
+        if (photoUri.startsWith('data:image')) {
+            addLog('🔄 Converting data URI to file...');
+            const base64Data = photoUri.split(',')[1];
+            const filePath = `${RNFS.CachesDirectoryPath}/nfc_photo_${Date.now()}.jpg`;
+
+            await RNFS.writeFile(filePath, base64Data, 'base64');
+            const fileUri = `file://${filePath}`;
+
+            addLog(`✅ Data URI converted: ${filePath}`);
+            return fileUri;
+        }
+
+        // Raw base64 (no data:image prefix)
+        if (/^[A-Za-z0-9+/=]+$/.test(photoUri.substring(0, 100))) {
+            addLog('🔄 Converting raw base64 to file...');
+            const filePath = `${RNFS.CachesDirectoryPath}/nfc_photo_${Date.now()}.jpg`;
+
+            await RNFS.writeFile(filePath, photoUri, 'base64');
+            const fileUri = `file://${filePath}`;
+
+            addLog(`✅ Base64 converted: ${filePath}`);
+            return fileUri;
+        }
+
+        // Absolute path (/data/user/0/...)
+        if (photoUri.startsWith('/')) {
+            addLog('🔄 Converting absolute path to file URI...');
+            return `file://${photoUri}`;
+        }
+
+        // Unknown format
+        throw new Error(`Unsupported photo format: ${photoUri.substring(0, 50)}`);
+
+    } catch (error) {
+        addLog(`❌ Photo conversion error: ${error.message}`);
+        throw error;
+    }
 };
 
 const CAPTURE_SEQUENCE_COUNT = 3;
@@ -430,7 +485,7 @@ const VerificationFlowScreen = ({ navigation, route }) => {
                 return;
             }
 
-            nfcModuleRef.current.onNFCResult((result) => {
+            nfcModuleRef.current.onNFCResult(async (result) => {
                 const parsedFields = result?.parsedFields || result?.data || result || {};
                 addLog('✅ NFC başarılı');
 
@@ -510,6 +565,19 @@ const VerificationFlowScreen = ({ navigation, route }) => {
                 // Fotoğraf set edilmediyse direkt completed'a geç
                 if (!photoWasSet) {
                     addLog('⚠️ Fotoğraf olmadan liveness atlanıyor');
+                    setCurrentPhase('completed');
+                    return;
+                }
+
+                // Convert photo to file:// format for ML Kit
+                try {
+                    addLog('🔄 Converting NFC photo to ML Kit compatible format...');
+                    const fileUri = await convertPhotoToFileUri(extractedPhotoUri, addLog);
+                    extractedPhotoUri = fileUri;
+                    addLog(`✅ Photo ready for liveness: ${fileUri.substring(0, 60)}...`);
+                } catch (conversionError) {
+                    addLog(`❌ Photo conversion failed: ${conversionError.message}`);
+                    addLog('⚠️ Liveness atlanıyor - photo format hatası');
                     setCurrentPhase('completed');
                     return;
                 }

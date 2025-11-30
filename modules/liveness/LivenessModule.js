@@ -216,22 +216,68 @@ class LivenessDetectionModule {
         }
 
         try {
-            console.log(`[LivenessModule] 📸 Loading reference photo: ${photoUri}`);
+            console.log(`[LivenessModule] 📸 Loading reference photo...`);
             console.log(`[LivenessModule] 📱 Platform: ${Platform.OS}`);
+            console.log(`[LivenessModule] 📄 URI Type: ${typeof photoUri}`);
+            console.log(`[LivenessModule] 📏 URI Length: ${photoUri?.length || 0}`);
+            console.log(`[LivenessModule] 🔍 URI Preview: ${String(photoUri).substring(0, 100)}...`);
 
             // Validate photo URI
             if (typeof photoUri !== 'string' || photoUri.trim() === '') {
                 throw new Error('Invalid photo URI: URI must be a non-empty string');
             }
 
-            // Fix Android file path - remove duplicate file:// prefix
+            // Detect and validate photo format
+            let photoFormat = 'unknown';
             let fixedPath = photoUri;
-            if (Platform.OS === 'android') {
-                // Remove all file:// prefixes and add single one
-                fixedPath = photoUri.replace(/^file:\/\/+/g, '');
-                fixedPath = `file://${fixedPath}`;
-                console.log(`[LivenessModule] 🔧 Fixed Android path: ${fixedPath}`);
+
+            if (photoUri.startsWith('file://')) {
+                photoFormat = 'file_uri';
+                console.log('[LivenessModule] ✅ Format: File URI');
+
+                // Fix Android file path - remove duplicate file:// prefix
+                if (Platform.OS === 'android') {
+                    fixedPath = photoUri.replace(/^file:\/\/+/g, '');
+                    fixedPath = `file://${fixedPath}`;
+                    console.log(`[LivenessModule] 🔧 Fixed Android path: ${fixedPath}`);
+                }
+
+            } else if (photoUri.startsWith('data:image')) {
+                photoFormat = 'data_uri';
+                console.log('[LivenessModule] ✅ Format: Data URI (base64)');
+
+                // Data URI'leri ML Kit desteklemiyor, file'a kaydetmek gerekir
+                throw new Error('Data URI format desteklenmiyor. Lütfen file:// formatında gönderin.');
+
+            } else if (/^[A-Za-z0-9+/=]+$/.test(photoUri.substring(0, 100))) {
+                photoFormat = 'base64';
+                console.log('[LivenessModule] ⚠️ Format: Raw base64 (data URI olmalı)');
+
+                // Raw base64 desteklenmez
+                throw new Error('Raw base64 format desteklenmiyor. Lütfen file:// formatında gönderin.');
+
+            } else if (photoUri.startsWith('/')) {
+                photoFormat = 'absolute_path';
+                console.log('[LivenessModule] ⚠️ Format: Absolute path (file:// ekleniyor)');
+
+                // Absolute path'e file:// ekle
+                fixedPath = `file://${photoUri}`;
+                console.log(`[LivenessModule] 🔧 Converted to: ${fixedPath}`);
+
+            } else if (photoUri.startsWith('content://')) {
+                photoFormat = 'content_uri';
+                console.log('[LivenessModule] ❌ Format: Content URI');
+
+                // Content URI desteklenmez
+                throw new Error('Content URI format desteklenmiyor. Lütfen file:// formatında gönderin.');
+
+            } else {
+                console.log('[LivenessModule] ❌ Format: Unknown/Unsupported');
+                throw new Error(`Bilinmeyen foto formatı. URI: ${photoUri.substring(0, 50)}...`);
             }
+
+            console.log(`[LivenessModule] 📋 Final format: ${photoFormat}`);
+            console.log(`[LivenessModule] 📋 Final path: ${fixedPath.substring(0, 100)}...`);
 
             console.log(`[LivenessModule] 🔍 Detecting face in reference photo...`);
 
