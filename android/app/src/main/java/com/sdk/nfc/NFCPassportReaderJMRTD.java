@@ -57,15 +57,39 @@ public class NFCPassportReaderJMRTD {
                 if (imageInfos != null && !imageInfos.isEmpty()) {
                     FaceImageInfo imageInfo = imageInfos.get(0);
                     // FaceImageInfo methods vary by JMRTD version
-                    // Try different approaches
+                    // Try different approaches to get JPEG/JPEG2000 image bytes
                     try {
-                        // Approach 1: Get encoded image data directly
-                        byte[] imageData = imageInfo.getEncoded();
+                        // Approach 1: Get raw image bytes (JPEG or JPEG2000)
+                        byte[] imageData = imageInfo.getImageBytes();
                         photoBase64 = Base64.encodeToString(imageData, Base64.NO_WRAP);
-                        Log.d(TAG, "✓ DG2 photo extracted (" + imageData.length + " bytes)");
+                        Log.d(TAG, "✓ DG2 photo extracted via getImageBytes() - " + imageData.length + " bytes");
+
+                        // Log first few bytes to verify JPEG format
+                        if (imageData.length > 4) {
+                            String header = String.format("%02X %02X %02X %02X",
+                                    imageData[0] & 0xFF, imageData[1] & 0xFF,
+                                    imageData[2] & 0xFF, imageData[3] & 0xFF);
+                            Log.d(TAG, "Image header bytes: " + header);
+
+                            // JPEG should start with FF D8 FF
+                            if ((imageData[0] & 0xFF) == 0xFF && (imageData[1] & 0xFF) == 0xD8) {
+                                Log.d(TAG, "✓ Valid JPEG format detected");
+                            } else {
+                                Log.w(TAG, "⚠ Unexpected image format (not JPEG)");
+                            }
+                        }
                     } catch (Exception e1) {
-                        Log.d(TAG, "Photo extraction method 1 failed, trying alternative...");
-                        // Photo reading optional - continue without it
+                        Log.w(TAG, "getImageBytes() failed, trying getEncoded()...");
+                        try {
+                            // Approach 2: Fallback to getEncoded() (may include ASN.1 wrapper)
+                            byte[] imageData = imageInfo.getEncoded();
+                            photoBase64 = Base64.encodeToString(imageData, Base64.NO_WRAP);
+                            Log.d(TAG, "✓ DG2 photo extracted via getEncoded() - " + imageData.length + " bytes");
+                            Log.w(TAG, "⚠ Using getEncoded() - may include ASN.1 wrapper");
+                        } catch (Exception e2) {
+                            Log.w(TAG, "Both photo extraction methods failed: " + e2.getMessage());
+                            // Photo reading optional - continue without it
+                        }
                     }
                 }
             }
