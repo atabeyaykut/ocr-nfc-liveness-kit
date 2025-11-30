@@ -105,14 +105,18 @@ const convertPhotoToFileUri = async (photoUri, addLog) => {
         if (photoUri.startsWith('file://')) {
             addLog('✅ Photo already in file:// format');
 
-            // Verify file exists
-            const cleanPath = photoUri.replace('file://', '');
+            // Verify file exists - remove all file:// prefixes for RNFS
+            const cleanPath = photoUri.replace(/^file:\/\/+/g, '');
             const exists = await RNFS.exists(cleanPath);
             if (!exists) {
                 throw new Error(`File does not exist: ${cleanPath}`);
             }
 
-            return photoUri;
+            // Ensure exactly 3 slashes for Android ML Kit
+            const normalizedUri = `file:///${cleanPath}`;
+            addLog(`🔧 Normalized to: ${normalizedUri}`);
+
+            return normalizedUri;
         }
 
         // Log cache directory for debugging
@@ -142,7 +146,8 @@ const convertPhotoToFileUri = async (photoUri, addLog) => {
             const stat = await RNFS.stat(filePath);
             addLog(`✅ File written: ${stat.size} bytes`);
 
-            const fileUri = `file://${filePath}`;
+            // Android ML Kit needs file:/// (3 slashes) for absolute paths
+            const fileUri = `file:///${filePath}`;
             addLog(`✅ Data URI converted: ${fileUri}`);
 
             return fileUri;
@@ -171,7 +176,8 @@ const convertPhotoToFileUri = async (photoUri, addLog) => {
             const stat = await RNFS.stat(filePath);
             addLog(`✅ File written: ${stat.size} bytes`);
 
-            const fileUri = `file://${filePath}`;
+            // Android ML Kit needs file:/// (3 slashes) for absolute paths
+            const fileUri = `file:///${filePath}`;
             addLog(`✅ Base64 converted: ${fileUri}`);
 
             return fileUri;
@@ -187,7 +193,8 @@ const convertPhotoToFileUri = async (photoUri, addLog) => {
                 throw new Error(`File does not exist: ${photoUri}`);
             }
 
-            return `file://${photoUri}`;
+            // Android ML Kit needs file:/// (3 slashes) for absolute paths
+            return `file:///${photoUri}`;
         }
 
         // Unknown format

@@ -332,11 +332,12 @@ export const LivenessModule = ({
                     flash: 'off',
                 });
 
-                // Fix Android file path - ML Kit needs file:// prefix (remove duplicates)
+                // Fix Android file path - ML Kit needs file:/// (3 slashes) for absolute paths
                 let photoPath = photo.path;
                 if (Platform.OS === 'android') {
                     photoPath = photo.path.replace(/^file:\/\/+/g, '');
-                    photoPath = `file://${photoPath}`;
+                    photoPath = `file:///${photoPath}`;
+                    Logger.info('[LivenessWrapper] 🔧 Fixed photo path:', photoPath);
                 }
 
                 const faces = await FaceDetection.detect(photoPath, {

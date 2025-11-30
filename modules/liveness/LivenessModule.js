@@ -251,10 +251,12 @@ class LivenessDetectionModule {
                 photoFormat = 'file_uri';
                 console.log('[LivenessModule] ✅ Format: File URI');
 
-                // Fix Android file path - remove duplicate file:// prefix
+                // Fix Android file path - ensure exactly 3 slashes (file:///)
                 if (Platform.OS === 'android') {
+                    // Remove all file:// prefixes
                     fixedPath = photoUri.replace(/^file:\/\/+/g, '');
-                    fixedPath = `file://${fixedPath}`;
+                    // Add exactly 3 slashes for Android ML Kit
+                    fixedPath = `file:///${fixedPath}`;
                     console.log(`[LivenessModule] 🔧 Fixed Android path: ${fixedPath}`);
                 }
 
@@ -274,10 +276,10 @@ class LivenessDetectionModule {
 
             } else if (photoUri.startsWith('/')) {
                 photoFormat = 'absolute_path';
-                console.log('[LivenessModule] ⚠️ Format: Absolute path (file:// ekleniyor)');
+                console.log('[LivenessModule] ⚠️ Format: Absolute path (file:/// ekleniyor)');
 
-                // Absolute path'e file:// ekle
-                fixedPath = `file://${photoUri}`;
+                // Absolute path'e file:/// ekle (3 slashes for Android ML Kit)
+                fixedPath = `file:///` + photoUri;
                 console.log(`[LivenessModule] 🔧 Converted to: ${fixedPath}`);
 
             } else if (photoUri.startsWith('content://')) {
@@ -299,7 +301,7 @@ class LivenessDetectionModule {
             // Verify file exists (for file:// URIs)
             if (fixedPath.startsWith('file://')) {
                 const RNFS = require('react-native-fs');
-                const cleanPath = fixedPath.replace('file://', '');
+                const cleanPath = fixedPath.replace(/^file:\/\/+/g, '');
                 console.log(`[LivenessModule] 📂 Checking file: ${cleanPath}`);
 
                 const exists = await RNFS.exists(cleanPath);
