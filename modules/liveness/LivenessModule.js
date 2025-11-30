@@ -313,16 +313,38 @@ class LivenessDetectionModule {
 
                 const stat = await RNFS.stat(cleanPath);
                 console.log(`[LivenessModule] 📂 File size: ${stat.size} bytes`);
+
+                // Get image dimensions for debugging
+                try {
+                    const Image = require('react-native').Image;
+                    await new Promise((resolve, reject) => {
+                        Image.getSize(
+                            fixedPath,
+                            (width, height) => {
+                                console.log(`[LivenessModule] 📐 Image dimensions: ${width}x${height}`);
+                                resolve();
+                            },
+                            (error) => {
+                                console.log(`[LivenessModule] ⚠️ Could not get image dimensions:`, error.message);
+                                resolve(); // Don't fail, just log
+                            }
+                        );
+                    });
+                } catch (imgError) {
+                    console.log(`[LivenessModule] ⚠️ Image.getSize error:`, imgError.message);
+                }
             }
 
             console.log(`[LivenessModule] 🔍 Detecting face in reference photo...`);
 
             // Extract face data from NFC photo with timeout
+            // NFC passport photos are often small/low-quality, use tolerant settings
             const detectionPromise = FaceDetection.detect(fixedPath, {
-                performanceMode: 'accurate',
+                performanceMode: 'fast',  // More tolerant for small/low-quality photos
                 landmarkMode: 'all',
                 classificationMode: 'all',
                 contourMode: 'all',
+                minFaceSize: 0.1,  // Allow smaller faces (10% of image)
             });
 
             // Add 10 second timeout
@@ -335,6 +357,12 @@ class LivenessDetectionModule {
             console.log(`[LivenessModule] 👤 Detected ${faces?.length || 0} face(s)`);
 
             if (!faces || faces.length === 0) {
+                console.log(`[LivenessModule] ⚠️ No face detected in reference photo`);
+                console.log(`[LivenessModule] ⚠️ This may be due to:`);
+                console.log(`[LivenessModule]    - Photo too small (passport photos are typically small)`);
+                console.log(`[LivenessModule]    - Low quality/resolution`);
+                console.log(`[LivenessModule]    - Face not clearly visible`);
+                console.log(`[LivenessModule]    - Photo corruption during NFC read`);
                 throw new Error('NFC fotoğrafında yüz algılanamadı. Lütfen net bir fotoğraf kullanın.');
             }
 
