@@ -1,5 +1,7 @@
 package com.sdk.nfc;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.util.Base64;
 import android.util.Log;
 
@@ -16,6 +18,7 @@ import org.jmrtd.lds.iso19794.FaceInfo;
 import net.sf.scuba.smartcards.CardServiceException;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.List;
 
@@ -58,38 +61,53 @@ public class NFCPassportReaderJMRTD {
                     FaceImageInfo imageInfo = imageInfos.get(0);
                     // FaceImageInfo methods vary by JMRTD version
                     // Try different approaches to get JPEG/JPEG2000 image bytes
+                    byte[] imageData = null;
+
                     try {
-                        // Approach 1: Get raw image bytes (JPEG or JPEG2000)
-                        byte[] imageData = imageInfo.getImageBytes();
-                        photoBase64 = Base64.encodeToString(imageData, Base64.NO_WRAP);
-                        Log.d(TAG, "✓ DG2 photo extracted via getImageBytes() - " + imageData.length + " bytes");
-
-                        // Log first few bytes to verify JPEG format
-                        if (imageData.length > 4) {
-                            String header = String.format("%02X %02X %02X %02X",
-                                    imageData[0] & 0xFF, imageData[1] & 0xFF,
-                                    imageData[2] & 0xFF, imageData[3] & 0xFF);
-                            Log.d(TAG, "Image header bytes: " + header);
-
-                            // JPEG should start with FF D8 FF
-                            if ((imageData[0] & 0xFF) == 0xFF && (imageData[1] & 0xFF) == 0xD8) {
-                                Log.d(TAG, "✓ Valid JPEG format detected");
-                            } else {
-                                Log.w(TAG, "⚠ Unexpected image format (not JPEG)");
-                            }
+                        // Approach 1: Use getImageInputStream() - most reliable
+                        InputStream imageInputStream = imageInfo.getImageInputStream();
+                        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                        byte[] tempBuffer = new byte[1024];
+                        int bytesRead;
+                        while ((bytesRead = imageInputStream.read(tempBuffer)) != -1) {
+                            buffer.write(tempBuffer, 0, bytesRead);
                         }
+                        imageData = buffer.toByteArray();
+                        Log.d(TAG, "✓ DG2 photo extracted via getImageInputStream() - " + imageData.length + " bytes");
                     } catch (Exception e1) {
-                        Log.w(TAG, "getImageBytes() failed, trying getEncoded()...");
+                        Log.w(TAG, "getImageInputStream() failed, trying getEncoded()...");
                         try {
                             // Approach 2: Fallback to getEncoded() (may include ASN.1 wrapper)
-                            byte[] imageData = imageInfo.getEncoded();
-                            photoBase64 = Base64.encodeToString(imageData, Base64.NO_WRAP);
+                            imageData = imageInfo.getEncoded();
                             Log.d(TAG, "✓ DG2 photo extracted via getEncoded() - " + imageData.length + " bytes");
                             Log.w(TAG, "⚠ Using getEncoded() - may include ASN.1 wrapper");
                         } catch (Exception e2) {
                             Log.w(TAG, "Both photo extraction methods failed: " + e2.getMessage());
                             // Photo reading optional - continue without it
                         }
+                    }
+
+                    // Process image data if extracted successfully
+                    if (imageData != null) {
+                        // Detect image format from header
+                        String imageFormat = detectImageFormat(imageData);
+                        Log.d(TAG, "📸 Detected image format: " + imageFormat);
+
+                        // Convert JPEG2000 to JPEG for compatibility with ML Kit
+                        if (imageFormat.equals("JPEG2000") || imageFormat.equals("UNKNOWN")) {
+                            Log.d(TAG, "🔄 Converting " + imageFormat + " to JPEG...");
+                            byte[] convertedJpeg = convertToJpeg(imageData);
+                            if (convertedJpeg != null) {
+                                imageData = convertedJpeg;
+                                Log.d(TAG, "✅ Converted to JPEG - " + imageData.length + " bytes");
+                            } else {
+                                Log.w(TAG, "⚠️ Conversion failed, using original data");
+                            }
+                        } else {
+                            Log.d(TAG, "✓ Valid JPEG format detected, no conversion needed");
+                        }
+
+                        photoBase64 = Base64.encodeToString(imageData, Base64.NO_WRAP);
                     }
                 }
             }
@@ -178,6 +196,91 @@ public class NFCPassportReaderJMRTD {
     /**
      * Get user-friendly error message from CardServiceException
      */
+    /**
+     * Detect image format from header bytes
+     * 
+     * @param imageData Raw image bytes
+     * @return Format name: "JPEG", "JPEG2000", or "UNKNOWN"
+     */
+    private static String detectImageFormat(byte[] imageData) {
+        if (imageData == null || imageData.length < 4) {
+            return "UNKNOWN";
+        }
+
+        // JPEG header: FF D8 FF
+        if ((imageData[0] & 0xFF) == 0xFF && (imageData[1] & 0xFF) == 0xD8) {
+            return "JPEG";
+        }
+
+        // JPEG2000 JP2 format: 00 00 00 0C 6A 50 20 20
+        if (imageData.length >= 12 &&
+                (imageData[0] & 0xFF) == 0x00 &&
+                (imageData[1] & 0xFF) == 0x00 &&
+                (imageData[2] & 0xFF) == 0x00 &&
+                (imageData[3] & 0xFF) == 0x0C &&
+                (imageData[4] & 0xFF) == 0x6A &&
+                (imageData[5] & 0xFF) == 0x50 &&
+                (imageData[6] & 0xFF) == 0x20 &&
+                (imageData[7] & 0xFF) == 0x20) {
+            return "JPEG2000";
+        }
+
+        // JPEG2000 J2K codestream: FF 4F FF 51
+        if ((imageData[0] & 0xFF) == 0xFF &&
+                (imageData[1] & 0xFF) == 0x4F &&
+                (imageData[2] & 0xFF) == 0xFF &&
+                (imageData[3] & 0xFF) == 0x51) {
+            return "JPEG2000";
+        }
+
+        return "UNKNOWN";
+    }
+
+    /**
+     * Convert any image format (especially JPEG2000) to standard JPEG
+     * using Android's BitmapFactory and Bitmap compression
+     * 
+     * @param imageData Raw image bytes
+     * @return JPEG bytes or null if conversion fails
+     */
+    private static byte[] convertToJpeg(byte[] imageData) {
+        try {
+            // Decode image using Android's BitmapFactory
+            // This supports JPEG, PNG, WebP, GIF, and some JPEG2000 variants
+            Bitmap bitmap = BitmapFactory.decodeByteArray(imageData, 0, imageData.length);
+
+            if (bitmap == null) {
+                Log.w(TAG, "⚠️ BitmapFactory.decodeByteArray returned null");
+                return null;
+            }
+
+            Log.d(TAG, "✓ Bitmap decoded: " + bitmap.getWidth() + "x" + bitmap.getHeight() + "px");
+
+            // Compress to JPEG with high quality (90%)
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            boolean success = bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream);
+
+            if (!success) {
+                Log.w(TAG, "⚠️ Bitmap.compress failed");
+                bitmap.recycle();
+                return null;
+            }
+
+            byte[] jpegData = outputStream.toByteArray();
+            Log.d(TAG, "✓ JPEG compressed: " + jpegData.length + " bytes");
+
+            // Clean up
+            bitmap.recycle();
+            outputStream.close();
+
+            return jpegData;
+
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Image conversion error: " + e.getMessage());
+            return null;
+        }
+    }
+
     public static String getErrorMessage(CardServiceException e) {
         int sw = e.getSW();
 
