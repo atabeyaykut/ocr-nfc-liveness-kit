@@ -57,7 +57,7 @@ export const LivenessModule = ({
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const lastFaceLogTime = useRef(0); // Throttle face detection logs
     const lastPhotoCaptureTime = useRef(0); // Throttle photo captures
-    const photoCaptureInterval = 3000; // Capture photo every 3 seconds during detection
+    const photoCaptureInterval = 2000; // Capture photo every 2 seconds during detection
 
     useEffect(() => {
         let isMounted = true;
@@ -388,8 +388,9 @@ export const LivenessModule = ({
 
                         livenessModule.processFaceData(faceData);
 
-                        // Capture photo for face comparison at random intervals
-                        if (referencePhotoUri && detected && isDetecting && currentChallenge) {
+                        // Capture photo for face comparison at intervals (no currentChallenge check)
+                        // This allows capturing even during challenge transitions
+                        if (referencePhotoUri && detected && isDetecting) {
                             const timeSinceLastCapture = now - lastPhotoCaptureTime.current;
 
                             if (shouldLog) {
@@ -397,12 +398,12 @@ export const LivenessModule = ({
                                 Logger.info('[LivenessWrapper] 📸   Reference photo: ✅');
                                 Logger.info('[LivenessWrapper] 📸   Face detected: ✅');
                                 Logger.info('[LivenessWrapper] 📸   Is detecting: ✅');
-                                Logger.info('[LivenessWrapper] 📸   Current challenge:', currentChallenge?.id);
+                                Logger.info('[LivenessWrapper] 📸   Current challenge:', currentChallenge?.id || 'transition');
                                 Logger.info('[LivenessWrapper] 📸   Time since last capture:', Math.floor(timeSinceLastCapture / 1000) + 's');
                                 Logger.info('[LivenessWrapper] 📸   Interval threshold:', photoCaptureInterval / 1000 + 's');
                             }
 
-                            // Capture photo every 3 seconds during challenges
+                            // Capture photo every 2 seconds during test (reduced from 3s)
                             if (timeSinceLastCapture > photoCaptureInterval) {
                                 try {
                                     Logger.info('[LivenessWrapper] ========================================');
@@ -428,11 +429,10 @@ export const LivenessModule = ({
                                 }
                             }
                         } else if (shouldLog) {
-                            Logger.info('[LivenessWrapper] ⏭️ Skipping photo capture:');
+                            Logger.info('[LivenessWrapper] ⏭️ Skipping photo capture (conditions not met):');
                             Logger.info('[LivenessWrapper]    Reference photo:', !!referencePhotoUri ? '✅' : '❌');
                             Logger.info('[LivenessWrapper]    Face detected:', detected ? '✅' : '❌');
                             Logger.info('[LivenessWrapper]    Is detecting:', isDetecting ? '✅' : '❌');
-                            Logger.info('[LivenessWrapper]    Current challenge:', currentChallenge ? '✅' : '❌');
                         }
                     } else {
                         if (shouldLog) {
