@@ -338,7 +338,7 @@ class LivenessDetectionModule {
             case 'turnHeadLeft':
                 // Detect head turned left - ML Kit: positive yAngle = left turn
                 const yAngleLeft = face.yAngle;
-                if (yAngleLeft !== undefined && yAngleLeft > 20) {
+                if (yAngleLeft !== undefined && yAngleLeft > 15) {
                     console.log(`✅ turnHeadLeft detected: yAngle=${yAngleLeft.toFixed(1)}°`);
                     return true;
                 }
@@ -347,7 +347,7 @@ class LivenessDetectionModule {
             case 'turnHeadRight':
                 // Detect head turned right - ML Kit: negative yAngle = right turn
                 const yAngleRight = face.yAngle;
-                if (yAngleRight !== undefined && yAngleRight < -20) {
+                if (yAngleRight !== undefined && yAngleRight < -15) {
                     console.log(`✅ turnHeadRight detected: yAngle=${yAngleRight.toFixed(1)}°`);
                     return true;
                 }
@@ -362,9 +362,9 @@ class LivenessDetectionModule {
                 break;
 
             case 'lookUp':
-                // Detect head tilted up - easier threshold (10° instead of 12°)
+                // Detect head tilted up - easier threshold (8° for better UX)
                 const xAngleUp = face.xAngle;
-                if (xAngleUp !== undefined && xAngleUp < -10) {
+                if (xAngleUp !== undefined && xAngleUp < -8) {
                     console.log(`✅ lookUp detected: xAngle=${xAngleUp.toFixed(1)}°`);
                     return true;
                 }
