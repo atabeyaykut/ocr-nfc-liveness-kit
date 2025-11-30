@@ -45,10 +45,18 @@ export const LivenessModule = ({
     const livenessModule = useRef(new LivenessDetectionModule()).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const lastFaceLogTime = useRef(0); // Throttle face detection logs
+    const lastPhotoCaptureTime = useRef(0); // Throttle photo captures
+    const photoCaptureInterval = 3000; // Capture photo every 3 seconds during detection
 
     useEffect(() => {
         let isMounted = true;
         Logger.info('[LivenessWrapper] 📷 Component mounted, initializing...');
+
+        // Setup reference photo for face comparison if provided
+        if (referencePhotoUri) {
+            Logger.info('[LivenessWrapper] 📸 Setting reference photo for face comparison');
+            livenessModule.setReferencePhoto(referencePhotoUri);
+        }
 
         // Initialize camera
         Logger.info('[LivenessWrapper] 📷 Activating camera...');
@@ -89,6 +97,17 @@ export const LivenessModule = ({
                     }
                 }
 
+                // Log face comparison results if enabled
+                if (result.faceComparison && result.faceComparison.enabled) {
+                    Logger.info(`[LivenessWrapper] 📸 Face Comparison: ${result.faceComparison.photosCaptured} photos captured`);
+                    if (result.faceComparison.photosWithChallenges) {
+                        Logger.info('[LivenessWrapper] Photos captured during challenges:');
+                        result.faceComparison.photosWithChallenges.forEach((p, idx) => {
+                            Logger.info(`[LivenessWrapper]   ${idx + 1}. ${p.challenge} @ ${new Date(p.timestamp).toLocaleTimeString()}`);
+                        });
+                    }
+                }
+
                 setIsDetecting(false);
                 setIsCameraActive(false);
                 setCurrentChallenge(null);
@@ -121,6 +140,12 @@ export const LivenessModule = ({
                     Logger.info(`[LivenessWrapper] 📊 Challenge progress: ${newIndex}/${totalChallenges}`);
                     return newIndex;
                 });
+            }
+        });
+
+        livenessModule.onPhotoCapture((data) => {
+            if (isMounted) {
+                Logger.info(`[LivenessWrapper] 📸 Photo captured: ${data.photoCount} total (challenge: ${data.challenge})`);
             }
         });
 
@@ -283,6 +308,21 @@ export const LivenessModule = ({
                         });
 
                         livenessModule.processFaceData(faceData);
+
+                        // Capture photo for face comparison at random intervals
+                        if (referencePhotoUri && detected && isDetecting && currentChallenge) {
+                            const timeSinceLastCapture = now - lastPhotoCaptureTime.current;
+                            // Capture photo every 3 seconds during challenges
+                            if (timeSinceLastCapture > photoCaptureInterval) {
+                                try {
+                                    Logger.info('[LivenessWrapper] 📸 Capturing photo for face comparison...');
+                                    livenessModule.capturePhotoForComparison(photo.path, faceData[0]);
+                                    lastPhotoCaptureTime.current = now;
+                                } catch (captureError) {
+                                    Logger.warn('[LivenessWrapper] ⚠️ Photo capture for comparison failed');
+                                }
+                            }
+                        }
                     } else {
                         if (shouldLog) {
                             Logger.info('[LivenessWrapper] ⚠️ No face in frame');

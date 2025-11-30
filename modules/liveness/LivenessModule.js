@@ -100,6 +100,13 @@ class LivenessDetectionModule {
         this.ttsEnabled = true;
         this.noFaceDetectionCount = 0;
         this.lastDebugLogTime = 0; // For throttling debug logs
+
+        // Face comparison for NFC verification
+        this.capturedPhotos = []; // Photos captured during liveness test
+        this.referencePhotoUri = null; // NFC photo for comparison
+        this.enableFaceComparison = false;
+        this.photoCaptureChance = 0.6; // 60% chance to capture photo during each challenge
+        this.currentFaceData = null; // Current face data from processFaceData
     }
 
     // API Methods
@@ -180,6 +187,38 @@ class LivenessDetectionModule {
 
     onChallengeChanged = (callback) => {
         this.callbacks.onChallengeChanged = callback;
+    };
+
+    onPhotoCapture = (callback) => {
+        this.callbacks.onPhotoCapture = callback;
+    };
+
+    // Face Comparison Methods
+    setReferencePhoto = (photoUri) => {
+        this.referencePhotoUri = photoUri;
+        this.enableFaceComparison = !!photoUri;
+        console.log(`[LivenessModule] 📸 Reference photo set: ${photoUri ? 'enabled' : 'disabled'}`);
+    };
+
+    capturePhotoForComparison = (photoUri, faceData) => {
+        if (!this.enableFaceComparison) return;
+
+        const photoData = {
+            uri: photoUri,
+            timestamp: Date.now(),
+            challenge: this.challenges[this.currentChallengeIndex]?.id,
+            faceData: faceData,
+        };
+
+        this.capturedPhotos.push(photoData);
+        console.log(`[LivenessModule] 📷 Photo captured for comparison (${this.capturedPhotos.length} total)`);
+
+        if (this.callbacks.onPhotoCapture) {
+            this.callbacks.onPhotoCapture({
+                photoCount: this.capturedPhotos.length,
+                challenge: photoData.challenge,
+            });
+        }
     };
 
     // Private Methods
@@ -270,6 +309,9 @@ class LivenessDetectionModule {
         this.faceDetected = true;
         this.noFaceDetectionCount = 0; // Reset counter when face is detected
         const face = faces[0];
+
+        // Store current face data for photo capture
+        this.currentFaceData = face;
 
         // Debug log angles every 1 second
         const now = Date.now();
@@ -453,6 +495,19 @@ class LivenessDetectionModule {
             },
             timestamp: new Date().toISOString(),
         };
+
+        // Add face comparison result if enabled
+        if (this.enableFaceComparison && this.capturedPhotos.length > 0) {
+            console.log(`[LivenessModule] 🔍 Performing face comparison with ${this.capturedPhotos.length} photos...`);
+            response.faceComparison = {
+                enabled: true,
+                photosCaptured: this.capturedPhotos.length,
+                photosWithChallenges: this.capturedPhotos.map(p => ({
+                    challenge: p.challenge,
+                    timestamp: p.timestamp,
+                })),
+            };
+        }
 
         if (this.callbacks.onResult) {
             console.log('[LivenessModule] 📢 Calling onResult callback with:', response);
