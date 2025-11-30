@@ -114,8 +114,14 @@ class LivenessDetectionModule {
     // API Methods
     startLiveness = async (challenges = ['lookStraight', 'turnHeadRight', 'turnHeadLeft', 'lookUp', 'lookDown']) => {
         try {
+            console.log('[LivenessModule] ========================================');
             console.log('[LivenessModule] 🚀 Starting liveness test...');
+            console.log('[LivenessModule] ⏰ Timestamp:', new Date().toISOString());
             console.log('[LivenessModule] 📋 Requested challenges:', challenges);
+            console.log('[LivenessModule] 📊 Challenge count:', challenges.length);
+            console.log('[LivenessModule] 🔍 Face comparison enabled:', this.enableFaceComparison);
+            console.log('[LivenessModule] 📸 Reference photo loaded:', !!this.referenceFaceData);
+            console.log('[LivenessModule] ========================================');
 
             // Validate challenges
             this.challenges = challenges.map(c => {
@@ -152,28 +158,38 @@ class LivenessDetectionModule {
     };
 
     stopLiveness = () => {
+        console.log('[LivenessModule] ========================================');
         console.log('[LivenessModule] ⏹️ Stopping liveness test...');
+        console.log('[LivenessModule] ⏰ Timestamp:', new Date().toISOString());
+        console.log('[LivenessModule] 📊 Current challenge index:', this.currentChallengeIndex);
+        console.log('[LivenessModule] 📊 Total challenges:', this.challenges.length);
+        console.log('[LivenessModule] 📊 Results collected:', this.results.length);
+        console.log('[LivenessModule] 📸 Photos captured:', this.capturedPhotos.length);
 
         // Clear any pending challenge timeout
         if (this.challengeTimeoutId) {
+            console.log('[LivenessModule] ⏱️ Clearing pending timeout...');
             clearTimeout(this.challengeTimeoutId);
             this.challengeTimeoutId = null;
         }
 
         // 🔧 FIX: Handle TTS stop promise rejection
         try {
+            console.log('[LivenessModule] 🔊 Stopping TTS...');
             Tts.stop().catch(() => {
-                // TTS not available, ignore
+                console.log('[LivenessModule] ⚠️ TTS stop rejected (ignored)');
             });
         } catch (error) {
-            // TTS not available, ignore
+            console.log('[LivenessModule] ⚠️ TTS stop error (ignored):', error.message);
         }
 
         this.challenges = [];
         this.currentChallengeIndex = 0;
         this.results = [];
         this.capturedPhotos = []; // Clean up captured photos
-        console.log('[LivenessModule] ✅ Liveness stopped and reset');
+
+        console.log('[LivenessModule] ✅ Liveness stopped and cleaned up');
+        console.log('[LivenessModule] ========================================');
 
         if (this.callbacks.onStopped) {
             console.log('[LivenessModule] 📢 Calling onStopped callback');
@@ -341,10 +357,23 @@ class LivenessDetectionModule {
     };
 
     capturePhotoForComparison = (photoUri, faceData) => {
-        if (!this.enableFaceComparison || !this.referenceFaceData) return;
+        console.log('[LivenessModule] 📸 capturePhotoForComparison called');
+        console.log('[LivenessModule] 📸 Photo URI:', photoUri?.substring(0, 80) + '...');
+        console.log('[LivenessModule] 📸 Face comparison enabled:', this.enableFaceComparison);
+        console.log('[LivenessModule] 📸 Reference face loaded:', !!this.referenceFaceData);
+
+        if (!this.enableFaceComparison || !this.referenceFaceData) {
+            console.log('[LivenessModule] ⚠️ Skipping photo capture (comparison disabled or no reference)');
+            return;
+        }
+
+        console.log('[LivenessModule] 🔄 Calculating face similarity...');
+        console.log('[LivenessModule] 🔄 Reference face frame:', this.referenceFaceData.frame);
+        console.log('[LivenessModule] 🔄 Live face frame:', faceData.frame);
 
         // Calculate similarity immediately
         const similarity = this.compareFaces(this.referenceFaceData, faceData);
+        console.log('[LivenessModule] 🔄 Similarity calculated:', (similarity * 100).toFixed(2) + '%');
 
         const photoData = {
             uri: photoUri,
@@ -355,9 +384,13 @@ class LivenessDetectionModule {
         };
 
         this.capturedPhotos.push(photoData);
-        console.log(`[LivenessModule] 📷 Photo captured for comparison (${this.capturedPhotos.length} total) - similarity: ${(similarity * 100).toFixed(1)}%`);
+        console.log(`[LivenessModule] ✅ Photo captured for comparison (#${this.capturedPhotos.length})`);
+        console.log(`[LivenessModule] ✅ Similarity: ${(similarity * 100).toFixed(1)}%`);
+        console.log(`[LivenessModule] ✅ Challenge: ${photoData.challenge}`);
+        console.log(`[LivenessModule] ✅ Total photos: ${this.capturedPhotos.length}`);
 
         if (this.callbacks.onPhotoCapture) {
+            console.log('[LivenessModule] 📢 Calling onPhotoCapture callback');
             this.callbacks.onPhotoCapture({
                 photoCount: this.capturedPhotos.length,
                 challenge: photoData.challenge,
@@ -578,42 +611,64 @@ class LivenessDetectionModule {
     };
 
     processFaceData = (faces) => {
+        const now = Date.now();
+
         if (!faces || faces.length === 0) {
             this.faceDetected = false;
             this.noFaceDetectionCount++;
 
+            // Log every 2 seconds when no face
+            if (now - this.lastDebugLogTime > 2000) {
+                console.log(`[LivenessModule] ⚠️ NO FACE: count=${this.noFaceDetectionCount}, threshold=20`);
+                this.lastDebugLogTime = now;
+            }
+
             // If no face detected for too long (20 consecutive checks ~10s), fail the challenge
             if (this.noFaceDetectionCount > 20 && this.currentChallengeIndex < this.challenges.length) {
                 const challenge = this.challenges[this.currentChallengeIndex];
-                console.log(`[LivenessModule] ❌ Challenge failed: No face detected for ${this.noFaceDetectionCount} frames (~${(this.noFaceDetectionCount * 0.5).toFixed(1)}s)`);
+                console.log(`[LivenessModule] ❌ CHALLENGE FAILED: No face detected for ${this.noFaceDetectionCount} frames (~${(this.noFaceDetectionCount * 0.5).toFixed(1)}s)`);
+                console.log(`[LivenessModule] ❌ Failed challenge: ${challenge.id} - "${challenge.instruction}"`);
                 this.challengeCompleted(challenge, false);
             }
             return;
         }
 
         this.faceDetected = true;
+
+        // Log when face is restored after being lost
+        if (this.noFaceDetectionCount > 0) {
+            console.log(`[LivenessModule] ✅ FACE RESTORED after ${this.noFaceDetectionCount} frames`);
+        }
+
         this.noFaceDetectionCount = 0; // Reset counter when face is detected
         const face = faces[0];
 
         // Store current face data for photo capture
         this.currentFaceData = face;
 
-        // Debug log angles every 1 second
-        const now = Date.now();
+        // Debug log angles and probabilities every 1 second
         if (now - this.lastDebugLogTime > 1000) {
-            console.log(`📐 Face angles: x=${face.xAngle?.toFixed(1) || 'N/A'}°, y=${face.yAngle?.toFixed(1) || 'N/A'}°, z=${face.zAngle?.toFixed(1) || 'N/A'}°`);
+            console.log(`[LivenessModule] 📐 Face angles: x=${face.xAngle?.toFixed(1) || 'N/A'}°, y=${face.yAngle?.toFixed(1) || 'N/A'}°, z=${face.zAngle?.toFixed(1) || 'N/A'}°`);
+            console.log(`[LivenessModule] 👁️ Eyes: L=${face.leftEyeOpenProbability?.toFixed(2) || 'N/A'}, R=${face.rightEyeOpenProbability?.toFixed(2) || 'N/A'}`);
+            console.log(`[LivenessModule] 😊 Smile: ${face.smilingProbability?.toFixed(2) || 'N/A'}`);
+            console.log(`[LivenessModule] 📦 Frame: ${face.frame?.width || 'N/A'}x${face.frame?.height || 'N/A'}`);
             this.lastDebugLogTime = now;
         }
 
         // Check if we have an active challenge
         if (this.currentChallengeIndex >= this.challenges.length) {
+            console.log('[LivenessModule] ⚠️ No active challenge (all completed)');
             return;
         }
 
         const challenge = this.challenges[this.currentChallengeIndex];
+        console.log(`[LivenessModule] 🎯 Checking challenge: ${challenge.id}`);
+
         const detected = this.detectChallengeCompletion(face, challenge);
+        console.log(`[LivenessModule] 🔍 Detection result: ${detected ? '✅ SUCCESS' : '⏳ waiting...'}`);
 
         if (detected) {
+            console.log(`[LivenessModule] 🎉 Challenge "${challenge.id}" COMPLETED!`);
             this.challengeCompleted(challenge, true);
         }
     };
