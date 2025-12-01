@@ -138,6 +138,21 @@ class LivenessDetectionModule {
                 return challenge;
             });
 
+            // Randomize challenge order for security (prevent spoof attacks)
+            // Always keep 'lookStraight' first for better UX
+            const firstChallenge = this.challenges[0];
+            const remainingChallenges = this.challenges.slice(1);
+
+            // Fisher-Yates shuffle for remaining challenges
+            for (let i = remainingChallenges.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [remainingChallenges[i], remainingChallenges[j]] = [remainingChallenges[j], remainingChallenges[i]];
+            }
+
+            this.challenges = [firstChallenge, ...remainingChallenges];
+            console.log('[LivenessModule] 🔀 Challenges randomized (keeping first challenge fixed)');
+            console.log('[LivenessModule] 📋 Final order:', this.challenges.map(c => c.id).join(', '));
+
             this.currentChallengeIndex = 0;
             this.results = [];
             console.log(`[LivenessModule] 📊 Total challenges to complete: ${this.challenges.length}`);
@@ -630,8 +645,13 @@ class LivenessDetectionModule {
         this.blinkState = null; // Reset blink state machine for new challenge
         this.blinkStateTime = null;
 
+        // Adaptive timeout based on challenge type
+        // Blink needs more time for state machine transitions
+        const timeoutBuffer = challenge.id === 'blink' ? 1500 : 1000;
+        const timeoutDuration = challenge.duration + timeoutBuffer;
+
         console.log(`[LivenessModule] 🎯 Starting challenge ${this.currentChallengeIndex + 1}/${this.challenges.length}: "${challenge.instruction}"`);
-        console.log(`[LivenessModule] ⏱️ Challenge timeout: ${challenge.duration + 2000}ms`);
+        console.log(`[LivenessModule] ⏱️ Challenge timeout: ${timeoutDuration}ms (${challenge.duration}ms + ${timeoutBuffer}ms buffer)`);
 
         // Speak instruction
         if (this.ttsEnabled) {
@@ -658,10 +678,10 @@ class LivenessDetectionModule {
             clearTimeout(this.challengeTimeoutId);
         }
 
-        // Set timeout for challenge (increased to 5 seconds)
+        // Set timeout for challenge (optimized for fast mode: 4-4.5s instead of 5s)
         this.challengeTimeoutId = setTimeout(() => {
             this.challengeTimeout(challenge);
-        }, challenge.duration + 2000);
+        }, timeoutDuration);
     };
 
     processFaceData = (faces) => {
