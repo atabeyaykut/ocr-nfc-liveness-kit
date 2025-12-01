@@ -824,40 +824,40 @@ class LivenessDetectionModule {
 
             case 'turnHeadLeft':
                 // Detect head turned left - Use absolute value due to front camera mirror
-                // Very relaxed threshold (5°) for easier detection
+                // Ultra relaxed threshold (3°) for easier detection
                 const yAngleLeft = face.yAngle;
                 console.log(`[LivenessModule] 📊 turnHeadLeft check: yAngle=${yAngleLeft?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: |yAngle| > 5°`);
+                console.log(`[LivenessModule] 🎯 Threshold: |yAngle| > 3°`);
 
                 if (yAngleLeft !== undefined) {
                     const yAbs = Math.abs(yAngleLeft);
                     console.log(`[LivenessModule] 📊 Absolute value: ${yAbs.toFixed(1)}°`);
 
-                    if (yAbs > 5) {
+                    if (yAbs > 3) {
                         console.log(`✅ turnHeadLeft detected: yAngle=${yAngleLeft.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${yAbs.toFixed(1)}° <= 5°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${yAbs.toFixed(1)}° <= 3°`);
                     }
                 }
                 break;
 
             case 'turnHeadRight':
                 // Detect head turned right - Use absolute value due to front camera mirror
-                // Very relaxed threshold (5°) for easier detection
+                // Ultra relaxed threshold (3°) for easier detection
                 const yAngleRight = face.yAngle;
                 console.log(`[LivenessModule] 📊 turnHeadRight check: yAngle=${yAngleRight?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: |yAngle| > 5°`);
+                console.log(`[LivenessModule] 🎯 Threshold: |yAngle| > 3°`);
 
                 if (yAngleRight !== undefined) {
                     const yAbs = Math.abs(yAngleRight);
                     console.log(`[LivenessModule] 📊 Absolute value: ${yAbs.toFixed(1)}°`);
 
-                    if (yAbs > 5) {
+                    if (yAbs > 3) {
                         console.log(`✅ turnHeadRight detected: yAngle=${yAngleRight.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${yAbs.toFixed(1)}° <= 5°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${yAbs.toFixed(1)}° <= 3°`);
                     }
                 }
                 break;
@@ -872,40 +872,40 @@ class LivenessDetectionModule {
 
             case 'lookUp':
                 // Detect head tilted up - Use absolute value due to axis inconsistency
-                // Very relaxed threshold (6°)
+                // Ultra relaxed threshold (3°)
                 const xAngleUp = face.xAngle;
                 console.log(`[LivenessModule] 📊 lookUp check: xAngle=${xAngleUp?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: |xAngle| > 6°`);
+                console.log(`[LivenessModule] 🎯 Threshold: |xAngle| > 3°`);
 
                 if (xAngleUp !== undefined) {
                     const xAbs = Math.abs(xAngleUp);
                     console.log(`[LivenessModule] 📊 Absolute value: ${xAbs.toFixed(1)}°`);
 
-                    if (xAbs > 6) {
+                    if (xAbs > 3) {
                         console.log(`✅ lookUp detected: xAngle=${xAngleUp.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${xAbs.toFixed(1)}° <= 6°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${xAbs.toFixed(1)}° <= 3°`);
                     }
                 }
                 break;
 
             case 'lookDown':
                 // Detect head tilted down - Use absolute value due to axis inconsistency
-                // Very relaxed threshold (6°)
+                // Ultra relaxed threshold (3°)
                 const xAngleDown = face.xAngle;
                 console.log(`[LivenessModule] 📊 lookDown check: xAngle=${xAngleDown?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: |xAngle| > 6°`);
+                console.log(`[LivenessModule] 🎯 Threshold: |xAngle| > 3°`);
 
                 if (xAngleDown !== undefined) {
                     const xAbs = Math.abs(xAngleDown);
                     console.log(`[LivenessModule] 📊 Absolute value: ${xAbs.toFixed(1)}°`);
 
-                    if (xAbs > 6) {
+                    if (xAbs > 3) {
                         console.log(`✅ lookDown detected: xAngle=${xAngleDown.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${xAbs.toFixed(1)}° <= 6°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${xAbs.toFixed(1)}° <= 3°`);
                     }
                 }
                 break;
