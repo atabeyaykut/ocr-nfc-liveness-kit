@@ -806,11 +806,12 @@ class LivenessDetectionModule {
                 const rightEyeOpen = face.rightEyeOpenProbability;
 
                 if (leftEyeOpen !== undefined && rightEyeOpen !== undefined) {
-                    // Improved thresholds for more reliable detection
-                    // Eyes are "open" when BOTH are clearly open (>0.6)
-                    // Eyes are "closed" when BOTH are clearly closed (<0.3)
-                    const eyesOpen = leftEyeOpen > 0.6 && rightEyeOpen > 0.6;
-                    const eyesClosed = leftEyeOpen < 0.3 && rightEyeOpen < 0.3;
+                    // Optimized thresholds for better detection
+                    // Eyes are "open" when BOTH are clearly open (>0.7)
+                    // Eyes are "closed" when BOTH are clearly closed (<0.35)
+                    // Wider gap reduces false positives from partial blinks
+                    const eyesOpen = leftEyeOpen > 0.7 && rightEyeOpen > 0.7;
+                    const eyesClosed = leftEyeOpen < 0.35 && rightEyeOpen < 0.35;
 
                     // Debug: Always log eye state during blink challenge
                     console.log(` Eye state: L=${leftEyeOpen.toFixed(2)}, R=${rightEyeOpen.toFixed(2)}, State=${this.blinkState || 'null'}`);
@@ -896,40 +897,40 @@ class LivenessDetectionModule {
 
             case 'lookUp':
                 // Detect head tilted up - xAngle should be NEGATIVE (head back)
-                // Threshold increased to 10° for more reliable detection
+                // Lowered threshold to -5° for easier detection (was -10°)
                 const xAngleUp = face.xAngle;
                 console.log(`[LivenessModule] 📊 lookUp check: xAngle=${xAngleUp?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: xAngle < -10° (head tilted back)`);
+                console.log(`[LivenessModule] 🎯 Threshold: xAngle < -5° (head tilted back)`);
 
                 if (xAngleUp !== undefined) {
                     console.log(`[LivenessModule] 📊 Current value: ${xAngleUp.toFixed(1)}°`);
 
                     // Looking up means head tilts back, which is NEGATIVE xAngle
-                    if (xAngleUp < -10) {
+                    if (xAngleUp < -5) {
                         console.log(`✅ lookUp detected: xAngle=${xAngleUp.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${xAngleUp.toFixed(1)}° >= -10°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${xAngleUp.toFixed(1)}° >= -5°`);
                     }
                 }
                 break;
 
             case 'lookDown':
                 // Detect head tilted down - xAngle should be POSITIVE (head forward)
-                // Threshold increased to 10° for more reliable detection
+                // Lowered threshold to 5° for easier detection (was 10°)
                 const xAngleDown = face.xAngle;
                 console.log(`[LivenessModule] 📊 lookDown check: xAngle=${xAngleDown?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: xAngle > 10° (head tilted forward)`);
+                console.log(`[LivenessModule] 🎯 Threshold: xAngle > 5° (head tilted forward)`);
 
                 if (xAngleDown !== undefined) {
                     console.log(`[LivenessModule] 📊 Current value: ${xAngleDown.toFixed(1)}°`);
 
                     // Looking down means head tilts forward, which is POSITIVE xAngle
-                    if (xAngleDown > 10) {
+                    if (xAngleDown > 5) {
                         console.log(`✅ lookDown detected: xAngle=${xAngleDown.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${xAngleDown.toFixed(1)}° <= 10°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${xAngleDown.toFixed(1)}° <= 5°`);
                     }
                 }
                 break;
