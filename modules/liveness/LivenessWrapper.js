@@ -356,10 +356,9 @@ export const LivenessModule = ({
                 const detectionStartTime = Date.now();
 
                 const faces = await FaceDetection.detect(photoPath, {
-                    performanceMode: 'accurate',  // Changed from 'fast' to get better angle detection
+                    performanceMode: 'fast',  // CRITICAL: 'accurate' is too slow (4+ seconds per frame!)
                     landmarkMode: 'all',
                     classificationMode: 'all',
-                    contourMode: 'all',  // Added for better face tracking
                 });
 
                 const detectionTime = Date.now() - detectionStartTime;
