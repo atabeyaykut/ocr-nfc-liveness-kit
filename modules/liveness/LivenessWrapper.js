@@ -319,6 +319,7 @@ export const LivenessModule = ({
         let isActive = true;
 
         const detectFace = async () => {
+            const frameStartTime = Date.now();
             if (!isActive || !cameraRef.current) {
                 if (!cameraRef.current) {
                     Logger.error('[LivenessWrapper] ❌ Camera ref not available');
@@ -327,10 +328,21 @@ export const LivenessModule = ({
             }
 
             try {
+                Logger.info('[LivenessWrapper] 🔄 Frame detection cycle started');
+                Logger.info('[LivenessWrapper] 📊 Current challenge:', currentChallenge?.id || 'none');
+                Logger.info('[LivenessWrapper] 📊 Is detecting:', isDetecting);
+                Logger.info('[LivenessWrapper] 📊 Camera active:', isCameraActive);
+
+                Logger.info('[LivenessWrapper] 📸 Taking photo for face detection...');
+                const photoStartTime = Date.now();
+
                 const photo = await cameraRef.current.takePhoto({
                     qualityPrioritization: 'speed',
                     flash: 'off',
                 });
+
+                const photoTime = Date.now() - photoStartTime;
+                Logger.info('[LivenessWrapper] ✅ Photo captured in', photoTime + 'ms');
 
                 // Fix Android file path - ML Kit needs file:/// (3 slashes) for absolute paths
                 let photoPath = photo.path;
@@ -340,12 +352,18 @@ export const LivenessModule = ({
                     Logger.info('[LivenessWrapper] 🔧 Fixed photo path:', photoPath);
                 }
 
+                Logger.info('[LivenessWrapper] 🔍 Running ML Kit face detection...');
+                const detectionStartTime = Date.now();
+
                 const faces = await FaceDetection.detect(photoPath, {
                     performanceMode: 'accurate',  // Changed from 'fast' to get better angle detection
                     landmarkMode: 'all',
                     classificationMode: 'all',
                     contourMode: 'all',  // Added for better face tracking
                 });
+
+                const detectionTime = Date.now() - detectionStartTime;
+                Logger.info('[LivenessWrapper] ✅ Face detection completed in', detectionTime + 'ms');
 
                 // Throttle logs to every 2 seconds
                 const now = Date.now();
@@ -454,7 +472,15 @@ export const LivenessModule = ({
             if (isActive) {
                 // Use faster interval (200ms) for blink detection, normal (300ms) for others
                 const interval = currentChallenge?.id === 'blink' ? 200 : 300;
+                const frameTotalTime = Date.now() - frameStartTime;
+
+                Logger.info('[LivenessWrapper] ⏱️ Frame cycle completed in', frameTotalTime + 'ms');
+                Logger.info('[LivenessWrapper] 📊 Next frame in', interval + 'ms');
+                Logger.info('[LivenessWrapper] ========================================');
+
                 setTimeout(detectFace, interval);
+            } else {
+                Logger.info('[LivenessWrapper] 🛑 Detection loop stopped (isActive=false)');
             }
         };
 
