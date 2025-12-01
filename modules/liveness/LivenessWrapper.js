@@ -285,12 +285,13 @@ export const LivenessModule = ({
             Logger.info('[LivenessWrapper] 🚀 Liveness testi başlatılıyor...');
 
             // Use most reliable challenges for better UX:
-            // lookUp removed due to front camera angle issues (users confuse it with turnRight)
+            // lookDown removed: causes face to disappear when user tilts head too far down (hair blocks camera)
+            // lookUp is safer: face remains visible, natural movement
             const challenges = [
                 'lookStraight',
                 'turnHeadLeft',
                 'turnHeadRight',
-                'lookDown',
+                'lookUp',
                 'blink'
             ];
             Logger.info('[LivenessWrapper] 📋 Challenges:', challenges);
