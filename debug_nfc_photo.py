@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+import base64
+from PIL import Image
+import io
+
+# Base64 string (uzun olduğu için dosyadan okuyacağız)
+base64_string = """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 dudbu base64 kodunu resime çevirir misin
+
+# Decode et
+image_data = base64.b64decode(base64_string)
+
+# Image nesnesine çevir
+image = Image.open(io.BytesIO(image_data))
+
+# Bilgileri yazdır
+print(f"📐 Image dimensions: {image.size[0]}x{image.size[1]}")
+print(f"📊 Image format: {image.format}")
+print(f"📊 Image mode: {image.mode}")
+print(f"📦 File size: {len(image_data)} bytes")
+
+# Kaydet
+output_path = "nfc_photo_decoded.jpg"
+image.save(output_path)
+print(f"\n✅ Saved to: {output_path}")
+
+# Detaylı analiz
+print(f"\n🔍 ANALYSIS:")
+print(f"   Width: {image.size[0]}px")
+print(f"   Height: {image.size[1]}px")
+print(f"   Aspect ratio: {image.size[0]/image.size[1]:.2f}")
+print(f"   Total pixels: {image.size[0] * image.size[1]:,}")
+
+# ML Kit için uygun mu?
+min_face_size_px = min(image.size) * 0.1
+print(f"\n🤖 ML KIT COMPATIBILITY:")
+print(f"   Min face size (10%): {min_face_size_px:.0f}px")
+if min(image.size) < 200:
+    print(f"   ⚠️  WARNING: Image is quite small, may have detection issues")
+else:
+    print(f"   ✅ Image size should be OK for face detection")
