@@ -549,6 +549,7 @@ class LivenessDetectionModule {
 
     /**
      * Compare face geometry (size, aspect ratio)
+     * IMPROVED: More tolerant to different camera distances and resolutions
      */
     compareFaceGeometry = (frame1, frame2) => {
         const width1 = frame1.width;
@@ -556,18 +557,17 @@ class LivenessDetectionModule {
         const width2 = frame2.width;
         const height2 = frame2.height;
 
-        // Aspect ratio similarity
+        // Aspect ratio similarity (more lenient - allow up to 30% difference)
         const aspectRatio1 = width1 / height1;
         const aspectRatio2 = width2 / height2;
         const aspectDiff = Math.abs(aspectRatio1 - aspectRatio2);
-        const aspectScore = Math.max(0, 1 - aspectDiff * 2);
+        const aspectScore = Math.max(0, 1 - aspectDiff);  // Changed from * 2 to be more lenient
 
-        // Size similarity (normalized)
-        const size1 = width1 * height1;
-        const size2 = width2 * height2;
-        const sizeRatio = Math.min(size1, size2) / Math.max(size1, size2);
+        // Size similarity (REMOVED - passport photos are small, live photos are large)
+        // This was causing very low scores (21-35%) due to resolution differences
+        // Instead, only use aspect ratio which is resolution-independent
 
-        return (aspectScore + sizeRatio) / 2;
+        return aspectScore;  // Changed from (aspectScore + sizeRatio) / 2
     };
 
     /**
@@ -806,11 +806,15 @@ class LivenessDetectionModule {
                 const rightEyeOpen = face.rightEyeOpenProbability;
 
                 if (leftEyeOpen !== undefined && rightEyeOpen !== undefined) {
-                    const eyesOpen = leftEyeOpen > 0.5 && rightEyeOpen > 0.5;
-                    const eyesClosed = leftEyeOpen < 0.4 && rightEyeOpen < 0.4;
+                    // Improved thresholds for more reliable detection
+                    // Eyes are "open" when BOTH are clearly open (>0.6)
+                    // Eyes are "closed" when BOTH are clearly closed (<0.3)
+                    const eyesOpen = leftEyeOpen > 0.6 && rightEyeOpen > 0.6;
+                    const eyesClosed = leftEyeOpen < 0.3 && rightEyeOpen < 0.3;
 
                     // Debug: Always log eye state during blink challenge
                     console.log(` Eye state: L=${leftEyeOpen.toFixed(2)}, R=${rightEyeOpen.toFixed(2)}, State=${this.blinkState || 'null'}`);
+                    console.log(` Evaluation: eyesOpen=${eyesOpen}, eyesClosed=${eyesClosed}`);
 
                     // State machine for blink detection
                     if (eyesOpen && this.blinkState !== 'eyes_open') {
@@ -891,41 +895,41 @@ class LivenessDetectionModule {
                 break;
 
             case 'lookUp':
-                // Detect head tilted up - Use absolute value due to axis inconsistency
-                // Ultra relaxed threshold (3°)
+                // Detect head tilted up - xAngle should be NEGATIVE (head back)
+                // Threshold increased to 10° for more reliable detection
                 const xAngleUp = face.xAngle;
                 console.log(`[LivenessModule] 📊 lookUp check: xAngle=${xAngleUp?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: |xAngle| > 3°`);
+                console.log(`[LivenessModule] 🎯 Threshold: xAngle < -10° (head tilted back)`);
 
                 if (xAngleUp !== undefined) {
-                    const xAbs = Math.abs(xAngleUp);
-                    console.log(`[LivenessModule] 📊 Absolute value: ${xAbs.toFixed(1)}°`);
+                    console.log(`[LivenessModule] 📊 Current value: ${xAngleUp.toFixed(1)}°`);
 
-                    if (xAbs > 3) {
+                    // Looking up means head tilts back, which is NEGATIVE xAngle
+                    if (xAngleUp < -10) {
                         console.log(`✅ lookUp detected: xAngle=${xAngleUp.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${xAbs.toFixed(1)}° <= 3°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${xAngleUp.toFixed(1)}° >= -10°`);
                     }
                 }
                 break;
 
             case 'lookDown':
-                // Detect head tilted down - Use absolute value due to axis inconsistency
-                // Ultra relaxed threshold (3°)
+                // Detect head tilted down - xAngle should be POSITIVE (head forward)
+                // Threshold increased to 10° for more reliable detection
                 const xAngleDown = face.xAngle;
                 console.log(`[LivenessModule] 📊 lookDown check: xAngle=${xAngleDown?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: |xAngle| > 3°`);
+                console.log(`[LivenessModule] 🎯 Threshold: xAngle > 10° (head tilted forward)`);
 
                 if (xAngleDown !== undefined) {
-                    const xAbs = Math.abs(xAngleDown);
-                    console.log(`[LivenessModule] 📊 Absolute value: ${xAbs.toFixed(1)}°`);
+                    console.log(`[LivenessModule] 📊 Current value: ${xAngleDown.toFixed(1)}°`);
 
-                    if (xAbs > 3) {
+                    // Looking down means head tilts forward, which is POSITIVE xAngle
+                    if (xAngleDown > 10) {
                         console.log(`✅ lookDown detected: xAngle=${xAngleDown.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${xAbs.toFixed(1)}° <= 3°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${xAngleDown.toFixed(1)}° <= 10°`);
                     }
                 }
                 break;
