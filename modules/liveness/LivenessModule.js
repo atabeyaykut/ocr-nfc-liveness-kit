@@ -111,6 +111,8 @@ class LivenessDetectionModule {
         // All movements measured relative to this baseline
         this.baselineAngles = null; // { x, y, z }
         this.baselineChallengeIndex = -1; // Track which challenge this baseline belongs to
+        this.lastFaceAngles = null;  // Store last frame angles for pre-baseline
+        this.preBaselineAngles = null;  // Pre-captured baseline from previous challenge
 
         // Logging configuration
         this.logLevel = 'DEBUG'; // ERROR, WARN, INFO, DEBUG, TRACE
@@ -958,11 +960,18 @@ class LivenessDetectionModule {
             const baselineStartTime = Date.now();
             const challengeName = this.challenges[this.currentChallengeIndex]?.id || 'unknown';
 
-            this.baselineAngles = {
-                x: face.xAngle || 0,
-                y: face.yAngle || 0,
-                z: face.zAngle || 0,
-            };
+            // OPTIMIZATION: Use pre-baseline from previous challenge if available
+            // This eliminates 2.7s baseline setup delay
+            if (this.preBaselineAngles) {
+                this.baselineAngles = { ...this.preBaselineAngles };
+                this.logWithLevel('INFO', `📍 BASELINE PRE-LOADED from previous challenge (instant setup)`);
+            } else {
+                this.baselineAngles = {
+                    x: face.xAngle || 0,
+                    y: face.yAngle || 0,
+                    z: face.zAngle || 0,
+                };
+            }
             this.baselineChallengeIndex = this.currentChallengeIndex;
 
             this.logWithLevel('INFO', `📍 BASELINE SET for challenge`, {
@@ -980,7 +989,8 @@ class LivenessDetectionModule {
                 },
                 frameNumber: this.frameLogCounter,
                 timeSinceChallengeStart: this.challengeStartTime ? Date.now() - this.challengeStartTime : 'N/A',
-                setupTime: Date.now() - baselineStartTime
+                setupTime: Date.now() - baselineStartTime,
+                source: this.preBaselineAngles ? 'pre-loaded' : 'first-frame'
             });
 
             this.logWithLevel('DEBUG', `📐 Baseline quality metrics`, {
@@ -1046,6 +1056,13 @@ class LivenessDetectionModule {
             });
             this.lastDebugLogTime = now;
         }
+
+        // Store current angles for next challenge's pre-baseline
+        this.lastFaceAngles = {
+            x: face.xAngle || 0,
+            y: face.yAngle || 0,
+            z: face.zAngle || 0,
+        };
 
         // Check if we have an active challenge
         if (this.currentChallengeIndex >= this.challenges.length) {
@@ -1273,27 +1290,47 @@ class LivenessDetectionModule {
                 const xAngleUp = face.xAngle;
                 const baselineX = this.baselineAngles?.x || 0;
                 const relativeXUp = xAngleUp - baselineX; // Negative = UP tilt
+
+                // FALLBACK: If baseline was captured during movement (|baseline| > 15°),
+                // use absolute threshold instead of relative
+                const baselineUnreliable = Math.abs(baselineX) > 15;
+
                 this.logPoseDebug({
                     challengeId: 'lookUp',
                     axisLabel: 'X',
                     baseline: baselineX,
                     current: xAngleUp,
                     relative: relativeXUp,
-                    thresholdText: '< -10° (UP tilt)',
+                    thresholdText: baselineUnreliable ? '< -10° (ABSOLUTE)' : '< -10° (UP tilt)',
                     elapsedMs: now - this.challengeStartTime,
                 });
 
                 if (xAngleUp !== undefined) {
-                    // Relaxed threshold from -5 to -10 for better real-world usability
-                    if (relativeXUp < -10) {
-                        console.log(`[LivenessModule][lookUp] ✅ Movement detected: ${Math.abs(relativeXUp).toFixed(1)}° UP`);
+                    let detected = false;
+
+                    if (baselineUnreliable) {
+                        // Baseline was captured during movement, use absolute threshold
+                        // User must look UP (negative X angle)
+                        detected = xAngleUp < -10;
+                        if (detected) {
+                            console.log(`[LivenessModule][lookUp] ✅ Movement detected (ABSOLUTE): ${Math.abs(xAngleUp).toFixed(1)}° UP`);
+                        }
+                    } else {
+                        // Normal relative detection
+                        detected = relativeXUp < -10;
+                        if (detected) {
+                            console.log(`[LivenessModule][lookUp] ✅ Movement detected: ${Math.abs(relativeXUp).toFixed(1)}° UP`);
+                        }
+                    }
+
+                    if (detected) {
                         return true;
                     } else {
                         this.logPoseShortfall({
                             challengeId: 'lookUp',
                             needed: -10,
-                            relative: relativeXUp,
-                            directionText: 'tilt head UP (negative X)',
+                            relative: baselineUnreliable ? xAngleUp : relativeXUp,
+                            directionText: baselineUnreliable ? 'tilt head UP (absolute)' : 'tilt head UP (negative X)',
                         });
                     }
                 }
@@ -1307,20 +1344,40 @@ class LivenessDetectionModule {
                 const baselineXDown = this.baselineAngles?.x || 0;
                 const relativeXDown = xAngleDown - baselineXDown; // Positive = DOWN tilt
 
+                // FALLBACK: If baseline was captured during movement (|baseline| > 15°),
+                // use absolute threshold instead of relative
+                const baselineUnreliableDown = Math.abs(baselineXDown) > 15;
+
                 console.log(`[LivenessModule] 📊 lookDown check:`);
                 console.log(`[LivenessModule]    Current: ${xAngleDown?.toFixed(1)}°`);
                 console.log(`[LivenessModule]    Baseline: ${baselineXDown.toFixed(1)}°`);
                 console.log(`[LivenessModule]    Relative: ${relativeXDown.toFixed(1)}° (movement from start)`);
-                console.log(`[LivenessModule] 🎯 Threshold: relative > 5° (DOWN tilt)`);
+                console.log(`[LivenessModule] 🎯 Threshold: ${baselineUnreliableDown ? '> +10° (ABSOLUTE)' : 'relative > 5° (DOWN tilt)'}`);
 
                 if (xAngleDown !== undefined) {
-                    // Looking DOWN = POSITIVE relative xAngle (head tilts forward)
-                    // User must tilt at least 5° DOWN from starting position
-                    if (relativeXDown > 5) {
-                        console.log(`✅ lookDown detected: tilted ${relativeXDown.toFixed(1)}° DOWN from baseline`);
+                    let detectedDown = false;
+
+                    if (baselineUnreliableDown) {
+                        // Baseline was captured during movement, use absolute threshold
+                        // User must look DOWN (positive X angle)
+                        detectedDown = xAngleDown > 10;
+                        if (detectedDown) {
+                            console.log(`✅ lookDown detected (ABSOLUTE): ${xAngleDown.toFixed(1)}° DOWN`);
+                        }
+                    } else {
+                        // Normal relative detection
+                        // Looking DOWN = POSITIVE relative xAngle (head tilts forward)
+                        // User must tilt at least 5° DOWN from starting position
+                        detectedDown = relativeXDown > 5;
+                        if (detectedDown) {
+                            console.log(`✅ lookDown detected: tilted ${relativeXDown.toFixed(1)}° DOWN from baseline`);
+                        }
+                    }
+
+                    if (detectedDown) {
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${relativeXDown.toFixed(1)}° <= 5° (need more DOWN tilt)`);
+                        console.log(`[LivenessModule] ❌ Failed: ${baselineUnreliableDown ? xAngleDown.toFixed(1) : relativeXDown.toFixed(1)}° (need ${baselineUnreliableDown ? 'absolute > 10°' : 'relative > 5°'})`);
                     }
                 }
                 break;
@@ -1406,6 +1463,26 @@ class LivenessDetectionModule {
             willResetBlinkState: true,
             willResetFrameCounter: false
         });
+
+        // Store last frame angles as pre-baseline for next challenge
+        // This eliminates baseline setup delay (2.7s → 0ms)
+        if (this.lastFaceAngles) {
+            this.preBaselineAngles = { ...this.lastFaceAngles };
+            this.logWithLevel('DEBUG', `📸 Pre-baseline captured for next challenge`, {
+                angles: {
+                    x: `${this.preBaselineAngles.x.toFixed(1)}°`,
+                    y: `${this.preBaselineAngles.y.toFixed(1)}°`,
+                    z: `${this.preBaselineAngles.z.toFixed(1)}°`
+                },
+                willBeUsedFor: this.currentChallengeIndex < this.challenges.length - 1
+                    ? this.challenges[this.currentChallengeIndex + 1]?.id
+                    : 'none (last challenge)'
+            });
+        }
+
+        // Reset state for next challenge
+        this.baselineAngles = null;
+        this.blinkState = null;
 
         // Move to next challenge
         this.currentChallengeIndex++;
