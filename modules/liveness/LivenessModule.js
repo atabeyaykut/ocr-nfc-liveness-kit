@@ -848,41 +848,41 @@ class LivenessDetectionModule {
                 break;
 
             case 'turnHeadLeft':
-                // Detect head turned left - Use absolute value due to front camera mirror
-                // Ultra relaxed threshold (3°) for easier detection
+                // Detect head turned left - POSITIVE yAngle (user turns left from their POV)
+                // Increased threshold to 15° for better spoofing prevention
                 const yAngleLeft = face.yAngle;
                 console.log(`[LivenessModule] 📊 turnHeadLeft check: yAngle=${yAngleLeft?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: |yAngle| > 3°`);
+                console.log(`[LivenessModule] 🎯 Threshold: yAngle > 15° (specific direction)`);
 
                 if (yAngleLeft !== undefined) {
-                    const yAbs = Math.abs(yAngleLeft);
-                    console.log(`[LivenessModule] 📊 Absolute value: ${yAbs.toFixed(1)}°`);
+                    console.log(`[LivenessModule] 📊 Current value: ${yAngleLeft.toFixed(1)}°`);
 
-                    if (yAbs > 3) {
+                    // Positive yAngle = head turned left (from user's perspective)
+                    if (yAngleLeft > 15) {
                         console.log(`✅ turnHeadLeft detected: yAngle=${yAngleLeft.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${yAbs.toFixed(1)}° <= 3°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${yAngleLeft.toFixed(1)}° <= 15°`);
                     }
                 }
                 break;
 
             case 'turnHeadRight':
-                // Detect head turned right - Use absolute value due to front camera mirror
-                // Ultra relaxed threshold (3°) for easier detection
+                // Detect head turned right - NEGATIVE yAngle (user turns right from their POV)
+                // Increased threshold to -15° for better spoofing prevention
                 const yAngleRight = face.yAngle;
                 console.log(`[LivenessModule] 📊 turnHeadRight check: yAngle=${yAngleRight?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: |yAngle| > 3°`);
+                console.log(`[LivenessModule] 🎯 Threshold: yAngle < -15° (specific direction)`);
 
                 if (yAngleRight !== undefined) {
-                    const yAbs = Math.abs(yAngleRight);
-                    console.log(`[LivenessModule] 📊 Absolute value: ${yAbs.toFixed(1)}°`);
+                    console.log(`[LivenessModule] 📊 Current value: ${yAngleRight.toFixed(1)}°`);
 
-                    if (yAbs > 3) {
+                    // Negative yAngle = head turned right (from user's perspective)
+                    if (yAngleRight < -15) {
                         console.log(`✅ turnHeadRight detected: yAngle=${yAngleRight.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${yAbs.toFixed(1)}° <= 3°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${yAngleRight.toFixed(1)}° >= -15°`);
                     }
                 }
                 break;
@@ -1017,8 +1017,16 @@ class LivenessDetectionModule {
         if (this.enableFaceComparison && this.capturedPhotos.length > 0) {
             console.log(`[LivenessModule] 🔍 Performing face comparison with ${this.capturedPhotos.length} photos...`);
 
+            // Skip first photo (often has low score as user may not be fully in frame yet)
+            // Use all photos if only 1 captured, otherwise skip first
+            const photosToAnalyze = this.capturedPhotos.length > 1
+                ? this.capturedPhotos.slice(1)
+                : this.capturedPhotos;
+
+            console.log(`[LivenessModule] 📸 Analyzing ${photosToAnalyze.length} photos (skipped first: ${this.capturedPhotos.length > 1})`);
+
             // Calculate similarity scores
-            const similarities = this.capturedPhotos
+            const similarities = photosToAnalyze
                 .map(p => p.similarity)
                 .filter(s => s !== undefined && s !== null);
 
