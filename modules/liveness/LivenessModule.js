@@ -30,14 +30,14 @@ const CHALLENGES = {
         id: 'lookStraight',
         instruction: 'Düz bakın',
         voice: 'Lütfen düz bakın',
-        duration: 3000,
+        duration: 6000,  // Increased from 4s to 6s for slow frame processing
         detectionKey: 'headPose',
     },
     BLINK: {
         id: 'blink',
         instruction: 'Gözlerinizi kırpın',
         voice: 'Lütfen gözlerinizi kırpın',
-        duration: 3000,
+        duration: 4000,  // Increased from 3s to 4s (uses 100ms interval)
         detectionKey: 'eyes',
     },
     SMILE: {
@@ -51,14 +51,14 @@ const CHALLENGES = {
         id: 'turnHeadLeft',
         instruction: 'Başınızı sola çevirin',
         voice: 'Lütfen başınızı sola çevirin',
-        duration: 3000,
+        duration: 7000,  // Increased from 5s to 7s for slow frame processing
         detectionKey: 'headPose',
     },
     TURN_HEAD_RIGHT: {
         id: 'turnHeadRight',
         instruction: 'Başınızı sağa çevirin',
         voice: 'Lütfen başınızı sağa çevirin',
-        duration: 3000,
+        duration: 7000,  // Increased from 5s to 7s for slow frame processing
         detectionKey: 'headPose',
     },
     NOD_HEAD: {
@@ -72,22 +72,23 @@ const CHALLENGES = {
         id: 'lookUp',
         instruction: 'Başınızı yukarı kaldırın',
         voice: 'Lütfen başınızı yukarı kaldırın',
-        duration: 3000,
+        duration: 7000,  // Increased from 5s to 7s for slow frame processing
     },
     LOOKDOWN: {
         id: 'lookDown',
         instruction: 'Başınızı aşağı eğin',
         voice: 'Lütfen başınızı aşağı eğin',
-        duration: 3000,
+        duration: 4500,
     },
     TILTHEAD: {
         id: 'tiltHead',
         instruction: 'Başınızı yana eğin',
         voice: 'Lütfen başınızı yana eğin',
-        duration: 3000,
+        duration: 4500,
     },
 };
 
+// Enhanced logging utilities - CLASS METHODS
 class LivenessDetectionModule {
     constructor() {
         this.callbacks = {};
@@ -111,6 +112,12 @@ class LivenessDetectionModule {
         this.baselineAngles = null; // { x, y, z }
         this.baselineChallengeIndex = -1; // Track which challenge this baseline belongs to
 
+        // Logging configuration
+        this.logLevel = 'DEBUG'; // ERROR, WARN, INFO, DEBUG, TRACE
+        this.frameLogCounter = 0; // For sampling frame logs
+        this.lastFrameLogTime = 0; // For throttling frame logs
+        this.frameLogInterval = 5; // Log every 5th frame
+
         // Face comparison for NFC verification
         this.capturedPhotos = []; // Photos captured during liveness test
         this.referencePhotoUri = null; // NFC photo for comparison
@@ -120,6 +127,64 @@ class LivenessDetectionModule {
         this.currentFaceData = null; // Current face data from processFaceData
         this.similarityThreshold = 0.25; // 25% minimum similarity for match (lowered due to basic algorithm)
     }
+
+    // Enhanced logging utilities - CLASS METHODS
+    shouldLog = (level) => {
+        const levels = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'];
+        const currentLevelIndex = levels.indexOf(this.logLevel);
+        const requestedLevelIndex = levels.indexOf(level);
+        return requestedLevelIndex <= currentLevelIndex;
+    };
+
+    logWithLevel = (level, message, data = null) => {
+        if (!this.shouldLog(level)) return;
+        const timestamp = new Date().toISOString();
+        const prefix = `[LivenessModule][${level}]`;
+        const fullMessage = data ? `${prefix} ${message} | Data: ${JSON.stringify(data)}` : `${prefix} ${message}`;
+
+        switch (level) {
+            case 'ERROR':
+                console.error(fullMessage);
+                break;
+            case 'WARN':
+                console.warn(fullMessage);
+                break;
+            default:
+                console.log(fullMessage);
+        }
+    };
+
+    shouldLogFrame = () => {
+        const now = Date.now();
+        // Log every 5th frame or every 2 seconds minimum
+        return (this.frameLogCounter % this.frameLogInterval === 0) ||
+            (now - this.lastFrameLogTime > 2000);
+    };
+
+    formatAngle = (value) => (value === undefined || value === null ? 'N/A' : `${value.toFixed(1)}°`);
+    formatDelta = (value) => (value === null || value === undefined ? 'N/A' : `${value >= 0 ? '+' : ''}${value.toFixed(1)}°`);
+    formatProb = (value) => (value === undefined || value === null ? 'N/A' : value.toFixed(2));
+    nowMs = () => Date.now();
+
+    // Enhanced logging helpers for pose detection
+    logPoseDebug = ({ challengeId, axisLabel, baseline, current, relative, thresholdText, elapsedMs }) => {
+        if (!this.shouldLogFrame()) return;
+        console.log(
+            `[LivenessModule][${challengeId}] ⏱️ ${elapsedMs}ms | ${axisLabel}-axis baseline=${this.formatAngle(baseline)} current=${this.formatAngle(current)} relative=${this.formatDelta(relative)} | threshold ${thresholdText}`,
+        );
+    };
+
+    logPoseShortfall = ({ challengeId, needed, relative, directionText }) => {
+        const delta = needed - relative;
+        console.log(
+            `[LivenessModule][${challengeId}] ❌ Movement insufficient (${directionText}). Need ${needed.toFixed(1)}°, current ${relative.toFixed(1)}°, short by ${delta.toFixed(1)}°`,
+        );
+    };
+
+    logBlinkDebug = ({ elapsedMs, state, leftProb, rightProb, eyesOpen, eyesClosed }) => {
+        if (!this.shouldLogFrame()) return;
+        console.log(`[LivenessModule][blink] ⏱️ ${elapsedMs}ms | state=${state || 'null'} | L=${this.formatProb(leftProb)} R=${this.formatProb(rightProb)} | eyesOpen=${eyesOpen} eyesClosed=${eyesClosed}`);
+    };
 
     // API Methods
     startLiveness = async (challenges = ['lookStraight', 'turnHeadRight', 'turnHeadLeft', 'lookUp', 'lookDown']) => {
@@ -636,103 +701,249 @@ class LivenessDetectionModule {
     };
 
     startNextChallenge = async () => {
-        console.log(`[LivenessModule] 🎯 Challenge index: ${this.currentChallengeIndex}/${this.challenges.length}`);
+        const startTime = Date.now();
+        this.logWithLevel('INFO', `🎯 Starting challenge transition`);
+        this.logWithLevel('DEBUG', `📊 Challenge index: ${this.currentChallengeIndex}/${this.challenges.length}`);
+        this.logWithLevel('TRACE', `🔧 Internal state check`, {
+            currentChallengeIndex: this.currentChallengeIndex,
+            totalChallenges: this.challenges.length,
+            hasResults: this.results.length > 0,
+            faceDetected: this.faceDetected,
+            challengeStartTime: this.challengeStartTime
+        });
 
         if (this.currentChallengeIndex >= this.challenges.length) {
             // All challenges completed
-            console.log('[LivenessModule] 🎊 All challenges completed!');
+            this.logWithLevel('INFO', `🎊 All challenges completed successfully!`);
+            this.logWithLevel('DEBUG', `📊 Final results summary`, {
+                totalChallenges: this.challenges.length,
+                completedChallenges: this.results.length,
+                successRate: this.results.length > 0 ? (this.results.filter(r => r.success).length / this.results.length * 100).toFixed(1) + '%' : 'N/A',
+                photosCaptured: this.capturedPhotos.length,
+                totalDuration: Date.now() - startTime
+            });
             this.completeDetection();
             return;
         }
 
         const challenge = this.challenges[this.currentChallengeIndex];
+        const previousChallenge = this.currentChallengeIndex > 0 ? this.challenges[this.currentChallengeIndex - 1] : null;
+
+        this.logWithLevel('INFO', `🔄 Starting new challenge`);
+        this.logWithLevel('DEBUG', `📋 Challenge details`, {
+            currentIndex: this.currentChallengeIndex,
+            challengeId: challenge.id,
+            instruction: challenge.instruction,
+            voiceInstruction: challenge.voice,
+            baseDuration: challenge.duration,
+            previousChallenge: previousChallenge ? previousChallenge.id : 'none'
+        });
+
         this.challengeStartTime = Date.now();
         this.noFaceDetectionCount = 0; // Reset no-face counter
         this.blinkState = null; // Reset blink state machine for new challenge
         this.blinkStateTime = null;
         this.baselineAngles = null; // Reset baseline - will be set with first face detection
         this.baselineChallengeIndex = -1; // Mark that baseline needs to be set for new challenge
+        this.frameLogCounter = 0; // Reset frame logging counter
+        this.lastFrameLogTime = Date.now();
 
-        console.log(`[LivenessModule] 🔄 Baseline reset for challenge index ${this.currentChallengeIndex}`);
+        this.logWithLevel('DEBUG', `🔄 State reset for new challenge`, {
+            challengeIndex: this.currentChallengeIndex,
+            blinkState: 'null',
+            baselineAngles: 'null',
+            noFaceDetectionCount: 0,
+            frameLogCounter: 0
+        });
 
         // Adaptive timeout based on challenge type
-        // Blink needs more time for state machine transitions
-        const timeoutBuffer = challenge.id === 'blink' ? 1500 : 1000;
+        // Increased buffer from 1000ms to 2000ms due to slow frame processing (3+ seconds per frame)
+        // This allows at least 2-3 frames to be processed before timeout
+        const timeoutBuffer = 2000;  // Unified 2s buffer for all challenges
         const timeoutDuration = challenge.duration + timeoutBuffer;
 
-        console.log(`[LivenessModule] 🎯 Starting challenge ${this.currentChallengeIndex + 1}/${this.challenges.length}: "${challenge.instruction}"`);
-        console.log(`[LivenessModule] ⏱️ Challenge timeout: ${timeoutDuration}ms (${challenge.duration}ms + ${timeoutBuffer}ms buffer)`);
+        this.logWithLevel('INFO', `⏱️ Challenge timeout configured`);
+        this.logWithLevel('DEBUG', `⏰ Timeout details`, {
+            baseDuration: challenge.duration,
+            bufferTime: timeoutBuffer,
+            totalTimeout: timeoutDuration,
+            reason: 'Unified 2s buffer for slow frame processing (3+ seconds per frame)'
+        });
 
         // Speak instruction
         if (this.ttsEnabled) {
-            console.log(`[LivenessModule] 🔊 Speaking: "${challenge.voice}"`);
+            this.logWithLevel('INFO', `🔊 Speaking voice instruction`);
+            this.logWithLevel('DEBUG', `� TTS details`, {
+                text: challenge.voice,
+                length: challenge.voice.length,
+                language: 'tr',
+                enabled: true
+            });
             try {
                 // 🔧 FIX: Handle promise rejection
-                Tts.speak(challenge.voice).catch(() => {
-                    console.log('[LivenessModule] ⚠️ TTS speak failed');
+                const ttsStartTime = Date.now();
+                Tts.speak(challenge.voice).catch((error) => {
+                    const ttsDuration = Date.now() - ttsStartTime;
+                    this.logWithLevel('WARN', `⚠️ TTS speak failed`, {
+                        duration: ttsDuration,
+                        error: error.message,
+                        fallback: 'User will see text instruction only'
+                    });
                 });
+                this.logWithLevel('DEBUG', `🔊 TTS speak initiated successfully`);
             } catch (error) {
-                console.log('[LivenessModule] ⚠️ TTS not available');
+                this.logWithLevel('WARN', `⚠️ TTS not available`, {
+                    error: error.message,
+                    fallback: 'Text instruction only mode'
+                });
             }
         } else {
-            console.log('[LivenessModule] 🔇 TTS disabled, skipping voice instruction');
+            this.logWithLevel('INFO', `🔇 TTS disabled - text instruction only`);
         }
 
         if (this.callbacks.onChallengeChanged) {
-            console.log('[LivenessModule] 📢 Calling onChallengeChanged callback');
-            this.callbacks.onChallengeChanged(challenge);
+            this.logWithLevel('DEBUG', `📢 Triggering onChallengeChanged callback`);
+            try {
+                this.callbacks.onChallengeChanged(challenge);
+                this.logWithLevel('DEBUG', `✅ onChallengeChanged callback executed successfully`);
+            } catch (error) {
+                this.logWithLevel('ERROR', `❌ onChallengeChanged callback failed`, {
+                    error: error.message,
+                    challengeId: challenge.id
+                });
+            }
+        } else {
+            this.logWithLevel('TRACE', `⚠️ No onChallengeChanged callback registered`);
         }
 
         // Clear any existing timeout
         if (this.challengeTimeoutId) {
+            this.logWithLevel('DEBUG', `🧹 Clearing existing challenge timeout`);
             clearTimeout(this.challengeTimeoutId);
+            this.challengeTimeoutId = null;
         }
 
         // Set timeout for challenge (optimized for fast mode: 4-4.5s instead of 5s)
+        this.logWithLevel('INFO', `⏰ Setting challenge timeout`);
+        this.logWithLevel('DEBUG', `⏱️ Timeout schedule`, {
+            duration: timeoutDuration,
+            challengeId: challenge.id,
+            scheduledTime: new Date(Date.now() + timeoutDuration).toISOString(),
+            currentTime: new Date().toISOString()
+        });
+
         this.challengeTimeoutId = setTimeout(() => {
+            this.logWithLevel('WARN', `⏰ Challenge timeout triggered`);
             this.challengeTimeout(challenge);
         }, timeoutDuration);
+
+        this.logWithLevel('INFO', `✅ Challenge ${this.currentChallengeIndex + 1}/${this.challenges.length} started: "${challenge.instruction}"`);
+        this.logWithLevel('DEBUG', `📊 Challenge startup completed in ${Date.now() - startTime}ms`);
     };
 
     processFaceData = (faces) => {
-        const now = Date.now();
+        const processingStartTime = Date.now();
+        this.frameLogCounter++;
 
-        console.log('[LivenessModule] ========================================');
-        console.log('[LivenessModule] 🔄 processFaceData called');
-        console.log('[LivenessModule] 📊 Face array length:', faces?.length || 0);
-        console.log('[LivenessModule] 📊 Current challenge index:', this.currentChallengeIndex);
-        console.log('[LivenessModule] 📊 Total challenges:', this.challenges.length);
+        this.logWithLevel('TRACE', `🔄 processFaceData entry point`);
+        this.logWithLevel('DEBUG', `📊 Frame processing started`, {
+            frameNumber: this.frameLogCounter,
+            faceArrayLength: faces?.length || 0,
+            currentChallengeIndex: this.currentChallengeIndex,
+            totalChallenges: this.challenges.length,
+            timestamp: new Date().toISOString()
+        });
+
+        // Detailed state logging for debugging
+        if (this.shouldLogFrame()) {
+            this.logWithLevel('TRACE', `🔧 Internal state snapshot`, {
+                faceDetected: this.faceDetected,
+                noFaceDetectionCount: this.noFaceDetectionCount,
+                challengeStartTime: this.challengeStartTime,
+                challengeElapsed: this.challengeStartTime ? Date.now() - this.challengeStartTime : 'N/A',
+                blinkState: this.blinkState,
+                baselineAngles: this.baselineAngles,
+                baselineChallengeIndex: this.baselineChallengeIndex,
+                hasTimeout: !!this.challengeTimeoutId
+            });
+        }
 
         if (!faces || faces.length === 0) {
-            console.log('[LivenessModule] ⚠️ No face in array, incrementing no-face count');
+            this.logWithLevel('WARN', `⚠️ No faces detected in frame`);
             this.faceDetected = false;
             this.noFaceDetectionCount++;
 
+            // Detailed no-face logging
+            if (this.shouldLogFrame()) {
+                this.logWithLevel('DEBUG', `📊 No-face detection analysis`, {
+                    consecutiveNoFaceCount: this.noFaceDetectionCount,
+                    threshold: 20,
+                    timeSinceLastFace: this.challengeStartTime ? ((Date.now() - this.challengeStartTime) / 1000).toFixed(1) + 's' : 'N/A',
+                    currentChallenge: this.currentChallengeIndex < this.challenges.length ? this.challenges[this.currentChallengeIndex].id : 'none',
+                    willFailAt: this.noFaceDetectionCount > 20 ? 'IMMEDIATE' : `frame ${20 - this.noFaceDetectionCount}`
+                });
+            }
+
             // Log every 2 seconds when no face
-            if (now - this.lastDebugLogTime > 2000) {
-                console.log(`[LivenessModule] ⚠️ NO FACE: count=${this.noFaceDetectionCount}, threshold=20`);
-                this.lastDebugLogTime = now;
+            if (Date.now() - this.lastDebugLogTime > 2000) {
+                this.logWithLevel('WARN', `⚠️ EXTENDED NO FACE DETECTION`, {
+                    duration: `${(this.noFaceDetectionCount * 0.5).toFixed(1)}s`,
+                    frameCount: this.noFaceDetectionCount,
+                    threshold: '20 frames (~10s)',
+                    action: 'Will fail challenge if continues'
+                });
+                this.lastDebugLogTime = Date.now();
             }
 
             // If no face detected for too long (20 consecutive checks ~10s), fail the challenge
             if (this.noFaceDetectionCount > 20 && this.currentChallengeIndex < this.challenges.length) {
                 const challenge = this.challenges[this.currentChallengeIndex];
-                console.log(`[LivenessModule] ❌ CHALLENGE FAILED: No face detected for ${this.noFaceDetectionCount} frames (~${(this.noFaceDetectionCount * 0.5).toFixed(1)}s)`);
-                console.log(`[LivenessModule] ❌ Failed challenge: ${challenge.id} - "${challenge.instruction}"`);
+                this.logWithLevel('ERROR', `❌ CHALLENGE FAILED: No face detected`, {
+                    consecutiveFrames: this.noFaceDetectionCount,
+                    estimatedDuration: `${(this.noFaceDetectionCount * 0.5).toFixed(1)}s`,
+                    failedChallenge: challenge.id,
+                    challengeInstruction: challenge.instruction,
+                    challengeElapsed: this.challengeStartTime ? Date.now() - this.challengeStartTime : 'N/A',
+                    reason: 'No face detected for extended period'
+                });
                 this.challengeCompleted(challenge, false);
             }
             return;
         }
 
+        // Face detected - detailed logging
         this.faceDetected = true;
+        const face = faces[0];
 
         // Log when face is restored after being lost
         if (this.noFaceDetectionCount > 0) {
-            console.log(`[LivenessModule] ✅ FACE RESTORED after ${this.noFaceDetectionCount} frames`);
+            this.logWithLevel('INFO', `✅ FACE RESTORED after loss`, {
+                lostDuration: `${(this.noFaceDetectionCount * 0.5).toFixed(1)}s`,
+                lostFrames: this.noFaceDetectionCount,
+                currentChallenge: this.currentChallengeIndex < this.challenges.length ? this.challenges[this.currentChallengeIndex].id : 'none'
+            });
         }
 
         this.noFaceDetectionCount = 0; // Reset counter when face is detected
-        const face = faces[0];
+
+        // Detailed face data logging
+        if (this.shouldLogFrame()) {
+            this.logWithLevel('TRACE', `👤 Face data analysis`, {
+                faceId: face.id || 'unknown',
+                hasBounds: !!face.bounds,
+                hasContours: !!face.contours,
+                hasLandmarks: !!face.landmarks,
+                hasEulerX: face.eulerX !== undefined,
+                hasEulerY: face.eulerY !== undefined,
+                hasEulerZ: face.eulerZ !== undefined,
+                leftEyeOpenProb: face.leftEyeOpenProbability !== undefined,
+                rightEyeOpenProb: face.rightEyeOpenProbability !== undefined,
+                smilingProb: face.smilingProbability !== undefined,
+                eulerX: face.eulerX,
+                eulerY: face.eulerY,
+                eulerZ: face.eulerZ
+            });
+        }
 
         // Store current face data for photo capture
         this.currentFaceData = face;
@@ -744,6 +955,9 @@ class LivenessDetectionModule {
             (this.baselineChallengeIndex !== this.currentChallengeIndex);
 
         if (needsBaseline && this.currentChallengeIndex < this.challenges.length) {
+            const baselineStartTime = Date.now();
+            const challengeName = this.challenges[this.currentChallengeIndex]?.id || 'unknown';
+
             this.baselineAngles = {
                 x: face.xAngle || 0,
                 y: face.yAngle || 0,
@@ -751,37 +965,141 @@ class LivenessDetectionModule {
             };
             this.baselineChallengeIndex = this.currentChallengeIndex;
 
-            const challengeName = this.challenges[this.currentChallengeIndex]?.id || 'unknown';
-            console.log(`[LivenessModule] 📍 BASELINE SET for challenge #${this.currentChallengeIndex} (${challengeName}): x=${this.baselineAngles.x.toFixed(1)}°, y=${this.baselineAngles.y.toFixed(1)}°, z=${this.baselineAngles.z.toFixed(1)}°`);
+            this.logWithLevel('INFO', `📍 BASELINE SET for challenge`, {
+                challengeIndex: this.currentChallengeIndex,
+                challengeId: challengeName,
+                baselineAngles: {
+                    x: `${this.baselineAngles.x.toFixed(1)}°`,
+                    y: `${this.baselineAngles.y.toFixed(1)}°`,
+                    z: `${this.baselineAngles.z.toFixed(1)}°`
+                },
+                rawAngles: {
+                    x: face.xAngle,
+                    y: face.yAngle,
+                    z: face.zAngle
+                },
+                frameNumber: this.frameLogCounter,
+                timeSinceChallengeStart: this.challengeStartTime ? Date.now() - this.challengeStartTime : 'N/A',
+                setupTime: Date.now() - baselineStartTime
+            });
+
+            this.logWithLevel('DEBUG', `📐 Baseline quality metrics`, {
+                faceConfidence: face.confidence || 'N/A',
+                faceSize: face.frame ? `${face.frame.width}x${face.frame.height}` : 'N/A',
+                hasAllAngles: face.xAngle !== undefined && face.yAngle !== undefined && face.zAngle !== undefined,
+                angleRange: {
+                    xRange: this.baselineAngles.x !== 0 ? 'offset' : 'centered',
+                    yRange: this.baselineAngles.y !== 0 ? 'offset' : 'centered',
+                    zRange: this.baselineAngles.z !== 0 ? 'offset' : 'centered'
+                }
+            });
+        } else if (this.baselineAngles) {
+            // Log baseline reference info for debugging
+            if (this.shouldLogFrame()) {
+                this.logWithLevel('TRACE', `📐 Using existing baseline`, {
+                    baselineChallenge: this.baselineChallengeIndex,
+                    currentChallenge: this.currentChallengeIndex,
+                    baselineSetFor: this.challenges[this.baselineChallengeIndex]?.id || 'unknown',
+                    baselineAngles: {
+                        x: `${this.baselineAngles.x.toFixed(1)}°`,
+                        y: `${this.baselineAngles.y.toFixed(1)}°`,
+                        z: `${this.baselineAngles.z.toFixed(1)}°`
+                    }
+                });
+            }
         }
 
-        // Debug log angles and probabilities every 1 second
+        // Enhanced angle and probability logging with performance metrics
+        const now = Date.now();
         if (now - this.lastDebugLogTime > 1000) {
-            console.log(`[LivenessModule] 📐 Face angles: x=${face.xAngle?.toFixed(1) || 'N/A'}°, y=${face.yAngle?.toFixed(1) || 'N/A'}°, z=${face.zAngle?.toFixed(1) || 'N/A'}°`);
-            console.log(`[LivenessModule] 👁️ Eyes: L=${face.leftEyeOpenProbability?.toFixed(2) || 'N/A'}, R=${face.rightEyeOpenProbability?.toFixed(2) || 'N/A'}`);
-            console.log(`[LivenessModule] 😊 Smile: ${face.smilingProbability?.toFixed(2) || 'N/A'}`);
-            console.log(`[LivenessModule] 📦 Frame: ${face.frame?.width || 'N/A'}x${face.frame?.height || 'N/A'}`);
+            const currentAngles = {
+                x: face.xAngle,
+                y: face.yAngle,
+                z: face.zAngle
+            };
+
+            const relativeAngles = this.baselineAngles ? {
+                x: currentAngles.x - this.baselineAngles.x,
+                y: currentAngles.y - this.baselineAngles.y,
+                z: currentAngles.z - this.baselineAngles.z
+            } : null;
+
+            this.logWithLevel('DEBUG', `📐 Real-time face tracking data`, {
+                absoluteAngles: {
+                    x: this.formatAngle(currentAngles.x),
+                    y: this.formatAngle(currentAngles.y),
+                    z: this.formatAngle(currentAngles.z)
+                },
+                relativeAngles: relativeAngles ? {
+                    x: this.formatDelta(relativeAngles.x),
+                    y: this.formatDelta(relativeAngles.y),
+                    z: this.formatDelta(relativeAngles.z)
+                } : 'N/A',
+                eyeProbabilities: {
+                    left: this.formatProb(face.leftEyeOpenProbability),
+                    right: this.formatProb(face.rightEyeOpenProbability)
+                },
+                smileProbability: this.formatProb(face.smilingProbability),
+                faceFrame: face.frame ? `${face.frame.width}x${face.frame.height}` : 'N/A',
+                challengeElapsed: this.challengeStartTime ? now - this.challengeStartTime : 'N/A',
+                frameProcessingTime: now - processingStartTime
+            });
             this.lastDebugLogTime = now;
         }
 
         // Check if we have an active challenge
         if (this.currentChallengeIndex >= this.challenges.length) {
-            console.log('[LivenessModule] ⚠️ No active challenge (all completed)');
+            this.logWithLevel('INFO', `⚠️ No active challenge - all challenges completed`);
+            this.logWithLevel('DEBUG', `📊 Final processing stats`, {
+                frameNumber: this.frameLogCounter,
+                processingTime: Date.now() - processingStartTime,
+                totalResults: this.results.length,
+                photosCaptured: this.capturedPhotos.length
+            });
             return;
         }
 
         const challenge = this.challenges[this.currentChallengeIndex];
-        console.log(`[LivenessModule] 🎯 Checking challenge: ${challenge.id}`);
+        const detectionStartTime = Date.now();
+
+        this.logWithLevel('DEBUG', `🎯 Starting challenge detection`, {
+            challengeId: challenge.id,
+            instruction: challenge.instruction,
+            frameNumber: this.frameLogCounter,
+            challengeElapsed: this.challengeStartTime ? Date.now() - this.challengeStartTime : 'N/A',
+            hasBaseline: !!this.baselineAngles,
+            baselineChallenge: this.baselineChallengeIndex
+        });
 
         const detected = this.detectChallengeCompletion(face, challenge);
-        console.log(`[LivenessModule] 🔍 Detection result: ${detected ? '✅ SUCCESS' : '⏳ waiting...'}`);
+        const detectionTime = Date.now() - detectionStartTime;
+
+        this.logWithLevel('DEBUG', `🔍 Challenge detection completed`, {
+            challengeId: challenge.id,
+            result: detected ? '✅ SUCCESS' : '⏳ waiting...',
+            detectionTime: detectionTime,
+            totalProcessingTime: Date.now() - processingStartTime,
+            frameNumber: this.frameLogCounter
+        });
 
         if (detected) {
-            console.log(`[LivenessModule] 🎉 Challenge "${challenge.id}" COMPLETED!`);
+            this.logWithLevel('INFO', `🎉 Challenge COMPLETED successfully!`, {
+                challengeId: challenge.id,
+                instruction: challenge.instruction,
+                completionTime: this.challengeStartTime ? Date.now() - this.challengeStartTime : 'N/A',
+                frameNumber: this.frameLogCounter,
+                totalFramesProcessed: this.frameLogCounter
+            });
 
             // Capture photo immediately when challenge is completed (if face comparison enabled)
             if (this.enableFaceComparison && this.referenceFaceData && this.currentFaceData) {
-                console.log('[LivenessModule] 📸 Capturing completion photo...');
+                this.logWithLevel('INFO', `📸 Triggering completion photo capture`);
+                this.logWithLevel('DEBUG', `📸 Photo capture details`, {
+                    hasReferencePhoto: !!this.referenceFaceData,
+                    hasCurrentFaceData: !!this.currentFaceData,
+                    photoChance: this.photoCaptureChance,
+                    captureTrigger: 'challenge_completion'
+                });
                 // We need the photo URI, but we don't have it here
                 // This will be handled by LivenessWrapper's onChallengeCompleted callback
             }
@@ -799,8 +1117,9 @@ class LivenessDetectionModule {
         console.log('[LivenessModule] ⏱️ Time since challenge start:', timeSinceStart + 'ms');
 
         // Make sure enough time has passed since challenge started
-        if (timeSinceStart < 500) {
-            console.log('[LivenessModule] ⏸️ Too early, waiting... (need 500ms)');
+        // Reduced from 500ms to 300ms because frame processing is already slow (3+ seconds per frame)
+        if (timeSinceStart < 300) {
+            console.log('[LivenessModule] ⏸️ Too early, waiting... (need 300ms)');
             return false;
         }
 
@@ -835,15 +1154,20 @@ class LivenessDetectionModule {
 
                 if (leftEyeOpen !== undefined && rightEyeOpen !== undefined) {
                     // Optimized thresholds for better detection
-                    // Eyes are "open" when BOTH are clearly open (>0.7)
-                    // Eyes are "closed" when BOTH are clearly closed (<0.35)
-                    // Wider gap reduces false positives from partial blinks
-                    const eyesOpen = leftEyeOpen > 0.7 && rightEyeOpen > 0.7;
-                    const eyesClosed = leftEyeOpen < 0.35 && rightEyeOpen < 0.35;
+                    // Eyes are "open" when BOTH are clearly open (>0.65)
+                    // Eyes are "closed" when BOTH are clearly closed (<0.4)
+                    // Adjusted for better real-world performance
+                    const eyesOpen = leftEyeOpen > 0.65 && rightEyeOpen > 0.65;
+                    const eyesClosed = leftEyeOpen < 0.4 && rightEyeOpen < 0.4;
 
-                    // Debug: Always log eye state during blink challenge
-                    console.log(` Eye state: L=${leftEyeOpen.toFixed(2)}, R=${rightEyeOpen.toFixed(2)}, State=${this.blinkState || 'null'}`);
-                    console.log(` Evaluation: eyesOpen=${eyesOpen}, eyesClosed=${eyesClosed}`);
+                    this.logBlinkDebug({
+                        elapsedMs: timeSinceStart,
+                        state: this.blinkState,
+                        leftProb: leftEyeOpen,
+                        rightProb: rightEyeOpen,
+                        eyesOpen,
+                        eyesClosed,
+                    });
 
                     // State machine for blink detection
                     if (eyesOpen && this.blinkState !== 'eyes_open') {
@@ -877,52 +1201,62 @@ class LivenessDetectionModule {
 
             case 'turnHeadLeft':
                 // RELATIVE ANGLE SYSTEM: Measure turn from baseline
-                // User starts with any head position → baseline set to 0°
-                // Then we measure how much they turned LEFT from that position
+                // FIX: ML Kit Y-axis goes NEGATIVE when turning LEFT (not positive!)
                 const yAngleLeft = face.yAngle;
                 const baselineY = this.baselineAngles?.y || 0;
-                const relativeYLeft = yAngleLeft - baselineY; // Positive = LEFT turn
-
-                console.log(`[LivenessModule] 📊 turnHeadLeft check:`);
-                console.log(`[LivenessModule]    Current: ${yAngleLeft?.toFixed(1)}°`);
-                console.log(`[LivenessModule]    Baseline: ${baselineY.toFixed(1)}°`);
-                console.log(`[LivenessModule]    Relative: ${relativeYLeft.toFixed(1)}° (movement from start)`);
-                console.log(`[LivenessModule] 🎯 Threshold: relative > 10° (LEFT turn)`);
+                const relativeYLeft = yAngleLeft - baselineY; // Negative = LEFT turn (ML Kit convention)
+                this.logPoseDebug({
+                    challengeId: 'turnHeadLeft',
+                    axisLabel: 'Y',
+                    baseline: baselineY,
+                    current: yAngleLeft,
+                    relative: relativeYLeft,
+                    thresholdText: '< -10° (LEFT)',
+                    elapsedMs: now - this.challengeStartTime,
+                });
 
                 if (yAngleLeft !== undefined) {
-                    // LEFT turn = POSITIVE relative angle
-                    // TEST: Lowered to 3° to see if user is making small movements
-                    if (relativeYLeft > 3) {
-                        console.log(`✅ turnHeadLeft detected: moved ${relativeYLeft.toFixed(1)}° LEFT from baseline`);
+                    // LEFT turn = NEGATIVE Y angle in ML Kit
+                    if (relativeYLeft < -10) {
+                        console.log(`[LivenessModule][turnHeadLeft] ✅ Movement detected: ${Math.abs(relativeYLeft).toFixed(1)}° LEFT`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${relativeYLeft.toFixed(1)}° <= 3° (need more LEFT turn)`);
+                        this.logPoseShortfall({
+                            challengeId: 'turnHeadLeft',
+                            needed: -10,
+                            relative: relativeYLeft,
+                            directionText: 'turn head further LEFT (negative Y)',
+                        });
                     }
                 }
                 break;
 
             case 'turnHeadRight':
-                // RELATIVE ANGLE SYSTEM: Measure turn from baseline
-                // User starts with any head position → baseline set to 0°
-                // Then we measure how much they turned RIGHT from that position
                 const yAngleRight = face.yAngle;
                 const baselineYRight = this.baselineAngles?.y || 0;
-                const relativeYRight = yAngleRight - baselineYRight; // Negative = RIGHT turn
-
-                console.log(`[LivenessModule] 📊 turnHeadRight check:`);
-                console.log(`[LivenessModule]    Current: ${yAngleRight?.toFixed(1)}°`);
-                console.log(`[LivenessModule]    Baseline: ${baselineYRight.toFixed(1)}°`);
-                console.log(`[LivenessModule]    Relative: ${relativeYRight.toFixed(1)}° (movement from start)`);
-                console.log(`[LivenessModule] 🎯 Threshold: relative < -5° (RIGHT turn)`);
+                const relativeYRight = yAngleRight - baselineYRight; // Positive = RIGHT turn (ML Kit convention)
+                this.logPoseDebug({
+                    challengeId: 'turnHeadRight',
+                    axisLabel: 'Y',
+                    baseline: baselineYRight,
+                    current: yAngleRight,
+                    relative: relativeYRight,
+                    thresholdText: '> +10° (RIGHT)',
+                    elapsedMs: now - this.challengeStartTime,
+                });
 
                 if (yAngleRight !== undefined) {
-                    // RIGHT turn = NEGATIVE relative angle
-                    // TEST: Lowered to -3° to see if user is making small movements
-                    if (relativeYRight < -3) {
-                        console.log(`✅ turnHeadRight detected: moved ${Math.abs(relativeYRight).toFixed(1)}° RIGHT from baseline`);
+                    // RIGHT turn = POSITIVE Y angle in ML Kit (relaxed from -5 to +10)
+                    if (relativeYRight > 10) {
+                        console.log(`[LivenessModule][turnHeadRight] ✅ Movement detected: ${relativeYRight.toFixed(1)}° RIGHT`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${relativeYRight.toFixed(1)}° >= -3° (need more RIGHT turn)`);
+                        this.logPoseShortfall({
+                            challengeId: 'turnHeadRight',
+                            needed: 10,
+                            relative: relativeYRight,
+                            directionText: 'turn head further RIGHT (positive Y)',
+                        });
                     }
                 }
                 break;
@@ -936,32 +1270,31 @@ class LivenessDetectionModule {
                 break;
 
             case 'lookUp':
-                // RELATIVE ANGLE SYSTEM: Measure tilt from baseline
-                // User starts with any head position → baseline set to 0°
-                // Then we measure how much they tilted UP from that position
                 const xAngleUp = face.xAngle;
                 const baselineX = this.baselineAngles?.x || 0;
                 const relativeXUp = xAngleUp - baselineX; // Negative = UP tilt
-
-                console.log(`[LivenessModule] 📊 lookUp check:`);
-                console.log(`[LivenessModule]    Current: ${xAngleUp?.toFixed(1)}°`);
-                console.log(`[LivenessModule]    Baseline: ${baselineX.toFixed(1)}°`);
-                console.log(`[LivenessModule]    Relative: ${relativeXUp.toFixed(1)}° (movement from start)`);
-                console.log(`[LivenessModule] 🎯 TEST: Trying BOTH directions - up (< -3°) OR down (> 3°)`);
+                this.logPoseDebug({
+                    challengeId: 'lookUp',
+                    axisLabel: 'X',
+                    baseline: baselineX,
+                    current: xAngleUp,
+                    relative: relativeXUp,
+                    thresholdText: '< -10° (UP tilt)',
+                    elapsedMs: now - this.challengeStartTime,
+                });
 
                 if (xAngleUp !== undefined) {
-                    // TEST: Check BOTH directions to see which one user is doing
-                    // Normal: Looking UP = NEGATIVE (head tilts back)
-                    // Maybe user is doing opposite?
-                    if (relativeXUp < -3) {
-                        console.log(`✅ lookUp detected: tilted ${Math.abs(relativeXUp).toFixed(1)}° UP (NEGATIVE) from baseline`);
+                    // Relaxed threshold from -5 to -10 for better real-world usability
+                    if (relativeXUp < -10) {
+                        console.log(`[LivenessModule][lookUp] ✅ Movement detected: ${Math.abs(relativeXUp).toFixed(1)}° UP`);
                         return true;
-                    } else if (relativeXUp > 3) {
-                        console.log(`⚠️ WARNING: User tilted DOWN (+${relativeXUp.toFixed(1)}°) instead of UP!`);
-                        console.log(`⚠️ But ACCEPTING it as test to see if direction is reversed`);
-                        return true; // TEST: Accept both directions
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${relativeXUp.toFixed(1)}° - no significant movement`);
+                        this.logPoseShortfall({
+                            challengeId: 'lookUp',
+                            needed: -10,
+                            relative: relativeXUp,
+                            directionText: 'tilt head UP (negative X)',
+                        });
                     }
                 }
                 break;
@@ -1008,42 +1341,156 @@ class LivenessDetectionModule {
     };
 
     challengeCompleted = (challenge, success) => {
+        const completionStartTime = Date.now();
+
+        this.logWithLevel('INFO', `🏁 Challenge completion process started`, {
+            challengeId: challenge.id,
+            instruction: challenge.instruction,
+            result: success ? 'SUCCESS' : 'FAILED',
+            timestamp: new Date().toISOString()
+        });
+
         // Clear challenge timeout to prevent duplicate execution
         if (this.challengeTimeoutId) {
+            this.logWithLevel('DEBUG', `🧹 Clearing challenge timeout`);
             clearTimeout(this.challengeTimeoutId);
             this.challengeTimeoutId = null;
+        } else {
+            this.logWithLevel('TRACE', `⚠️ No active timeout to clear`);
         }
 
         const duration = Date.now() - this.challengeStartTime;
-        console.log(`[LivenessModule] ${success ? '✅' : '❌'} Challenge "${challenge.instruction}" ${success ? 'COMPLETED' : 'FAILED'} in ${duration}ms`);
+        const successCount = this.results.filter(r => r.success).length;
+        const totalCount = this.results.length;
 
-        // Record result
-        this.results.push({
+        this.logWithLevel('INFO', `${success ? '✅' : '❌'} Challenge completed`, {
+            challengeId: challenge.id,
+            instruction: challenge.instruction,
+            result: success ? 'COMPLETED' : 'FAILED',
+            duration: duration,
+            durationFormatted: `${(duration / 1000).toFixed(1)}s`,
+            expectedDuration: challenge.duration,
+            durationVsExpected: duration > challenge.duration ? 'exceeded' : 'within',
+            frameNumber: this.frameLogCounter
+        });
+
+        // Record result with detailed logging
+        const result = {
             challenge: challenge.id,
             success: success,
             timestamp: Date.now(),
             duration: duration,
+            framesProcessed: this.frameLogCounter,
+            baselineAngles: this.baselineAngles ? {
+                x: this.baselineAngles.x.toFixed(1),
+                y: this.baselineAngles.y.toFixed(1),
+                z: this.baselineAngles.z.toFixed(1)
+            } : null
+        };
+
+        this.results.push(result);
+
+        this.logWithLevel('DEBUG', `📊 Progress updated`, {
+            completedChallenges: totalCount + 1,
+            successfulChallenges: successCount + (success ? 1 : 0),
+            successRate: totalCount > 0 ? `${((successCount + (success ? 1 : 0)) / (totalCount + 1) * 100).toFixed(1)}%` : 'N/A',
+            totalChallenges: this.challenges.length,
+            remainingChallenges: this.challenges.length - (this.currentChallengeIndex + 1)
         });
 
-        console.log(`[LivenessModule] 📊 Progress: ${this.results.filter(r => r.success).length}/${this.results.length} successful`);
+        // Detailed state cleanup logging
+        this.logWithLevel('DEBUG', `🔄 State cleanup before next challenge`, {
+            currentChallengeIndex: this.currentChallengeIndex,
+            nextChallengeIndex: this.currentChallengeIndex + 1,
+            willResetBaseline: true,
+            willResetBlinkState: true,
+            willResetFrameCounter: false
+        });
 
         // Move to next challenge
         this.currentChallengeIndex++;
 
-        // Small delay before next challenge
+        // Small delay before next challenge with enhanced logging
+        const delayTime = 1000;
+        this.logWithLevel('INFO', `⏰ Scheduling next challenge`, {
+            delay: delayTime,
+            delayFormatted: `${delayTime / 1000}s`,
+            nextChallengeIndex: this.currentChallengeIndex,
+            nextChallengeId: this.currentChallengeIndex < this.challenges.length ? this.challenges[this.currentChallengeIndex].id : 'none',
+            isFinalChallenge: this.currentChallengeIndex >= this.challenges.length
+        });
+
         setTimeout(() => {
+            this.logWithLevel('DEBUG', `⏰ Delay completed, starting next challenge`);
             this.startNextChallenge();
-        }, 1000);
+        }, delayTime);
+
+        this.logWithLevel('DEBUG', `📊 Challenge completion process finished in ${Date.now() - completionStartTime}ms`);
     };
 
     challengeTimeout = (challenge) => {
+        const timeoutStartTime = Date.now();
+
+        this.logWithLevel('WARN', `⏰ Challenge timeout triggered`, {
+            challengeId: challenge.id,
+            instruction: challenge.instruction,
+            timestamp: new Date().toISOString(),
+            expectedDuration: challenge.duration,
+            actualDuration: this.challengeStartTime ? Date.now() - this.challengeStartTime : 'N/A'
+        });
+
         // Check if this challenge is still active
         if (this.currentChallengeIndex < this.challenges.length &&
             this.challenges[this.currentChallengeIndex].id === challenge.id) {
-            // Challenge failed due to timeout
-            console.log(`[LivenessModule] ⏱️ TIMEOUT: Challenge "${challenge.instruction}" took too long`);
+
+            this.logWithLevel('ERROR', `❌ Challenge FAILED due to timeout`, {
+                challengeId: challenge.id,
+                instruction: challenge.instruction,
+                timeoutReason: 'Challenge not completed within allowed time',
+                expectedDuration: challenge.duration,
+                actualDuration: this.challengeStartTime ? Date.now() - this.challengeStartTime : 'N/A',
+                frameNumber: this.frameLogCounter,
+                faceDetected: this.faceDetected,
+                baselineSet: !!this.baselineAngles,
+                lastKnownAngles: this.currentFaceData ? {
+                    x: this.formatAngle(this.currentFaceData.xAngle),
+                    y: this.formatAngle(this.currentFaceData.yAngle),
+                    z: this.formatAngle(this.currentFaceData.zAngle)
+                } : 'N/A'
+            });
+
+            // Detailed timeout analysis
+            if (this.challengeStartTime) {
+                const elapsed = Date.now() - this.challengeStartTime;
+                const efficiency = (elapsed / challenge.duration) * 100;
+
+                this.logWithLevel('DEBUG', `📊 Timeout analysis`, {
+                    timeEfficiency: `${efficiency.toFixed(1)}%`,
+                    timeUsed: `${elapsed}ms`,
+                    timeAllowed: `${challenge.duration}ms`,
+                    timeWasted: `${Math.max(0, elapsed - challenge.duration)}ms`,
+                    framesProcessed: this.frameLogCounter,
+                    avgFrameTime: this.frameLogCounter > 0 ? `${(elapsed / this.frameLogCounter).toFixed(1)}ms` : 'N/A',
+                    possibleCauses: [
+                        'User movement too slow',
+                        'Face detection issues',
+                        'Baseline not properly set',
+                        'Thresholds too strict',
+                        'Camera/ML Kit performance'
+                    ]
+                });
+            }
+
             this.challengeCompleted(challenge, false);
+        } else {
+            this.logWithLevel('WARN', `⚠️ Timeout ignored - challenge no longer active`, {
+                timeoutChallengeId: challenge.id,
+                currentChallengeId: this.currentChallengeIndex < this.challenges.length ? this.challenges[this.currentChallengeIndex].id : 'none',
+                reason: 'Challenge already completed or replaced'
+            });
         }
+
+        this.logWithLevel('DEBUG', `📊 Timeout handling completed in ${Date.now() - timeoutStartTime}ms`);
     };
 
     completeDetection = () => {
