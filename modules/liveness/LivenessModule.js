@@ -905,20 +905,21 @@ class LivenessDetectionModule {
 
             case 'lookUp':
                 // Detect head tilted up - xAngle should be NEGATIVE (head back)
-                // Lowered threshold to -5° for easier detection (was -10°)
+                // Threshold lowered to -3° based on user test data showing -1.8° to -2.9°
+                // This is more realistic for users (was -5°, then -10° originally)
                 const xAngleUp = face.xAngle;
                 console.log(`[LivenessModule] 📊 lookUp check: xAngle=${xAngleUp?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: xAngle < -5° (head tilted back)`);
+                console.log(`[LivenessModule] 🎯 Threshold: xAngle < -3° (head tilted back)`);
 
                 if (xAngleUp !== undefined) {
                     console.log(`[LivenessModule] 📊 Current value: ${xAngleUp.toFixed(1)}°`);
 
                     // Looking up means head tilts back, which is NEGATIVE xAngle
-                    if (xAngleUp < -5) {
+                    if (xAngleUp < -3) {
                         console.log(`✅ lookUp detected: xAngle=${xAngleUp.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${xAngleUp.toFixed(1)}° >= -5°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${xAngleUp.toFixed(1)}° >= -3°`);
                     }
                 }
                 break;
