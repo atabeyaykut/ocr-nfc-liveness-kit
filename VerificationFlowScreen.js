@@ -231,8 +231,16 @@ const VerificationFlowScreen = ({ navigation, route }) => {
     const [detectionHint, setDetectionHint] = useState('');
 
     const cameraRef = useRef(null);
-    const ocrModuleRef = useRef(new OCRReaderModule());
-    const nfcModuleRef = useRef(new NFCReaderModule());
+    const ocrModuleRef = useRef(null);
+    const nfcModuleRef = useRef(null);
+
+    // Lazy initialization to prevent memory leaks
+    if (!ocrModuleRef.current) {
+        ocrModuleRef.current = new OCRReaderModule();
+    }
+    if (!nfcModuleRef.current) {
+        nfcModuleRef.current = new NFCReaderModule();
+    }
 
     const device = useCameraDevice('back');
 
