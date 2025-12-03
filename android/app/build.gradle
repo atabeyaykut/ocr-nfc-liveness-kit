@@ -96,6 +96,11 @@ android {
     }
   }
 
+  // Prevent compression of large ONNX model file in APK
+  aaptOptions {
+    noCompress "onnx"  // Don't compress .onnx files (87MB FaceNet model)
+  }
+
   packagingOptions {
     resources {
       excludes += [
