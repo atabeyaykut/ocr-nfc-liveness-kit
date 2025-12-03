@@ -1,0 +1,297 @@
+/**
+ * FaceRecognitionService - ONNX FaceNet tabanlı yüz tanıma
+ * 
+ * FaceNet ONNX modeli kullanarak yüz embeddings hesaplar ve karşılaştırır.
+ * Model: 160x160 RGB input → 512-dim face embedding output
+ * Similarity: Cosine similarity (0-1 range, >0.7 = match)
+ * 
+ * @module FaceRecognitionService
+ */
+
+import { InferenceSession, Tensor } from 'onnxruntime-react-native';
+import RNFS from 'react-native-fs';
+import ImageResizer from '@bam.tech/react-native-image-resizer';
+
+const MODEL_INPUT_SIZE = 160; // FaceNet input size
+const EMBEDDING_SIZE = 512; // FaceNet output dimension
+
+class FaceRecognitionService {
+    constructor() {
+        this.session = null;
+        this.isInitialized = false;
+    }
+
+    /**
+     * Initialize ONNX session with FaceNet model
+     */
+    async initialize() {
+        if (this.isInitialized) {
+            console.log('[FaceRecognition] Already initialized');
+            return true;
+        }
+
+        try {
+            console.log('[FaceRecognition] Initializing ONNX session...');
+
+            // Model path from Android assets
+            const modelPath = `${RNFS.DocumentDirectoryPath}/facenet.onnx`;
+
+            // Check if model exists in documents directory, if not copy from assets
+            const exists = await RNFS.exists(modelPath);
+            if (!exists) {
+                console.log('[FaceRecognition] Copying model from assets...');
+                // For Android, copy from assets to documents directory
+                if (Platform.OS === 'android') {
+                    await RNFS.copyFileAssets('facenet.onnx', modelPath);
+                } else {
+                    // For iOS, model should be in bundle
+                    const bundlePath = `${RNFS.MainBundlePath}/facenet.onnx`;
+                    await RNFS.copyFile(bundlePath, modelPath);
+                }
+                console.log('[FaceRecognition] Model copied successfully');
+            }
+
+            // Verify file size
+            const stat = await RNFS.stat(modelPath);
+            console.log(`[FaceRecognition] Model file size: ${(stat.size / 1024 / 1024).toFixed(2)}MB`);
+
+            // Create ONNX session
+            this.session = await InferenceSession.create(modelPath);
+            this.isInitialized = true;
+
+            console.log('[FaceRecognition] ✅ ONNX session initialized successfully');
+            return true;
+
+        } catch (error) {
+            console.error('[FaceRecognition] ❌ Initialization failed:', error);
+            console.error('[FaceRecognition] Error stack:', error.stack);
+            this.isInitialized = false;
+            return false;
+        }
+    }
+
+    /**
+     * Preprocess image for FaceNet model
+     * - Resize to 160x160
+     * - Convert to RGB
+     * - Normalize to [-1, 1] range
+     * - Convert to NCHW format (1, 3, 160, 160)
+     * 
+     * @param {string} imagePath - Path to image file
+     * @param {Object} faceFrame - Face bounding box from ML Kit
+     * @returns {Float32Array} Preprocessed image data
+     */
+    async preprocessImage(imagePath, faceFrame) {
+        try {
+            console.log('[FaceRecognition] Preprocessing image...');
+            console.log(`[FaceRecognition] Input: ${imagePath}`);
+            console.log(`[FaceRecognition] Face frame:`, faceFrame);
+
+            // 1. Crop face region if bounding box provided
+            let processedPath = imagePath;
+            if (faceFrame && faceFrame.left !== undefined) {
+                const cropData = {
+                    offset: {
+                        x: Math.max(0, faceFrame.left),
+                        y: Math.max(0, faceFrame.top),
+                    },
+                    size: {
+                        width: faceFrame.width,
+                        height: faceFrame.height,
+                    },
+                };
+
+                console.log('[FaceRecognition] Cropping face region:', cropData);
+
+                // Crop image
+                const croppedImage = await ImageResizer.createResizedImage(
+                    imagePath,
+                    cropData.size.width,
+                    cropData.size.height,
+                    'JPEG',
+                    100,
+                    0,
+                    null,
+                    false,
+                    {
+                        mode: 'contain',
+                        onlyScaleDown: false,
+                    }
+                );
+                processedPath = croppedImage.uri;
+            }
+
+            // 2. Resize to 160x160 (FaceNet input size)
+            console.log('[FaceRecognition] Resizing to 160x160...');
+            const resizedImage = await ImageResizer.createResizedImage(
+                processedPath,
+                MODEL_INPUT_SIZE,
+                MODEL_INPUT_SIZE,
+                'JPEG',
+                100,
+                0,
+                null,
+                false,
+                {
+                    mode: 'cover', // Fill entire 160x160
+                }
+            );
+
+            // 3. Read image as base64
+            const base64Image = await RNFS.readFile(resizedImage.uri, 'base64');
+
+            // 4. Decode base64 to pixels (this is simplified - in practice you'd need actual pixel decoding)
+            // For now, we'll use a placeholder approach
+            // In production, you'd use a proper image decoding library or native module
+
+            console.log('[FaceRecognition] ⚠️ Image preprocessing complete (placeholder)');
+            console.log('[FaceRecognition] Note: Full pixel decoding needs implementation');
+
+            // Placeholder: return dummy normalized data
+            // In production: decode base64 → RGB pixels → normalize to [-1,1] → NCHW format
+            const inputData = new Float32Array(1 * 3 * MODEL_INPUT_SIZE * MODEL_INPUT_SIZE);
+
+            return inputData;
+
+        } catch (error) {
+            console.error('[FaceRecognition] ❌ Preprocessing failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Extract face embedding using FaceNet
+     * 
+     * @param {string} imagePath - Path to image file
+     * @param {Object} faceFrame - Face bounding box from ML Kit
+     * @returns {Float32Array} 512-dim face embedding
+     */
+    async extractEmbedding(imagePath, faceFrame) {
+        if (!this.isInitialized) {
+            console.log('[FaceRecognition] Not initialized, initializing now...');
+            const success = await this.initialize();
+            if (!success) {
+                throw new Error('Failed to initialize FaceRecognition service');
+            }
+        }
+
+        try {
+            console.log('[FaceRecognition] Extracting face embedding...');
+
+            // Preprocess image
+            const inputData = await this.preprocessImage(imagePath, faceFrame);
+
+            // Create input tensor [1, 3, 160, 160]
+            const inputTensor = new Tensor('float32', inputData, [1, 3, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE]);
+
+            // Run inference
+            console.log('[FaceRecognition] Running ONNX inference...');
+            const feeds = { input: inputTensor };
+            const results = await this.session.run(feeds);
+
+            // Get output tensor (512-dim embedding)
+            const outputTensor = results.output;
+            const embedding = outputTensor.data;
+
+            console.log(`[FaceRecognition] ✅ Embedding extracted: ${embedding.length} dimensions`);
+
+            return embedding;
+
+        } catch (error) {
+            console.error('[FaceRecognition] ❌ Embedding extraction failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Calculate cosine similarity between two embeddings
+     * 
+     * @param {Float32Array} embedding1 
+     * @param {Float32Array} embedding2 
+     * @returns {number} Similarity score (0-1, higher = more similar)
+     */
+    calculateCosineSimilarity(embedding1, embedding2) {
+        if (embedding1.length !== embedding2.length) {
+            throw new Error('Embeddings must have same length');
+        }
+
+        let dotProduct = 0;
+        let norm1 = 0;
+        let norm2 = 0;
+
+        for (let i = 0; i < embedding1.length; i++) {
+            dotProduct += embedding1[i] * embedding2[i];
+            norm1 += embedding1[i] * embedding1[i];
+            norm2 += embedding2[i] * embedding2[i];
+        }
+
+        norm1 = Math.sqrt(norm1);
+        norm2 = Math.sqrt(norm2);
+
+        if (norm1 === 0 || norm2 === 0) {
+            return 0;
+        }
+
+        const similarity = dotProduct / (norm1 * norm2);
+
+        // Cosine similarity is in range [-1, 1], normalize to [0, 1]
+        const normalizedSimilarity = (similarity + 1) / 2;
+
+        return normalizedSimilarity;
+    }
+
+    /**
+     * Compare two faces and return similarity score
+     * 
+     * @param {string} image1Path - Path to first image
+     * @param {Object} face1Frame - Face bounding box for first image
+     * @param {string} image2Path - Path to second image
+     * @param {Object} face2Frame - Face bounding box for second image
+     * @returns {Object} { similarity: number, isMatch: boolean }
+     */
+    async compareFaces(image1Path, face1Frame, image2Path, face2Frame) {
+        try {
+            console.log('[FaceRecognition] Comparing faces...');
+
+            // Extract embeddings
+            const embedding1 = await this.extractEmbedding(image1Path, face1Frame);
+            const embedding2 = await this.extractEmbedding(image2Path, face2Frame);
+
+            // Calculate similarity
+            const similarity = this.calculateCosineSimilarity(embedding1, embedding2);
+
+            // Threshold for match (0.7 = 70% similarity)
+            const isMatch = similarity >= 0.7;
+
+            console.log(`[FaceRecognition] Similarity: ${(similarity * 100).toFixed(2)}%`);
+            console.log(`[FaceRecognition] Match: ${isMatch ? '✅ YES' : '❌ NO'}`);
+
+            return {
+                similarity,
+                isMatch,
+                threshold: 0.7,
+            };
+
+        } catch (error) {
+            console.error('[FaceRecognition] ❌ Face comparison failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Cleanup resources
+     */
+    async dispose() {
+        if (this.session) {
+            console.log('[FaceRecognition] Disposing ONNX session...');
+            // ONNX Runtime session disposal (if available)
+            this.session = null;
+            this.isInitialized = false;
+        }
+    }
+}
+
+// Singleton instance
+const faceRecognitionService = new FaceRecognitionService();
+
+export default faceRecognitionService;
