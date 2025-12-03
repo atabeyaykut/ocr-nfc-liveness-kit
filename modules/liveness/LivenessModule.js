@@ -21,6 +21,7 @@ import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import Tts from 'react-native-tts';
 import FaceDetection from '@react-native-ml-kit/face-detection';
+import { compareFacesImproved } from './ImprovedFaceComparison';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -124,7 +125,7 @@ class LivenessDetectionModule {
         this.referenceFaceData = null; // Face data extracted from NFC photo
         this.enableFaceComparison = true; // Enable face photo comparison
         this.photoCaptureChance = 0.6; // 60% chance to capture photo
-        this.similarityThreshold = 0.60;  // 60% minimum similarity (relaxed - basic bbox/landmark algorithm)
+        this.similarityThreshold = 0.55;  // 55% minimum similarity (improved landmark-based algorithm with weighted scoring)
         this.currentFaceData = null; // Current face data from processFaceData
     }
 
@@ -538,46 +539,16 @@ class LivenessDetectionModule {
     };
 
     /**
-     * Compare two faces using landmark-based similarity
-     * @param {Object} face1 - Reference face (NFC photo)
+     * Compare two faces for similarity
+     * IMPROVED: Uses enhanced landmark-based algorithm with weighted scoring
+     * 
+     * @param {Object} face1 - Reference face (from NFC photo)
      * @param {Object} face2 - Live face (captured during test)
      * @returns {number} Similarity score (0-1)
      */
     compareFaces = (face1, face2) => {
-        if (!face1 || !face2) return 0;
-
-        try {
-            let totalScore = 0;
-            let weightSum = 0;
-
-            // 1. Landmark similarity (50% weight)
-            if (face1.landmarks && face2.landmarks && face1.frame && face2.frame) {
-                const landmarkScore = this.compareLandmarks(face1.landmarks, face2.landmarks, face1.frame, face2.frame);
-                totalScore += landmarkScore * 0.5;
-                weightSum += 0.5;
-            }
-
-            // 2. Face geometry similarity (30% weight)
-            if (face1.frame && face2.frame) {
-                const geometryScore = this.compareFaceGeometry(face1.frame, face2.frame);
-                totalScore += geometryScore * 0.3;
-                weightSum += 0.3;
-            }
-
-            // 3. Feature similarity (20% weight) - eye, smile probabilities
-            const featureScore = this.compareFaceFeatures(face1, face2);
-            totalScore += featureScore * 0.2;
-            weightSum += 0.2;
-
-            // Normalize
-            const finalScore = weightSum > 0 ? totalScore / weightSum : 0;
-
-            return Math.max(0, Math.min(1, finalScore));
-
-        } catch (error) {
-            console.error('[LivenessModule] ❌ Face comparison error:', error);
-            return 0;
-        }
+        // Use improved comparison algorithm
+        return compareFacesImproved(face1, face2);
     };
 
     /**
