@@ -105,6 +105,11 @@ class LivenessDetectionModule {
         this.blinkState = null; // null | 'eyes_open' | 'eyes_closed'
         this.blinkStateTime = null; // Track when state changed
 
+        // Baseline angles for relative challenge detection
+        // When a challenge starts, first face position becomes baseline (0,0,0)
+        // All movements measured relative to this baseline
+        this.baselineAngles = null; // { x, y, z }
+
         // Face comparison for NFC verification
         this.capturedPhotos = []; // Photos captured during liveness test
         this.referencePhotoUri = null; // NFC photo for comparison
@@ -644,6 +649,7 @@ class LivenessDetectionModule {
         this.noFaceDetectionCount = 0; // Reset no-face counter
         this.blinkState = null; // Reset blink state machine for new challenge
         this.blinkStateTime = null;
+        this.baselineAngles = null; // Reset baseline - will be set with first face detection
 
         // Adaptive timeout based on challenge type
         // Blink needs more time for state machine transitions
@@ -726,6 +732,17 @@ class LivenessDetectionModule {
 
         // Store current face data for photo capture
         this.currentFaceData = face;
+
+        // Set baseline angles on first face detection for this challenge
+        // This makes all movements relative to the starting position
+        if (this.baselineAngles === null && this.currentChallengeIndex < this.challenges.length) {
+            this.baselineAngles = {
+                x: face.xAngle || 0,
+                y: face.yAngle || 0,
+                z: face.zAngle || 0,
+            };
+            console.log(`[LivenessModule] 📍 BASELINE SET: x=${this.baselineAngles.x.toFixed(1)}°, y=${this.baselineAngles.y.toFixed(1)}°, z=${this.baselineAngles.z.toFixed(1)}°`);
+        }
 
         // Debug log angles and probabilities every 1 second
         if (now - this.lastDebugLogTime > 1000) {
@@ -848,46 +865,53 @@ class LivenessDetectionModule {
                 break;
 
             case 'turnHeadLeft':
-                // Detect head turned left - Lowered to minimum for better UX
-                // User shows small turns - accepting 10° minimum
-                // This is more realistic for actual users vs perfect test conditions
+                // RELATIVE ANGLE SYSTEM: Measure turn from baseline
+                // User starts with any head position → baseline set to 0°
+                // Then we measure how much they turned LEFT from that position
                 const yAngleLeft = face.yAngle;
-                const yAbsLeft = Math.abs(yAngleLeft || 0);
-                console.log(`[LivenessModule] 📊 turnHeadLeft check: yAngle=${yAngleLeft?.toFixed(1)}° (|abs|=${yAbsLeft.toFixed(1)}°)`);
-                console.log(`[LivenessModule] 🎯 Threshold: |yAngle| > 10° (moderate turn = left)`);
+                const baselineY = this.baselineAngles?.y || 0;
+                const relativeYLeft = yAngleLeft - baselineY; // Positive = LEFT turn
+
+                console.log(`[LivenessModule] 📊 turnHeadLeft check:`);
+                console.log(`[LivenessModule]    Current: ${yAngleLeft?.toFixed(1)}°`);
+                console.log(`[LivenessModule]    Baseline: ${baselineY.toFixed(1)}°`);
+                console.log(`[LivenessModule]    Relative: ${relativeYLeft.toFixed(1)}° (movement from start)`);
+                console.log(`[LivenessModule] 🎯 Threshold: relative > 10° (LEFT turn)`);
 
                 if (yAngleLeft !== undefined) {
-                    console.log(`[LivenessModule] 📊 Current absolute value: ${yAbsLeft.toFixed(1)}°`);
-
-                    // Lowered to 10° for better user experience
-                    // User data shows they can turn but angles are smaller than expected
-                    if (yAbsLeft > 10) {
-                        console.log(`✅ turnHeadLeft detected: |yAngle|=${yAbsLeft.toFixed(1)}° (raw: ${yAngleLeft.toFixed(1)}°)`);
+                    // LEFT turn = POSITIVE relative angle
+                    // User must turn at least 10° to the LEFT from starting position
+                    if (relativeYLeft > 10) {
+                        console.log(`✅ turnHeadLeft detected: moved ${relativeYLeft.toFixed(1)}° LEFT from baseline`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${yAbsLeft.toFixed(1)}° <= 10°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${relativeYLeft.toFixed(1)}° <= 10° (need more LEFT turn)`);
                     }
                 }
                 break;
 
             case 'turnHeadRight':
-                // Detect head turned right - NEGATIVE yAngle
-                // Ultra-low threshold at -1.2° for maximum user convenience
-                // Absolute minimum threshold for right turn detection
+                // RELATIVE ANGLE SYSTEM: Measure turn from baseline
+                // User starts with any head position → baseline set to 0°
+                // Then we measure how much they turned RIGHT from that position
                 const yAngleRight = face.yAngle;
-                console.log(`[LivenessModule] 📊 turnHeadRight check: yAngle=${yAngleRight?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: yAngle < -1.2° (NEGATIVE = right)`);
+                const baselineYRight = this.baselineAngles?.y || 0;
+                const relativeYRight = yAngleRight - baselineYRight; // Negative = RIGHT turn
+
+                console.log(`[LivenessModule] 📊 turnHeadRight check:`);
+                console.log(`[LivenessModule]    Current: ${yAngleRight?.toFixed(1)}°`);
+                console.log(`[LivenessModule]    Baseline: ${baselineYRight.toFixed(1)}°`);
+                console.log(`[LivenessModule]    Relative: ${relativeYRight.toFixed(1)}° (movement from start)`);
+                console.log(`[LivenessModule] 🎯 Threshold: relative < -5° (RIGHT turn)`);
 
                 if (yAngleRight !== undefined) {
-                    console.log(`[LivenessModule] 📊 Current value: ${yAngleRight.toFixed(1)}°`);
-
-                    // NEGATIVE yAngle = head turned RIGHT
-                    // Lowered from -5° → -2° → -1.5° → -1.2° (ultra-low for UX)
-                    if (yAngleRight < -1.2) {
-                        console.log(`✅ turnHeadRight detected: yAngle=${yAngleRight.toFixed(1)}°`);
+                    // RIGHT turn = NEGATIVE relative angle
+                    // User must turn at least 5° to the RIGHT from starting position
+                    if (relativeYRight < -5) {
+                        console.log(`✅ turnHeadRight detected: moved ${Math.abs(relativeYRight).toFixed(1)}° RIGHT from baseline`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${yAngleRight.toFixed(1)}° >= -1.2°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${relativeYRight.toFixed(1)}° >= -5° (need more RIGHT turn)`);
                     }
                 }
                 break;
@@ -901,43 +925,53 @@ class LivenessDetectionModule {
                 break;
 
             case 'lookUp':
-                // Detect head tilted up - xAngle should be NEGATIVE (head back)
-                // Lowered to -2° minimum - user showed -2.2° which was very close
-                // Progressive lowering: -10° → -5° → -3° → -2° (final)
+                // RELATIVE ANGLE SYSTEM: Measure tilt from baseline
+                // User starts with any head position → baseline set to 0°
+                // Then we measure how much they tilted UP from that position
                 const xAngleUp = face.xAngle;
-                console.log(`[LivenessModule] 📊 lookUp check: xAngle=${xAngleUp?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: xAngle < -2° (head tilted back)`);
+                const baselineX = this.baselineAngles?.x || 0;
+                const relativeXUp = xAngleUp - baselineX; // Negative = UP tilt
+
+                console.log(`[LivenessModule] 📊 lookUp check:`);
+                console.log(`[LivenessModule]    Current: ${xAngleUp?.toFixed(1)}°`);
+                console.log(`[LivenessModule]    Baseline: ${baselineX.toFixed(1)}°`);
+                console.log(`[LivenessModule]    Relative: ${relativeXUp.toFixed(1)}° (movement from start)`);
+                console.log(`[LivenessModule] 🎯 Threshold: relative < -5° (UP tilt)`);
 
                 if (xAngleUp !== undefined) {
-                    console.log(`[LivenessModule] 📊 Current value: ${xAngleUp.toFixed(1)}°`);
-
-                    // Looking up means head tilts back, which is NEGATIVE xAngle
-                    // -2° is minimum acceptable (user showed -2.2°)
-                    if (xAngleUp < -2) {
-                        console.log(`✅ lookUp detected: xAngle=${xAngleUp.toFixed(1)}°`);
+                    // Looking UP = NEGATIVE relative xAngle (head tilts back)
+                    // User must tilt at least 5° UP from starting position
+                    if (relativeXUp < -5) {
+                        console.log(`✅ lookUp detected: tilted ${Math.abs(relativeXUp).toFixed(1)}° UP from baseline`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${xAngleUp.toFixed(1)}° >= -2°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${relativeXUp.toFixed(1)}° >= -5° (need more UP tilt)`);
                     }
                 }
                 break;
 
             case 'lookDown':
-                // Detect head tilted down - xAngle should be POSITIVE (head forward)
-                // Lowered threshold to 5° for easier detection (was 10°)
+                // RELATIVE ANGLE SYSTEM: Measure tilt from baseline
+                // User starts with any head position → baseline set to 0°
+                // Then we measure how much they tilted DOWN from that position
                 const xAngleDown = face.xAngle;
-                console.log(`[LivenessModule] 📊 lookDown check: xAngle=${xAngleDown?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: xAngle > 5° (head tilted forward)`);
+                const baselineXDown = this.baselineAngles?.x || 0;
+                const relativeXDown = xAngleDown - baselineXDown; // Positive = DOWN tilt
+
+                console.log(`[LivenessModule] 📊 lookDown check:`);
+                console.log(`[LivenessModule]    Current: ${xAngleDown?.toFixed(1)}°`);
+                console.log(`[LivenessModule]    Baseline: ${baselineXDown.toFixed(1)}°`);
+                console.log(`[LivenessModule]    Relative: ${relativeXDown.toFixed(1)}° (movement from start)`);
+                console.log(`[LivenessModule] 🎯 Threshold: relative > 5° (DOWN tilt)`);
 
                 if (xAngleDown !== undefined) {
-                    console.log(`[LivenessModule] 📊 Current value: ${xAngleDown.toFixed(1)}°`);
-
-                    // Looking down means head tilts forward, which is POSITIVE xAngle
-                    if (xAngleDown > 5) {
-                        console.log(`✅ lookDown detected: xAngle=${xAngleDown.toFixed(1)}°`);
+                    // Looking DOWN = POSITIVE relative xAngle (head tilts forward)
+                    // User must tilt at least 5° DOWN from starting position
+                    if (relativeXDown > 5) {
+                        console.log(`✅ lookDown detected: tilted ${relativeXDown.toFixed(1)}° DOWN from baseline`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${xAngleDown.toFixed(1)}° <= 5°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${relativeXDown.toFixed(1)}° <= 5° (need more DOWN tilt)`);
                     }
                 }
                 break;
