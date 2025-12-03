@@ -109,6 +109,7 @@ class LivenessDetectionModule {
         // When a challenge starts, first face position becomes baseline (0,0,0)
         // All movements measured relative to this baseline
         this.baselineAngles = null; // { x, y, z }
+        this.baselineChallengeIndex = -1; // Track which challenge this baseline belongs to
 
         // Face comparison for NFC verification
         this.capturedPhotos = []; // Photos captured during liveness test
@@ -650,6 +651,9 @@ class LivenessDetectionModule {
         this.blinkState = null; // Reset blink state machine for new challenge
         this.blinkStateTime = null;
         this.baselineAngles = null; // Reset baseline - will be set with first face detection
+        this.baselineChallengeIndex = -1; // Mark that baseline needs to be set for new challenge
+
+        console.log(`[LivenessModule] 🔄 Baseline reset for challenge index ${this.currentChallengeIndex}`);
 
         // Adaptive timeout based on challenge type
         // Blink needs more time for state machine transitions
@@ -735,13 +739,20 @@ class LivenessDetectionModule {
 
         // Set baseline angles on first face detection for this challenge
         // This makes all movements relative to the starting position
-        if (this.baselineAngles === null && this.currentChallengeIndex < this.challenges.length) {
+        // CRITICAL: Must set baseline for EACH challenge (check both null AND index mismatch)
+        const needsBaseline = (this.baselineAngles === null) ||
+            (this.baselineChallengeIndex !== this.currentChallengeIndex);
+
+        if (needsBaseline && this.currentChallengeIndex < this.challenges.length) {
             this.baselineAngles = {
                 x: face.xAngle || 0,
                 y: face.yAngle || 0,
                 z: face.zAngle || 0,
             };
-            console.log(`[LivenessModule] 📍 BASELINE SET: x=${this.baselineAngles.x.toFixed(1)}°, y=${this.baselineAngles.y.toFixed(1)}°, z=${this.baselineAngles.z.toFixed(1)}°`);
+            this.baselineChallengeIndex = this.currentChallengeIndex;
+
+            const challengeName = this.challenges[this.currentChallengeIndex]?.id || 'unknown';
+            console.log(`[LivenessModule] 📍 BASELINE SET for challenge #${this.currentChallengeIndex} (${challengeName}): x=${this.baselineAngles.x.toFixed(1)}°, y=${this.baselineAngles.y.toFixed(1)}°, z=${this.baselineAngles.z.toFixed(1)}°`);
         }
 
         // Debug log angles and probabilities every 1 second
