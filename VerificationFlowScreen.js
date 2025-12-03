@@ -1024,23 +1024,131 @@ const VerificationFlowScreen = ({ navigation, route }) => {
 
                 {livenessResult && (
                     <View style={styles.resultCard}>
-                        <Text style={styles.resultCardTitle}>👤 Liveness Sonucu</Text>
+                        <Text style={styles.resultCardTitle}>👤 Liveness Test Sonucu</Text>
+
                         {livenessResult.skipped ? (
                             <Text style={styles.warningText}>Atlandı</Text>
-                        ) : livenessResult.success ? (
-                            <>
-                                <Text style={styles.resultText}>
-                                    ✅ Canlılık doğrulandı
-                                </Text>
-                                <Text style={styles.resultText}>
-                                    Benzerlik: %{livenessResult.similarity}
-                                </Text>
-                                <Text style={styles.resultText}>
-                                    Komut sayısı: {livenessResult.commands}
-                                </Text>
-                            </>
                         ) : (
-                            <Text style={styles.warningText}>Başarısız</Text>
+                            <>
+                                {/* Ana Sonuç */}
+                                <View style={styles.mainResultContainer}>
+                                    <Text style={[styles.mainResultText, {
+                                        color: livenessResult.passed ? '#28a745' : '#dc3545'
+                                    }]}>
+                                        {livenessResult.passed ? '✅ BAŞARILI' : '❌ BAŞARISIZ'}
+                                    </Text>
+                                    <Text style={styles.scoreText}>
+                                        Skor: {livenessResult.score}%
+                                        ({livenessResult.details?.successfulChallenges || 0}/{livenessResult.details?.totalChallenges || 0})
+                                    </Text>
+                                    {livenessResult.failureReason && (
+                                        <Text style={styles.failureReasonText}>
+                                            ⚠️ {livenessResult.failureReason}
+                                        </Text>
+                                    )}
+                                </View>
+
+                                {/* Challenge Detayları */}
+                                {livenessResult.details?.challenges && (
+                                    <View style={styles.challengesContainer}>
+                                        <Text style={styles.sectionTitle}>🎯 Challenge Sonuçları:</Text>
+                                        {livenessResult.details.challenges.map((challenge, idx) => (
+                                            <View key={idx} style={styles.challengeItem}>
+                                                <View style={styles.challengeHeader}>
+                                                    <Text style={styles.challengeNumber}>{idx + 1}.</Text>
+                                                    <Text style={styles.challengeInstruction}>
+                                                        {challenge.instruction}
+                                                    </Text>
+                                                    <Text style={[
+                                                        styles.challengeStatus,
+                                                        { color: challenge.result === 'SUCCESS' ? '#28a745' : '#dc3545' }
+                                                    ]}>
+                                                        {challenge.result === 'SUCCESS' ? '✓' : '✗'}
+                                                    </Text>
+                                                </View>
+                                                <Text style={styles.challengeDuration}>
+                                                    Süre: {(challenge.duration / 1000).toFixed(1)}s
+                                                </Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
+
+                                {/* Face Comparison Detayları */}
+                                {livenessResult.faceComparison && livenessResult.faceComparison.enabled && (
+                                    <View style={styles.faceComparisonContainer}>
+                                        <Text style={styles.sectionTitle}>📸 Yüz Karşılaştırma:</Text>
+
+                                        <View style={styles.faceComparisonStats}>
+                                            <View style={styles.statRow}>
+                                                <Text style={styles.statLabel}>Durum:</Text>
+                                                <Text style={[
+                                                    styles.statValue,
+                                                    { color: livenessResult.faceComparison.passed ? '#28a745' : '#dc3545' }
+                                                ]}>
+                                                    {livenessResult.faceComparison.passed ? '✅ Geçti' : '❌ Başarısız'}
+                                                </Text>
+                                            </View>
+
+                                            <View style={styles.statRow}>
+                                                <Text style={styles.statLabel}>Ortalama Benzerlik:</Text>
+                                                <Text style={styles.statValue}>
+                                                    {(livenessResult.faceComparison.averageSimilarity * 100).toFixed(1)}%
+                                                </Text>
+                                            </View>
+
+                                            <View style={styles.statRow}>
+                                                <Text style={styles.statLabel}>Min / Max:</Text>
+                                                <Text style={styles.statValue}>
+                                                    {(livenessResult.faceComparison.minScore * 100).toFixed(1)}% /
+                                                    {(livenessResult.faceComparison.maxScore * 100).toFixed(1)}%
+                                                </Text>
+                                            </View>
+
+                                            <View style={styles.statRow}>
+                                                <Text style={styles.statLabel}>Eşik Değeri:</Text>
+                                                <Text style={styles.statValue}>
+                                                    {(livenessResult.faceComparison.threshold * 100).toFixed(1)}%
+                                                </Text>
+                                            </View>
+
+                                            <View style={styles.statRow}>
+                                                <Text style={styles.statLabel}>Fotoğraf Sayısı:</Text>
+                                                <Text style={styles.statValue}>
+                                                    {livenessResult.faceComparison.photosCaptured} çekildi,
+                                                    {livenessResult.faceComparison.photosAnalyzed} analiz edildi
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Her Fotoğrafın Skoru */}
+                                        {livenessResult.faceComparison.photosWithChallenges &&
+                                            livenessResult.faceComparison.photosWithChallenges.length > 0 && (
+                                                <View style={styles.photoScoresContainer}>
+                                                    <Text style={styles.subSectionTitle}>Fotoğraf Skorları:</Text>
+                                                    {livenessResult.faceComparison.photosWithChallenges.map((photo, idx) => (
+                                                        <View key={idx} style={styles.photoScoreItem}>
+                                                            <Text style={styles.photoNumber}>{idx + 1}.</Text>
+                                                            <Text style={styles.photoChallenge}>
+                                                                {photo.challenge || 'N/A'}
+                                                            </Text>
+                                                            <Text style={[
+                                                                styles.photoSimilarity,
+                                                                {
+                                                                    color: (photo.similarity * 100) >= (livenessResult.faceComparison.threshold * 100)
+                                                                        ? '#28a745'
+                                                                        : '#dc3545'
+                                                                }
+                                                            ]}>
+                                                                {(photo.similarity * 100).toFixed(1)}%
+                                                            </Text>
+                                                        </View>
+                                                    ))}
+                                                </View>
+                                            )}
+                                    </View>
+                                )}
+                            </>
                         )}
                     </View>
                 )}
@@ -1251,6 +1359,135 @@ const styles = StyleSheet.create({
     },
     backButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
     errorText: { color: '#EF4444', fontSize: 16 },
+
+    // Liveness Result Styles
+    mainResultContainer: {
+        backgroundColor: '#1E293B',
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 16,
+        alignItems: 'center',
+    },
+    mainResultText: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 8,
+    },
+    scoreText: {
+        fontSize: 16,
+        color: '#94A3B8',
+        marginBottom: 4,
+    },
+    failureReasonText: {
+        fontSize: 13,
+        color: '#F59E0B',
+        marginTop: 8,
+        textAlign: 'center',
+    },
+    challengesContainer: {
+        backgroundColor: '#1E293B',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 16,
+    },
+    sectionTitle: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: '#60A5FA',
+        marginBottom: 12,
+    },
+    challengeItem: {
+        backgroundColor: '#0F172A',
+        padding: 10,
+        borderRadius: 6,
+        marginBottom: 8,
+    },
+    challengeHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    challengeNumber: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#94A3B8',
+        marginRight: 8,
+        width: 20,
+    },
+    challengeInstruction: {
+        fontSize: 14,
+        color: '#E2E8F0',
+        flex: 1,
+    },
+    challengeStatus: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginLeft: 8,
+    },
+    challengeDuration: {
+        fontSize: 12,
+        color: '#94A3B8',
+        marginLeft: 28,
+    },
+    faceComparisonContainer: {
+        backgroundColor: '#1E293B',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 16,
+    },
+    faceComparisonStats: {
+        backgroundColor: '#0F172A',
+        padding: 10,
+        borderRadius: 6,
+        marginBottom: 12,
+    },
+    statRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    statLabel: {
+        fontSize: 13,
+        color: '#94A3B8',
+    },
+    statValue: {
+        fontSize: 13,
+        color: '#E2E8F0',
+        fontWeight: '600',
+    },
+    photoScoresContainer: {
+        backgroundColor: '#0F172A',
+        padding: 10,
+        borderRadius: 6,
+    },
+    subSectionTitle: {
+        fontSize: 13,
+        fontWeight: 'bold',
+        color: '#94A3B8',
+        marginBottom: 8,
+    },
+    photoScoreItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 6,
+        paddingVertical: 4,
+    },
+    photoNumber: {
+        fontSize: 12,
+        color: '#64748B',
+        width: 25,
+    },
+    photoChallenge: {
+        fontSize: 12,
+        color: '#CBD5E0',
+        flex: 1,
+    },
+    photoSimilarity: {
+        fontSize: 13,
+        fontWeight: 'bold',
+        minWidth: 50,
+        textAlign: 'right',
+    },
 });
 
 export default VerificationFlowScreen;
