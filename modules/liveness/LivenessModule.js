@@ -872,22 +872,22 @@ class LivenessDetectionModule {
 
             case 'turnHeadRight':
                 // Detect head turned right - NEGATIVE yAngle
-                // Lowered to -2° minimum based on user showing -2.3°
-                // User turns small angles - must accommodate
+                // Final lowering to -1.5° - user showed -1.9° (failed with -2° by 0.1°!)
+                // Absolute minimum threshold for right turn detection
                 const yAngleRight = face.yAngle;
                 console.log(`[LivenessModule] 📊 turnHeadRight check: yAngle=${yAngleRight?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: yAngle < -2° (NEGATIVE = right)`);
+                console.log(`[LivenessModule] 🎯 Threshold: yAngle < -1.5° (NEGATIVE = right)`);
 
                 if (yAngleRight !== undefined) {
                     console.log(`[LivenessModule] 📊 Current value: ${yAngleRight.toFixed(1)}°`);
 
                     // NEGATIVE yAngle = head turned RIGHT
-                    // Lowered from -5° to -2° for better UX
-                    if (yAngleRight < -2) {
+                    // Lowered from -5° → -2° → -1.5° (final, user showed -1.9°)
+                    if (yAngleRight < -1.5) {
                         console.log(`✅ turnHeadRight detected: yAngle=${yAngleRight.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${yAngleRight.toFixed(1)}° >= -2°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${yAngleRight.toFixed(1)}° >= -1.5°`);
                     }
                 }
                 break;
