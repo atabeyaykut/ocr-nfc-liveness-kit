@@ -1279,28 +1279,28 @@ class LivenessDetectionModule {
             case 'lookUp':
                 const xAngleUp = face.xAngle;
                 const baselineX = this.baselineAngles?.x || 0;
-                const relativeXUp = xAngleUp - baselineX; // Negative = UP tilt
+                const relativeXUp = xAngleUp - baselineX; // POSITIVE = UP tilt (ML Kit standard)
                 this.logPoseDebug({
                     challengeId: 'lookUp',
                     axisLabel: 'X',
                     baseline: baselineX,
                     current: xAngleUp,
                     relative: relativeXUp,
-                    thresholdText: '< -10° (UP tilt)',
+                    thresholdText: '> +10° (UP tilt)',
                     elapsedMs: now - this.challengeStartTime,
                 });
 
                 if (xAngleUp !== undefined) {
-                    // Relaxed threshold from -5 to -10 for better real-world usability
-                    if (relativeXUp < -10) {
-                        console.log(`[LivenessModule][lookUp] ✅ Movement detected: ${Math.abs(relativeXUp).toFixed(1)}° UP`);
+                    // ML Kit rotationX: POSITIVE = head tilted UP, NEGATIVE = head tilted DOWN
+                    if (relativeXUp > 10) {
+                        console.log(`[LivenessModule][lookUp] ✅ Movement detected: ${relativeXUp.toFixed(1)}° UP`);
                         return true;
                     } else {
                         this.logPoseShortfall({
                             challengeId: 'lookUp',
-                            needed: -10,
+                            needed: 10,
                             relative: relativeXUp,
-                            directionText: 'tilt head UP (negative X)',
+                            directionText: 'tilt head UP (positive X)',
                         });
                     }
                 }
@@ -1312,22 +1312,22 @@ class LivenessDetectionModule {
                 // Then we measure how much they tilted DOWN from that position
                 const xAngleDown = face.xAngle;
                 const baselineXDown = this.baselineAngles?.x || 0;
-                const relativeXDown = xAngleDown - baselineXDown; // Positive = DOWN tilt
+                const relativeXDown = xAngleDown - baselineXDown; // NEGATIVE = DOWN tilt (ML Kit standard)
 
                 console.log(`[LivenessModule] 📊 lookDown check:`);
                 console.log(`[LivenessModule]    Current: ${xAngleDown?.toFixed(1)}°`);
                 console.log(`[LivenessModule]    Baseline: ${baselineXDown.toFixed(1)}°`);
                 console.log(`[LivenessModule]    Relative: ${relativeXDown.toFixed(1)}° (movement from start)`);
-                console.log(`[LivenessModule] 🎯 Threshold: relative > 5° (DOWN tilt)`);
+                console.log(`[LivenessModule] 🎯 Threshold: relative < -5° (DOWN tilt)`);
 
                 if (xAngleDown !== undefined) {
-                    // Looking DOWN = POSITIVE relative xAngle (head tilts forward)
-                    // User must tilt at least 5° DOWN from starting position
-                    if (relativeXDown > 5) {
-                        console.log(`✅ lookDown detected: tilted ${relativeXDown.toFixed(1)}° DOWN from baseline`);
+                    // ML Kit rotationX: POSITIVE = head tilted UP, NEGATIVE = head tilted DOWN
+                    // User must tilt at least 5° DOWN (negative) from starting position
+                    if (relativeXDown < -5) {
+                        console.log(`✅ lookDown detected: tilted ${Math.abs(relativeXDown).toFixed(1)}° DOWN from baseline`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${relativeXDown.toFixed(1)}° <= 5° (need more DOWN tilt)`);
+                        console.log(`[LivenessModule] ❌ Failed: ${relativeXDown.toFixed(1)}° >= -5° (need more DOWN tilt)`);
                     }
                 }
                 break;
