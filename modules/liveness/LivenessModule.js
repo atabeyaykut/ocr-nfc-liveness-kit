@@ -848,43 +848,43 @@ class LivenessDetectionModule {
                 break;
 
             case 'turnHeadLeft':
-                // Detect head turned left - NEGATIVE yAngle (user turns left from their POV)
-                // Based on real log data: yAngle=-5.9° when user turns left
-                // Using 10° threshold (realistic based on test data)
+                // Detect head turned left - POSITIVE yAngle (user turns left from their POV)
+                // Based on VERIFIED log data: yAngle=43.3°, 36.3° when user turns left
+                // Using 25° threshold (conservative based on 36-43° observed range)
                 const yAngleLeft = face.yAngle;
                 console.log(`[LivenessModule] 📊 turnHeadLeft check: yAngle=${yAngleLeft?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: yAngle < -10° (specific direction)`);
+                console.log(`[LivenessModule] 🎯 Threshold: yAngle > 25° (POSITIVE = left)`);
 
                 if (yAngleLeft !== undefined) {
                     console.log(`[LivenessModule] 📊 Current value: ${yAngleLeft.toFixed(1)}°`);
 
-                    // Negative yAngle = head turned left (from user's perspective)
-                    if (yAngleLeft < -10) {
+                    // POSITIVE yAngle = head turned LEFT (verified from logs)
+                    if (yAngleLeft > 25) {
                         console.log(`✅ turnHeadLeft detected: yAngle=${yAngleLeft.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${yAngleLeft.toFixed(1)}° >= -10°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${yAngleLeft.toFixed(1)}° <= 25°`);
                     }
                 }
                 break;
 
             case 'turnHeadRight':
-                // Detect head turned right - POSITIVE yAngle (user turns right from their POV)
-                // Based on real log data: yAngle=11.2° when user turns right
-                // Using 10° threshold (realistic based on test data)
+                // Detect head turned right - NEGATIVE yAngle (user turns right from their POV)
+                // Based on VERIFIED log data: yAngle=-7.2° when user turns right
+                // Using -5° threshold (conservative, user showed -7.2°)
                 const yAngleRight = face.yAngle;
                 console.log(`[LivenessModule] 📊 turnHeadRight check: yAngle=${yAngleRight?.toFixed(1)}°`);
-                console.log(`[LivenessModule] 🎯 Threshold: yAngle > 10° (specific direction)`);
+                console.log(`[LivenessModule] 🎯 Threshold: yAngle < -5° (NEGATIVE = right)`);
 
                 if (yAngleRight !== undefined) {
                     console.log(`[LivenessModule] 📊 Current value: ${yAngleRight.toFixed(1)}°`);
 
-                    // Positive yAngle = head turned right (from user's perspective)
-                    if (yAngleRight > 10) {
+                    // NEGATIVE yAngle = head turned RIGHT (verified from logs)
+                    if (yAngleRight < -5) {
                         console.log(`✅ turnHeadRight detected: yAngle=${yAngleRight.toFixed(1)}°`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${yAngleRight.toFixed(1)}° <= 10°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${yAngleRight.toFixed(1)}° >= -5°`);
                     }
                 }
                 break;
