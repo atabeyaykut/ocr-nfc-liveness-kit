@@ -22,6 +22,7 @@ import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import Tts from 'react-native-tts';
 import FaceDetection from '@react-native-ml-kit/face-detection';
 import { compareFacesImproved } from './ImprovedFaceComparison';
+import faceRecognitionService from './FaceRecognitionService';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -125,8 +126,14 @@ class LivenessDetectionModule {
         this.referenceFaceData = null; // Face data extracted from NFC photo
         this.enableFaceComparison = true; // Enable face photo comparison
         this.photoCaptureChance = 0.6; // 60% chance to capture photo
-        this.similarityThreshold = 0.55;  // 55% minimum similarity (improved landmark-based algorithm with weighted scoring)
+
+        // ML-based face recognition with FaceNet
+        this.useFaceNet = true; // Use ONNX FaceNet for high accuracy (target: 80%+ similarity)
+        this.similarityThreshold = 0.70; // 70% threshold for FaceNet (95%+ accuracy for same person)
+        // Fallback: 0.55 for landmark-based if FaceNet fails to initialize
+
         this.currentFaceData = null; // Current face data from processFaceData
+        this.faceNetInitialized = false; // Track FaceNet initialization status
     }
 
     // Enhanced logging utilities - CLASS METHODS
@@ -495,7 +502,7 @@ class LivenessDetectionModule {
         }
     };
 
-    capturePhotoForComparison = (photoUri, faceData) => {
+    capturePhotoForComparison = async (photoUri, faceData) => {
         console.log('[LivenessModule] 📸 capturePhotoForComparison called');
         console.log('[LivenessModule] 📸 Photo URI:', photoUri?.substring(0, 80) + '...');
         console.log('[LivenessModule] 📸 Face comparison enabled:', this.enableFaceComparison);
@@ -510,8 +517,13 @@ class LivenessDetectionModule {
         console.log('[LivenessModule] 🔄 Reference face frame:', this.referenceFaceData.frame);
         console.log('[LivenessModule] 🔄 Live face frame:', faceData.frame);
 
-        // Calculate similarity immediately
-        const similarity = this.compareFaces(this.referenceFaceData, faceData);
+        // Calculate similarity (async if using FaceNet)
+        const similarity = await this.compareFaces(
+            this.referencePhotoUri,
+            this.referenceFaceData,
+            photoUri,
+            faceData
+        );
         console.log('[LivenessModule] 🔄 Similarity calculated:', (similarity * 100).toFixed(2) + '%');
 
         const photoData = {
@@ -540,15 +552,66 @@ class LivenessDetectionModule {
 
     /**
      * Compare two faces for similarity
-     * IMPROVED: Uses enhanced landmark-based algorithm with weighted scoring
      * 
-     * @param {Object} face1 - Reference face (from NFC photo)
-     * @param {Object} face2 - Live face (captured during test)
-     * @returns {number} Similarity score (0-1)
+     * Uses ML-based FaceNet (ONNX) for high accuracy (80%+ target) if available,
+     * falls back to enhanced landmark-based algorithm otherwise.
+     * 
+     * @param {string} refPhotoUri - Reference photo URI (NFC photo)
+     * @param {Object} refFaceData - Reference face data (from NFC photo)
+     * @param {string} livePhotoUri - Live photo URI (captured during test)
+     * @param {Object} liveFaceData - Live face data (captured during test)
+     * @returns {Promise<number>} Similarity score (0-1)
      */
-    compareFaces = (face1, face2) => {
-        // Use improved comparison algorithm
-        return compareFacesImproved(face1, face2);
+    compareFaces = async (refPhotoUri, refFaceData, livePhotoUri, liveFaceData) => {
+        try {
+            // Try FaceNet ML-based comparison first (if enabled)
+            if (this.useFaceNet) {
+                // Initialize FaceNet on first use
+                if (!this.faceNetInitialized) {
+                    console.log('[LivenessModule] 🤖 Initializing FaceNet...');
+                    const initialized = await faceRecognitionService.initialize();
+                    this.faceNetInitialized = initialized;
+
+                    if (!initialized) {
+                        console.log('[LivenessModule] ⚠️ FaceNet initialization failed, falling back to landmark-based');
+                        this.useFaceNet = false;
+                        this.similarityThreshold = 0.55; // Lower threshold for landmark-based
+                    } else {
+                        console.log('[LivenessModule] ✅ FaceNet initialized successfully');
+                    }
+                }
+
+                // Use FaceNet if initialized
+                if (this.faceNetInitialized) {
+                    console.log('[LivenessModule] 🤖 Using FaceNet ML-based comparison...');
+                    const result = await faceRecognitionService.compareFaces(
+                        refPhotoUri,
+                        refFaceData.frame,
+                        livePhotoUri,
+                        liveFaceData.frame
+                    );
+
+                    console.log(`[LivenessModule] 🤖 FaceNet similarity: ${(result.similarity * 100).toFixed(2)}%`);
+                    console.log(`[LivenessModule] 🤖 Match: ${result.isMatch ? '✅' : '❌'} (threshold: ${(result.threshold * 100)}%)`);
+
+                    return result.similarity;
+                }
+            }
+
+            // Fallback to enhanced landmark-based algorithm
+            console.log('[LivenessModule] 📊 Using enhanced landmark-based comparison...');
+            const similarity = compareFacesImproved(refFaceData, liveFaceData);
+            console.log(`[LivenessModule] 📊 Landmark similarity: ${(similarity * 100).toFixed(2)}%`);
+
+            return similarity;
+
+        } catch (error) {
+            console.error('[LivenessModule] ❌ Face comparison error:', error);
+            console.error('[LivenessModule] ❌ Falling back to landmark-based comparison');
+
+            // Fallback to landmark-based on error
+            return compareFacesImproved(refFaceData, liveFaceData);
+        }
     };
 
     /**
