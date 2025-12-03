@@ -21,6 +21,8 @@ class FaceRecognitionService {
     constructor() {
         this.session = null;
         this.isInitialized = false;
+        this.inputName = 'input';   // Default, will be updated from model metadata
+        this.outputName = 'output'; // Default, will be updated from model metadata
     }
 
     /**
@@ -42,13 +44,25 @@ class FaceRecognitionService {
             const exists = await RNFS.exists(modelPath);
             if (!exists) {
                 console.log('[FaceRecognition] Copying model from assets...');
-                // For Android, copy from assets to documents directory
+                // Copy model from platform-specific location
                 if (Platform.OS === 'android') {
+                    // Android: Copy from assets folder
                     await RNFS.copyFileAssets('facenet.onnx', modelPath);
-                } else {
-                    // For iOS, model should be in bundle
+                } else if (Platform.OS === 'ios') {
+                    // iOS: Copy from bundle (model must be added to Xcode project)
                     const bundlePath = `${RNFS.MainBundlePath}/facenet.onnx`;
+                    const bundleExists = await RNFS.exists(bundlePath);
+
+                    if (!bundleExists) {
+                        throw new Error(
+                            'FaceNet model not found in iOS bundle. ' +
+                            'Please add facenet.onnx to Xcode project as a resource.'
+                        );
+                    }
+
                     await RNFS.copyFile(bundlePath, modelPath);
+                } else {
+                    throw new Error(`Unsupported platform: ${Platform.OS}`);
                 }
                 console.log('[FaceRecognition] Model copied successfully');
             }
@@ -59,6 +73,17 @@ class FaceRecognitionService {
 
             // Create ONNX session
             this.session = await InferenceSession.create(modelPath);
+
+            // Get model metadata for input/output names
+            try {
+                this.inputName = this.session.inputNames?.[0] || 'input';
+                this.outputName = this.session.outputNames?.[0] || 'output';
+                console.log('[FaceRecognition] 📋 Model input name:', this.inputName);
+                console.log('[FaceRecognition] 📋 Model output name:', this.outputName);
+            } catch (e) {
+                console.log('[FaceRecognition] ⚠️ Could not read model metadata, using defaults');
+            }
+
             this.isInitialized = true;
 
             console.log('[FaceRecognition] ✅ ONNX session initialized successfully');
@@ -94,16 +119,17 @@ class FaceRecognitionService {
             // 1. Resize to 160x160 (FaceNet input size)
             console.log('[FaceRecognition] Resizing to 160x160...');
             const resizedImage = await ImageResizer.createResizedImage(
-                imagePath.replace(/^file:\/\//, ''), // Remove file:// prefix for ImageResizer
-                MODEL_INPUT_SIZE,
-                MODEL_INPUT_SIZE,
-                'JPEG',
-                100, // Quality
-                0,   // Rotation
-                null,
-                false,
+                imagePath.replace(/^file:\/\//, ''), // Remove file:// prefix
+                MODEL_INPUT_SIZE,    // maxWidth
+                MODEL_INPUT_SIZE,    // maxHeight
+                'JPEG',              // compressFormat
+                100,                 // quality (0-100)
+                0,                   // rotation (degrees)
+                undefined,           // outputPath (auto-generate)
+                false,               // keepMeta
                 {
-                    mode: 'cover', // Fill entire 160x160
+                    mode: 'cover',   // Fill entire 160x160
+                    onlyScaleDown: false,
                 }
             );
 
@@ -118,7 +144,10 @@ class FaceRecognitionService {
             // 3. Decode JPEG to raw RGB pixels
             console.log('[FaceRecognition] Decoding JPEG...');
             const imageBuffer = Buffer.from(base64Image, 'base64');
-            const rawImageData = decodeJpeg(imageBuffer, { useTArray: true });
+            const rawImageData = decodeJpeg(imageBuffer, {
+                useTArray: true,      // Return Uint8Array instead of Buffer
+                formatAsRGBA: true,   // Ensure RGBA format (4 bytes per pixel)
+            });
 
             // rawImageData.data is Uint8Array in RGBA format
             // Shape: [160, 160, 4] (RGBA)
@@ -128,11 +157,21 @@ class FaceRecognitionService {
                 throw new Error(`Image size mismatch: ${width}x${height}, expected ${MODEL_INPUT_SIZE}x${MODEL_INPUT_SIZE}`);
             }
 
-            console.log('[FaceRecognition] Decoded: ${width}x${height}, ${data.length} bytes');
+            console.log(`[FaceRecognition] ✅ Decoded: ${width}x${height}, ${data.length} bytes`);
 
-            // 4. Convert RGBA to RGB and normalize to [-1, 1]
+            // 4. Validate decoded data
+            if (!(data instanceof Uint8Array)) {
+                throw new Error('Decoded image data is not Uint8Array');
+            }
+
+            const expectedBytes = width * height * 4; // RGBA
+            if (data.length !== expectedBytes) {
+                throw new Error(`Expected ${expectedBytes} bytes, got ${data.length}`);
+            }
+
+            // 5. Convert RGBA to RGB and normalize to [-1, 1]
             // FaceNet expects: NCHW format (1, 3, 160, 160) with values in [-1, 1]
-            console.log('[FaceRecognition] Converting to RGB Float32Array...');
+            console.log('[FaceRecognition] 🔢 Converting to RGB Float32Array...');
 
             const imageSize = MODEL_INPUT_SIZE * MODEL_INPUT_SIZE;
             const inputData = new Float32Array(1 * 3 * imageSize);
@@ -156,9 +195,9 @@ class FaceRecognitionService {
                 inputData[imageSize * 2 + i] = (b / 127.5) - 1;    // B channel
             }
 
-            console.log('[FaceRecognition] Preprocessing complete');
+            console.log('[FaceRecognition] ✅ Preprocessing complete');
             console.log(`[FaceRecognition] Output shape: [1, 3, ${MODEL_INPUT_SIZE}, ${MODEL_INPUT_SIZE}]`);
-            console.log(`[FaceRecognition] Output size: ${inputData.length} floats`);
+            console.log(`[FaceRecognition] Output size: ${inputData.length} floats (${(inputData.length * 4 / 1024).toFixed(1)}KB)`);
 
             return inputData;
 
@@ -194,13 +233,17 @@ class FaceRecognitionService {
             // Create input tensor [1, 3, 160, 160]
             const inputTensor = new Tensor('float32', inputData, [1, 3, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE]);
 
-            // Run inference
-            console.log('[FaceRecognition] Running ONNX inference...');
-            const feeds = { input: inputTensor };
+            // Run inference with dynamic input/output names
+            console.log('[FaceRecognition] 🧠 Running ONNX inference...');
+            const feeds = { [this.inputName]: inputTensor };
             const results = await this.session.run(feeds);
 
-            // Get output tensor (512-dim embedding)
-            const outputTensor = results.output;
+            // Get output tensor (512-dim embedding) using dynamic name
+            const outputTensor = results[this.outputName];
+            if (!outputTensor) {
+                throw new Error(`Output tensor '${this.outputName}' not found in results`);
+            }
+
             const embedding = outputTensor.data;
 
             console.log(`[FaceRecognition] ✅ Embedding extracted: ${embedding.length} dimensions`);
