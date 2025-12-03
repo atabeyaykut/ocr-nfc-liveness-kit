@@ -849,24 +849,27 @@ class LivenessDetectionModule {
 
             case 'turnHeadLeft':
                 // Detect head turned left - LARGE absolute yAngle (bigger turn)
-                // Data shows inconsistency: Test2: +43.3°, Test3: -33.4°
-                // Pattern: LEFT turn = LARGE angle (30-45°), RIGHT turn = SMALL angle (5-10°)
-                // Using |yAngle| > 20° to catch both positive and negative large turns
+                // Data analysis from multiple tests:
+                // - Test2: +43.3°, +36.3° (successful left turn)
+                // - Test3: -33.4° (successful left turn, different sign)
+                // - Test4: -39.3° (successful left turn)
+                // Pattern: LEFT = LARGE angle (30-40°), RIGHT = SMALL angle (5-10°)
+                // Using |yAngle| > 15° to catch large turns while excluding small right turns
                 const yAngleLeft = face.yAngle;
                 const yAbsLeft = Math.abs(yAngleLeft || 0);
                 console.log(`[LivenessModule] 📊 turnHeadLeft check: yAngle=${yAngleLeft?.toFixed(1)}° (|abs|=${yAbsLeft.toFixed(1)}°)`);
-                console.log(`[LivenessModule] 🎯 Threshold: |yAngle| > 20° (LARGE turn = left)`);
+                console.log(`[LivenessModule] 🎯 Threshold: |yAngle| > 15° (LARGE turn = left)`);
 
                 if (yAngleLeft !== undefined) {
                     console.log(`[LivenessModule] 📊 Current absolute value: ${yAbsLeft.toFixed(1)}°`);
 
                     // Large absolute yAngle = head turned LEFT (significant turn)
-                    // Excludes small turns (right: 5-10°)
-                    if (yAbsLeft > 20) {
+                    // 15° threshold: Catches 30-40° left turns, excludes 5-10° right turns
+                    if (yAbsLeft > 15) {
                         console.log(`✅ turnHeadLeft detected: |yAngle|=${yAbsLeft.toFixed(1)}° (raw: ${yAngleLeft.toFixed(1)}°)`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${yAbsLeft.toFixed(1)}° <= 20°`);
+                        console.log(`[LivenessModule] ❌ Failed: ${yAbsLeft.toFixed(1)}° <= 15°`);
                     }
                 }
                 break;
