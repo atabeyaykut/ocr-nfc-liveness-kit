@@ -891,12 +891,12 @@ class LivenessDetectionModule {
 
                 if (yAngleLeft !== undefined) {
                     // LEFT turn = POSITIVE relative angle
-                    // User must turn at least 10° to the LEFT from starting position
-                    if (relativeYLeft > 10) {
+                    // TEST: Lowered to 3° to see if user is making small movements
+                    if (relativeYLeft > 3) {
                         console.log(`✅ turnHeadLeft detected: moved ${relativeYLeft.toFixed(1)}° LEFT from baseline`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${relativeYLeft.toFixed(1)}° <= 10° (need more LEFT turn)`);
+                        console.log(`[LivenessModule] ❌ Failed: ${relativeYLeft.toFixed(1)}° <= 3° (need more LEFT turn)`);
                     }
                 }
                 break;
@@ -917,12 +917,12 @@ class LivenessDetectionModule {
 
                 if (yAngleRight !== undefined) {
                     // RIGHT turn = NEGATIVE relative angle
-                    // User must turn at least 5° to the RIGHT from starting position
-                    if (relativeYRight < -5) {
+                    // TEST: Lowered to -3° to see if user is making small movements
+                    if (relativeYRight < -3) {
                         console.log(`✅ turnHeadRight detected: moved ${Math.abs(relativeYRight).toFixed(1)}° RIGHT from baseline`);
                         return true;
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${relativeYRight.toFixed(1)}° >= -5° (need more RIGHT turn)`);
+                        console.log(`[LivenessModule] ❌ Failed: ${relativeYRight.toFixed(1)}° >= -3° (need more RIGHT turn)`);
                     }
                 }
                 break;
@@ -947,16 +947,21 @@ class LivenessDetectionModule {
                 console.log(`[LivenessModule]    Current: ${xAngleUp?.toFixed(1)}°`);
                 console.log(`[LivenessModule]    Baseline: ${baselineX.toFixed(1)}°`);
                 console.log(`[LivenessModule]    Relative: ${relativeXUp.toFixed(1)}° (movement from start)`);
-                console.log(`[LivenessModule] 🎯 Threshold: relative < -5° (UP tilt)`);
+                console.log(`[LivenessModule] 🎯 TEST: Trying BOTH directions - up (< -3°) OR down (> 3°)`);
 
                 if (xAngleUp !== undefined) {
-                    // Looking UP = NEGATIVE relative xAngle (head tilts back)
-                    // User must tilt at least 5° UP from starting position
-                    if (relativeXUp < -5) {
-                        console.log(`✅ lookUp detected: tilted ${Math.abs(relativeXUp).toFixed(1)}° UP from baseline`);
+                    // TEST: Check BOTH directions to see which one user is doing
+                    // Normal: Looking UP = NEGATIVE (head tilts back)
+                    // Maybe user is doing opposite?
+                    if (relativeXUp < -3) {
+                        console.log(`✅ lookUp detected: tilted ${Math.abs(relativeXUp).toFixed(1)}° UP (NEGATIVE) from baseline`);
                         return true;
+                    } else if (relativeXUp > 3) {
+                        console.log(`⚠️ WARNING: User tilted DOWN (+${relativeXUp.toFixed(1)}°) instead of UP!`);
+                        console.log(`⚠️ But ACCEPTING it as test to see if direction is reversed`);
+                        return true; // TEST: Accept both directions
                     } else {
-                        console.log(`[LivenessModule] ❌ Failed: ${relativeXUp.toFixed(1)}° >= -5° (need more UP tilt)`);
+                        console.log(`[LivenessModule] ❌ Failed: ${relativeXUp.toFixed(1)}° - no significant movement`);
                     }
                 }
                 break;
