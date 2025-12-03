@@ -122,10 +122,10 @@ class LivenessDetectionModule {
         this.capturedPhotos = []; // Photos captured during liveness test
         this.referencePhotoUri = null; // NFC photo for comparison
         this.referenceFaceData = null; // Face data extracted from NFC photo
-        this.enableFaceComparison = false;
-        this.photoCaptureChance = 0.6; // 60% chance to capture photo during each challenge
+        this.enableFaceComparison = true; // Enable face photo comparison
+        this.photoCaptureChance = 0.6; // 60% chance to capture photo
+        this.similarityThreshold = 0.60;  // 60% minimum similarity (relaxed - basic bbox/landmark algorithm)
         this.currentFaceData = null; // Current face data from processFaceData
-        this.similarityThreshold = 0.25; // 25% minimum similarity for match (lowered due to basic algorithm)
     }
 
     // Enhanced logging utilities - CLASS METHODS
@@ -1518,6 +1518,7 @@ class LivenessDetectionModule {
 
         const response = {
             passed: passed,
+            success: passed, // For UI compatibility (VerificationFlowScreen checks .success)
             score: Math.round(score),
             details: {
                 totalChallenges: totalCount,
