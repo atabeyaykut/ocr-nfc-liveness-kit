@@ -11,6 +11,8 @@
 import { InferenceSession, Tensor } from 'onnxruntime-react-native';
 import RNFS from 'react-native-fs';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
+import { decode as decodeJpeg } from 'jpeg-js';
+import { Platform } from 'react-native';
 
 const MODEL_INPUT_SIZE = 160; // FaceNet input size
 const EMBEDDING_SIZE = 512; // FaceNet output dimension
@@ -79,57 +81,25 @@ class FaceRecognitionService {
      * 
      * @param {string} imagePath - Path to image file
      * @param {Object} faceFrame - Face bounding box from ML Kit
-     * @returns {Float32Array} Preprocessed image data
+     * @returns {Float32Array} Preprocessed image data in NCHW format
      */
     async preprocessImage(imagePath, faceFrame) {
         try {
             console.log('[FaceRecognition] Preprocessing image...');
-            console.log(`[FaceRecognition] Input: ${imagePath}`);
-            console.log(`[FaceRecognition] Face frame:`, faceFrame);
-
-            // 1. Crop face region if bounding box provided
-            let processedPath = imagePath;
-            if (faceFrame && faceFrame.left !== undefined) {
-                const cropData = {
-                    offset: {
-                        x: Math.max(0, faceFrame.left),
-                        y: Math.max(0, faceFrame.top),
-                    },
-                    size: {
-                        width: faceFrame.width,
-                        height: faceFrame.height,
-                    },
-                };
-
-                console.log('[FaceRecognition] Cropping face region:', cropData);
-
-                // Crop image
-                const croppedImage = await ImageResizer.createResizedImage(
-                    imagePath,
-                    cropData.size.width,
-                    cropData.size.height,
-                    'JPEG',
-                    100,
-                    0,
-                    null,
-                    false,
-                    {
-                        mode: 'contain',
-                        onlyScaleDown: false,
-                    }
-                );
-                processedPath = croppedImage.uri;
+            console.log(`[FaceRecognition] Input: ${imagePath.substring(0, 50)}...`);
+            if (faceFrame) {
+                console.log(`[FaceRecognition] Face bbox: ${faceFrame.width}x${faceFrame.height}`);
             }
 
-            // 2. Resize to 160x160 (FaceNet input size)
+            // 1. Resize to 160x160 (FaceNet input size)
             console.log('[FaceRecognition] Resizing to 160x160...');
             const resizedImage = await ImageResizer.createResizedImage(
-                processedPath,
+                imagePath.replace(/^file:\/\//, ''), // Remove file:// prefix for ImageResizer
                 MODEL_INPUT_SIZE,
                 MODEL_INPUT_SIZE,
                 'JPEG',
-                100,
-                0,
+                100, // Quality
+                0,   // Rotation
                 null,
                 false,
                 {
@@ -137,24 +107,64 @@ class FaceRecognitionService {
                 }
             );
 
-            // 3. Read image as base64
-            const base64Image = await RNFS.readFile(resizedImage.uri, 'base64');
+            console.log('[FaceRecognition] Resized:', resizedImage.uri);
 
-            // 4. Decode base64 to pixels (this is simplified - in practice you'd need actual pixel decoding)
-            // For now, we'll use a placeholder approach
-            // In production, you'd use a proper image decoding library or native module
+            // 2. Read image as base64
+            const base64Image = await RNFS.readFile(
+                resizedImage.uri.replace(/^file:\/\//, ''),
+                'base64'
+            );
 
-            console.log('[FaceRecognition] ⚠️ Image preprocessing complete (placeholder)');
-            console.log('[FaceRecognition] Note: Full pixel decoding needs implementation');
+            // 3. Decode JPEG to raw RGB pixels
+            console.log('[FaceRecognition] Decoding JPEG...');
+            const imageBuffer = Buffer.from(base64Image, 'base64');
+            const rawImageData = decodeJpeg(imageBuffer, { useTArray: true });
 
-            // Placeholder: return dummy normalized data
-            // In production: decode base64 → RGB pixels → normalize to [-1,1] → NCHW format
-            const inputData = new Float32Array(1 * 3 * MODEL_INPUT_SIZE * MODEL_INPUT_SIZE);
+            // rawImageData.data is Uint8Array in RGBA format
+            // Shape: [160, 160, 4] (RGBA)
+            const { width, height, data } = rawImageData;
+
+            if (width !== MODEL_INPUT_SIZE || height !== MODEL_INPUT_SIZE) {
+                throw new Error(`Image size mismatch: ${width}x${height}, expected ${MODEL_INPUT_SIZE}x${MODEL_INPUT_SIZE}`);
+            }
+
+            console.log('[FaceRecognition] Decoded: ${width}x${height}, ${data.length} bytes');
+
+            // 4. Convert RGBA to RGB and normalize to [-1, 1]
+            // FaceNet expects: NCHW format (1, 3, 160, 160) with values in [-1, 1]
+            console.log('[FaceRecognition] Converting to RGB Float32Array...');
+
+            const imageSize = MODEL_INPUT_SIZE * MODEL_INPUT_SIZE;
+            const inputData = new Float32Array(1 * 3 * imageSize);
+
+            // Separate RGB channels and normalize
+            // NCHW: [batch, channel, height, width]
+            // Channel order: R, G, B
+            for (let i = 0; i < imageSize; i++) {
+                const pixelIndex = i * 4; // RGBA has 4 bytes per pixel
+
+                // Extract RGB values (0-255)
+                const r = data[pixelIndex];
+                const g = data[pixelIndex + 1];
+                const b = data[pixelIndex + 2];
+                // Alpha channel (pixelIndex + 3) is ignored
+
+                // Normalize to [-1, 1] range
+                // Formula: (pixel / 127.5) - 1
+                inputData[i] = (r / 127.5) - 1;                    // R channel
+                inputData[imageSize + i] = (g / 127.5) - 1;        // G channel
+                inputData[imageSize * 2 + i] = (b / 127.5) - 1;    // B channel
+            }
+
+            console.log('[FaceRecognition] Preprocessing complete');
+            console.log(`[FaceRecognition] Output shape: [1, 3, ${MODEL_INPUT_SIZE}, ${MODEL_INPUT_SIZE}]`);
+            console.log(`[FaceRecognition] Output size: ${inputData.length} floats`);
 
             return inputData;
 
         } catch (error) {
-            console.error('[FaceRecognition] ❌ Preprocessing failed:', error);
+            console.error('[FaceRecognition] Preprocessing failed:', error);
+            console.error('[FaceRecognition] Error details:', error.message);
             throw error;
         }
     }
