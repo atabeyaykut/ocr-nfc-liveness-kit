@@ -473,8 +473,8 @@ export const LivenessModule = ({
 
             // Continue detection with adaptive interval
             if (isActive) {
-                // Use faster interval (150ms) for blink detection, normal (300ms) for others
-                // Blink happens very fast (~100-400ms), need frequent captures
+                // Use faster interval (100ms) for blink detection, normal (300ms) for others
+                // Blink happens very fast (~200-300ms), need frequent captures to catch it
                 const interval = currentChallenge?.id === 'blink' ? 100 : 300;
                 const frameTotalTime = Date.now() - frameStartTime;
 
