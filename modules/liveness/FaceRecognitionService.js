@@ -278,20 +278,22 @@ class FaceRecognitionService {
             // STEP 2: Resize to 160x160 (FaceNet input size)
             console.log('[FaceRecognition] Resizing to 160x160...');
 
-            // IMPORTANT: Use 'cover' mode to maintain aspect ratio and center-crop to exact size
-            // This prevents face distortion which can reduce recognition accuracy
-            // 'stretch' mode would distort faces if aspect ratio isn't 1:1
+            // CRITICAL BUG FIX: mode: 'cover' doesn't guarantee exact dimensions!
+            // It maintains aspect ratio but may give 160x185 instead of 160x160
+            // Solution: Use 'stretch' mode for cropped faces
+            // Since we already cropped the face (+20% margin), slight stretch is acceptable
+            // and much better than wrong dimensions which cause ONNX errors!
             const resizedImage = await ImageResizer.createResizedImage(
                 processPath,         // Path to process (cropped or original)
-                MODEL_INPUT_SIZE,    // maxWidth
-                MODEL_INPUT_SIZE,    // maxHeight
+                MODEL_INPUT_SIZE,    // maxWidth = 160
+                MODEL_INPUT_SIZE,    // maxHeight = 160
                 'JPEG',              // compressFormat
                 100,                 // quality (0-100)
                 0,                   // rotation (degrees)
                 undefined,           // outputPath (auto-generate)
                 false,               // keepMeta
                 {
-                    mode: 'cover',   // CRITICAL: Maintain aspect ratio, center-crop to exact size (prevents distortion)
+                    mode: 'stretch', // CRITICAL: Force exact 160x160 (cropped face, so stretch is OK)
                     onlyScaleDown: false,
                 }
             );
@@ -388,7 +390,8 @@ class FaceRecognitionService {
             console.error('[FaceRecognition] Error details:', error.message);
 
             // CRITICAL: Cleanup temp files even in error cases to prevent memory leak
-            // resizedPath might not be defined if error occurred before resize
+            // All variables might be undefined if error occurred early (e.g., input validation)
+            // MUST use typeof checks to avoid ReferenceError in catch block!
             if (typeof resizedPath !== 'undefined') {
                 try {
                     await RNFS.unlink(resizedPath);
@@ -399,7 +402,11 @@ class FaceRecognitionService {
             }
 
             // processPath cleanup (if crop was created but not yet cleaned)
-            if (needsCleanup && typeof processPath !== 'undefined' && processPath !== cleanPath) {
+            // CRITICAL: Check if needsCleanup and cleanPath exist before accessing!
+            if (typeof needsCleanup !== 'undefined' && needsCleanup &&
+                typeof processPath !== 'undefined' &&
+                typeof cleanPath !== 'undefined' &&
+                processPath !== cleanPath) {
                 try {
                     await RNFS.unlink(processPath);
                     console.log('[FaceRecognition] 🧹 Emergency cleanup: crop file deleted');
