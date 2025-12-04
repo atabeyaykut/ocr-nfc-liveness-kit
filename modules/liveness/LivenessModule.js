@@ -508,50 +508,57 @@ class LivenessDetectionModule {
     };
 
     capturePhotoForComparison = async (photoUri, faceData) => {
-        console.log('[LivenessModule] 📸 capturePhotoForComparison called');
-        console.log('[LivenessModule] 📸 Photo URI:', photoUri?.substring(0, 80) + '...');
-        console.log('[LivenessModule] 📸 Face comparison enabled:', this.enableFaceComparison);
-        console.log('[LivenessModule] 📸 Reference face loaded:', !!this.referenceFaceData);
+        try {
+            console.log('[LivenessModule] 📸 capturePhotoForComparison called');
+            console.log('[LivenessModule] 📸 Photo URI:', photoUri?.substring(0, 80) + '...');
+            console.log('[LivenessModule] 📸 Face comparison enabled:', this.enableFaceComparison);
+            console.log('[LivenessModule] 📸 Reference face loaded:', !!this.referenceFaceData);
 
-        if (!this.enableFaceComparison || !this.referenceFaceData) {
-            console.log('[LivenessModule] ⚠️ Skipping photo capture (comparison disabled or no reference)');
-            return;
-        }
+            if (!this.enableFaceComparison || !this.referenceFaceData) {
+                console.log('[LivenessModule] ⚠️ Skipping photo capture (comparison disabled or no reference)');
+                return;
+            }
 
-        console.log('[LivenessModule] 🔄 Calculating face similarity...');
-        console.log('[LivenessModule] 🔄 Reference face frame:', this.referenceFaceData.frame);
-        console.log('[LivenessModule] 🔄 Live face frame:', faceData.frame);
+            console.log('[LivenessModule] 🔄 Calculating face similarity...');
+            console.log('[LivenessModule] 🔄 Reference face frame:', this.referenceFaceData.frame);
+            console.log('[LivenessModule] 🔄 Live face frame:', faceData.frame);
 
-        // Calculate similarity (async if using FaceNet)
-        const similarity = await this.compareFaces(
-            this.referencePhotoUri,
-            this.referenceFaceData,
-            photoUri,
-            faceData
-        );
-        console.log('[LivenessModule] 🔄 Similarity calculated:', (similarity * 100).toFixed(2) + '%');
+            // Calculate similarity (async if using FaceNet)
+            const similarity = await this.compareFaces(
+                this.referencePhotoUri,
+                this.referenceFaceData,
+                photoUri,
+                faceData
+            );
+            console.log('[LivenessModule] 🔄 Similarity calculated:', (similarity * 100).toFixed(2) + '%');
 
-        const photoData = {
-            uri: photoUri,
-            timestamp: Date.now(),
-            challenge: this.challenges[this.currentChallengeIndex]?.id,
-            faceData: faceData,
-            similarity: similarity, // Store similarity score
-        };
+            const photoData = {
+                uri: photoUri,
+                timestamp: Date.now(),
+                challenge: this.challenges[this.currentChallengeIndex]?.id,
+                faceData: faceData,
+                similarity: similarity, // Store similarity score
+            };
 
-        this.capturedPhotos.push(photoData);
-        console.log(`[LivenessModule] ✅ Photo captured for comparison (#${this.capturedPhotos.length})`);
-        console.log(`[LivenessModule] ✅ Similarity: ${(similarity * 100).toFixed(1)}%`);
-        console.log(`[LivenessModule] ✅ Challenge: ${photoData.challenge}`);
-        console.log(`[LivenessModule] ✅ Total photos: ${this.capturedPhotos.length}`);
+            this.capturedPhotos.push(photoData);
+            console.log(`[LivenessModule] ✅ Photo captured for comparison (#${this.capturedPhotos.length})`);
+            console.log(`[LivenessModule] ✅ Similarity: ${(similarity * 100).toFixed(1)}%`);
+            console.log(`[LivenessModule] ✅ Challenge: ${photoData.challenge}`);
+            console.log(`[LivenessModule] ✅ Total photos: ${this.capturedPhotos.length}`);
 
-        if (this.callbacks.onPhotoCapture) {
-            console.log('[LivenessModule] 📢 Calling onPhotoCapture callback');
-            this.callbacks.onPhotoCapture({
-                photoCount: this.capturedPhotos.length,
-                challenge: photoData.challenge,
-                similarity: similarity,
-            });
+            if (this.callbacks.onPhotoCapture) {
+                console.log('[LivenessModule] 📢 Calling onPhotoCapture callback');
+                this.callbacks.onPhotoCapture({
+                    photoCount: this.capturedPhotos.length,
+                    challenge: photoData.challenge,
+                    similarity: similarity,
+                });
+            }
+        } catch (error) {
+            console.error('[LivenessModule] ❌ capturePhotoForComparison failed:', error);
+            console.error('[LivenessModule] ❌ Error details:', error.message);
+            console.error('[LivenessModule] ❌ Stack:', error.stack);
+            // Don't throw - allow liveness test to continue even if face comparison fails
         }
     };
 

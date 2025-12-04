@@ -430,28 +430,30 @@ export const LivenessModule = ({
 
                             // Capture photo every 2 seconds during test (reduced from 3s)
                             if (timeSinceLastCapture > photoCaptureInterval) {
-                                try {
-                                    Logger.info('[LivenessWrapper] ========================================');
-                                    Logger.info('[LivenessWrapper] 📸 CAPTURING PHOTO FOR FACE COMPARISON');
-                                    Logger.info('[LivenessWrapper] 📸 Photo path:', photoPath);
-                                    Logger.info('[LivenessWrapper] 📸 Challenge:', currentChallenge?.id);
-                                    Logger.info('[LivenessWrapper] 📸 Face frame:', faces[0]?.frame);
-                                    Logger.info('[LivenessWrapper] 📸 Calling capturePhotoForComparison...');
+                                Logger.info('[LivenessWrapper] ========================================');
+                                Logger.info('[LivenessWrapper] 📸 CAPTURING PHOTO FOR FACE COMPARISON');
+                                Logger.info('[LivenessWrapper] 📸 Photo path:', photoPath);
+                                Logger.info('[LivenessWrapper] 📸 Challenge:', currentChallenge?.id);
+                                Logger.info('[LivenessWrapper] 📸 Face frame:', faces[0]?.frame);
+                                Logger.info('[LivenessWrapper] 📸 Calling capturePhotoForComparison...');
 
-                                    // Pass raw ML Kit face object (faces[0]) for comparison
-                                    // Use photoPath (already fixed for Android) instead of photo.path
-                                    livenessModule.capturePhotoForComparison(photoPath, faces[0]);
+                                // Update timestamp BEFORE async call to prevent duplicate captures
+                                lastPhotoCaptureTime.current = now;
 
-                                    lastPhotoCaptureTime.current = now;
-                                    Logger.info('[LivenessWrapper] ✅ Photo capture call completed');
-                                    Logger.info('[LivenessWrapper] ========================================');
-                                } catch (captureError) {
-                                    Logger.error('[LivenessWrapper] ========================================');
-                                    Logger.error('[LivenessWrapper] ❌ Photo capture for comparison FAILED');
-                                    Logger.error('[LivenessWrapper] ❌ Error:', captureError.message);
-                                    Logger.error('[LivenessWrapper] ❌ Stack:', captureError.stack);
-                                    Logger.error('[LivenessWrapper] ========================================');
-                                }
+                                // CRITICAL: Fire-and-forget async call to prevent UI blocking
+                                // FaceNet inference takes 2-4 seconds, we don't want to block frame processing
+                                // Errors are handled inside capturePhotoForComparison
+                                livenessModule.capturePhotoForComparison(photoPath, faces[0])
+                                    .catch(captureError => {
+                                        Logger.error('[LivenessWrapper] ========================================');
+                                        Logger.error('[LivenessWrapper] ❌ Photo capture for comparison FAILED');
+                                        Logger.error('[LivenessWrapper] ❌ Error:', captureError.message);
+                                        Logger.error('[LivenessWrapper] ❌ Stack:', captureError.stack);
+                                        Logger.error('[LivenessWrapper] ========================================');
+                                    });
+
+                                Logger.info('[LivenessWrapper] ✅ Photo capture call initiated (async)');
+                                Logger.info('[LivenessWrapper] ========================================');
                             }
                         } else if (shouldLog) {
                             Logger.info('[LivenessWrapper] ⏭️ Skipping photo capture (conditions not met):');
