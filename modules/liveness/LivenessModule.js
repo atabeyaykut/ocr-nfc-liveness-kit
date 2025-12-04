@@ -321,11 +321,12 @@ class LivenessDetectionModule {
 
     // Face Comparison Methods
     setReferencePhoto = async (photoUri) => {
-        this.referencePhotoUri = photoUri;
+        // Note: this.referencePhotoUri will be set to fixedPath after path validation/correction
         this.enableFaceComparison = !!photoUri;
 
         if (!photoUri) {
             console.log('[LivenessModule] 📸 Reference photo disabled');
+            this.referencePhotoUri = null;
             return;
         }
 
@@ -395,6 +396,10 @@ class LivenessDetectionModule {
             console.log(`[LivenessModule] 📋 Final format: ${photoFormat}`);
             console.log(`[LivenessModule] 📋 Final path: ${fixedPath}`);
             console.log(`[LivenessModule] 📋 Path length: ${fixedPath.length}`);
+
+            // CRITICAL: Store the FIXED path (not original) for FaceNet comparison
+            this.referencePhotoUri = fixedPath;
+            console.log(`[LivenessModule] ✅ Reference URI stored: ${this.referencePhotoUri.substring(0, 80)}...`);
 
             // Verify file exists (for file:// URIs)
             if (fixedPath.startsWith('file://')) {

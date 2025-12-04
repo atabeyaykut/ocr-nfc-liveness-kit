@@ -136,7 +136,7 @@ class FaceRecognitionService {
                 undefined,           // outputPath (auto-generate)
                 false,               // keepMeta
                 {
-                    mode: 'cover',   // Fill entire 160x160
+                    mode: 'contain',  // CRITICAL: Force exact 160x160 (not 'cover' which preserves aspect ratio)
                     onlyScaleDown: false,
                 }
             );
