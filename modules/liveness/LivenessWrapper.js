@@ -351,8 +351,12 @@ export const LivenessModule = ({
                 // Fix Android file path - ML Kit needs file:/// (3 slashes) for absolute paths
                 let photoPath = photo.path;
                 if (Platform.OS === 'android') {
-                    photoPath = photo.path.replace(/^file:\/\/+/g, '');
-                    photoPath = `file:///${photoPath}`;
+                    // Remove all file:// prefixes (if any) and ensure absolute path starts with /
+                    let cleanPath = photo.path.replace(/^file:\/\/+/g, '');
+                    if (!cleanPath.startsWith('/')) {
+                        cleanPath = '/' + cleanPath;
+                    }
+                    photoPath = `file://${cleanPath}`;  // file:// + /data/... = file:///data/...
                     Logger.info('[LivenessWrapper] 🔧 Fixed photo path:', photoPath);
                 }
 
