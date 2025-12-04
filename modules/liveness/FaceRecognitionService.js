@@ -261,6 +261,9 @@ class FaceRecognitionService {
             // STEP 2: Resize to 160x160 (FaceNet input size)
             console.log('[FaceRecognition] Resizing to 160x160...');
 
+            // IMPORTANT: Use 'cover' mode to maintain aspect ratio and center-crop to exact size
+            // This prevents face distortion which can reduce recognition accuracy
+            // 'stretch' mode would distort faces if aspect ratio isn't 1:1
             const resizedImage = await ImageResizer.createResizedImage(
                 processPath,         // Path to process (cropped or original)
                 MODEL_INPUT_SIZE,    // maxWidth
@@ -271,24 +274,27 @@ class FaceRecognitionService {
                 undefined,           // outputPath (auto-generate)
                 false,               // keepMeta
                 {
-                    mode: 'stretch',  // CRITICAL: Ignore aspect ratio, force EXACT 160x160 (FaceNet requirement)
+                    mode: 'cover',   // CRITICAL: Maintain aspect ratio, center-crop to exact size (prevents distortion)
                     onlyScaleDown: false,
                 }
             );
 
             console.log('[FaceRecognition] Resized:', resizedImage.uri);
 
-            // Cleanup cropped temp file if needed
+            // Track resized path for cleanup (even in error cases)
+            const resizedPath = resizedImage.uri.replace(/^file:\/\//, '');
+
+            // Cleanup cropped temp file ASAP (no longer needed)
             if (needsCleanup && processPath !== cleanPath) {
                 try {
                     await RNFS.unlink(processPath);
+                    console.log('[FaceRecognition] 🧹 Cleaned up crop temp file');
                 } catch (e) {
-                    // Ignore cleanup errors
+                    // Non-critical, just log
                 }
             }
 
             // STEP 3: Read image as base64
-            const resizedPath = resizedImage.uri.replace(/^file:\/\//, '');
             const base64Image = await RNFS.readFile(resizedPath, 'base64');
 
             // STEP 4: Decode JPEG to raw RGB pixels
@@ -363,6 +369,28 @@ class FaceRecognitionService {
         } catch (error) {
             console.error('[FaceRecognition] Preprocessing failed:', error);
             console.error('[FaceRecognition] Error details:', error.message);
+
+            // CRITICAL: Cleanup temp files even in error cases to prevent memory leak
+            // resizedPath might not be defined if error occurred before resize
+            if (typeof resizedPath !== 'undefined') {
+                try {
+                    await RNFS.unlink(resizedPath);
+                    console.log('[FaceRecognition] 🧹 Emergency cleanup: resized file deleted');
+                } catch (cleanupError) {
+                    // Already failing, don't throw cleanup errors
+                }
+            }
+
+            // processPath cleanup (if crop was created but not yet cleaned)
+            if (needsCleanup && typeof processPath !== 'undefined' && processPath !== cleanPath) {
+                try {
+                    await RNFS.unlink(processPath);
+                    console.log('[FaceRecognition] 🧹 Emergency cleanup: crop file deleted');
+                } catch (cleanupError) {
+                    // Already failing, don't throw cleanup errors
+                }
+            }
+
             throw error;
         }
     }
