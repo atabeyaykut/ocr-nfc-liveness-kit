@@ -318,6 +318,19 @@ class LivenessDetectionModule {
                         return { success: true, fileName };
                     } catch (error) {
                         const fileName = photo.uri.substring(photo.uri.lastIndexOf('/') + 1);
+                        // BUG FIX #21: If file doesn't exist, it was already deleted (race condition)
+                        // This can happen when completeDetection() and stopLiveness() both try to cleanup
+                        const isAlreadyDeleted = error.message && (
+                            error.message.includes('File does not exist') ||
+                            error.message.includes('ENOENT') ||
+                            error.message.includes('no such file')
+                        );
+
+                        if (isAlreadyDeleted) {
+                            console.log(`[LivenessModule][DEBUG] ⚠️ Photo ${index + 1} already deleted (race condition): ${fileName}`);
+                            return { success: false, reason: 'already_deleted', fileName };
+                        }
+
                         console.log(`[LivenessModule] ⚠️ Could not delete photo ${index + 1} (${fileName}):`, error.message);
                         return { success: false, reason: error.message, fileName };
                     }
@@ -1736,6 +1749,19 @@ class LivenessDetectionModule {
                             return { success: true, fileName };
                         } catch (error) {
                             const fileName = photo.uri.substring(photo.uri.lastIndexOf('/') + 1);
+                            // BUG FIX #21: If file doesn't exist, it was already deleted (race condition)
+                            // This can happen when completeDetection() and stopLiveness() both try to cleanup
+                            const isAlreadyDeleted = error.message && (
+                                error.message.includes('File does not exist') ||
+                                error.message.includes('ENOENT') ||
+                                error.message.includes('no such file')
+                            );
+
+                            if (isAlreadyDeleted) {
+                                console.log(`[LivenessModule][DEBUG] ⚠️ Photo ${index + 1} already deleted (race condition): ${fileName}`);
+                                return { success: false, reason: 'already_deleted', fileName };
+                            }
+
                             console.log(`[LivenessModule] ⚠️ Could not delete photo ${index + 1} (${fileName}):`, error.message);
                             return { success: false, reason: error.message, fileName };
                         }
