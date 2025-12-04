@@ -285,7 +285,24 @@ class LivenessDetectionModule {
         this.challenges = [];
         this.currentChallengeIndex = 0;
         this.results = [];
-        this.capturedPhotos = []; // Clean up captured photos
+
+        // CRITICAL: Delete captured photo files from disk to prevent memory leak
+        if (this.capturedPhotos.length > 0) {
+            console.log(`[LivenessModule] 🧹 Cleaning up ${this.capturedPhotos.length} captured photo files...`);
+            this.capturedPhotos.forEach(async (photo) => {
+                if (photo.uri) {
+                    try {
+                        const cleanPath = photo.uri.replace(/^file:\/\//, '');
+                        await RNFS.unlink(cleanPath);
+                        console.log(`[LivenessModule] 🧹 Deleted photo: ${cleanPath.substring(cleanPath.lastIndexOf('/') + 1)}`);
+                    } catch (error) {
+                        // Photo might have already been deleted, ignore
+                        console.log(`[LivenessModule] ⚠️ Could not delete photo (may not exist):`, error.message);
+                    }
+                }
+            });
+        }
+        this.capturedPhotos = []; // Clear array after cleanup
 
         console.log('[LivenessModule] ✅ Liveness stopped and cleaned up');
         console.log('[LivenessModule] ========================================');
@@ -1642,6 +1659,24 @@ class LivenessDetectionModule {
             this.callbacks.onResult(response);
         } else {
             console.log('[LivenessModule] ⚠️ No onResult callback registered');
+        }
+
+        // CRITICAL: Delete captured photo files after test completion
+        if (this.capturedPhotos.length > 0) {
+            console.log(`[LivenessModule] 🧹 Cleaning up ${this.capturedPhotos.length} captured photo files...`);
+            this.capturedPhotos.forEach(async (photo) => {
+                if (photo.uri) {
+                    try {
+                        const cleanPath = photo.uri.replace(/^file:\/\//, '');
+                        await RNFS.unlink(cleanPath);
+                        console.log(`[LivenessModule] 🧹 Deleted photo: ${cleanPath.substring(cleanPath.lastIndexOf('/') + 1)}`);
+                    } catch (error) {
+                        // Photo might have already been deleted, ignore
+                        console.log(`[LivenessModule] ⚠️ Could not delete photo:`, error.message);
+                    }
+                }
+            });
+            this.capturedPhotos = []; // Clear array after cleanup
         }
     };
 
