@@ -2,7 +2,7 @@
  * FaceRecognitionService - ONNX FaceNet tabanlı yüz tanıma
  * 
  * FaceNet ONNX modeli kullanarak yüz embeddings hesaplar ve karşılaştırır.
- * Model: 160x160 RGB input → 512-dim face embedding output
+ * Model: 160x160 RGB input → 128-dim face embedding output (standard FaceNet)
  * Similarity: Cosine similarity (0-1 range, >0.7 = match)
  * 
  * @module FaceRecognitionService
@@ -15,7 +15,7 @@ import { decode as decodeJpeg } from 'jpeg-js';
 import { Platform } from 'react-native';
 
 const MODEL_INPUT_SIZE = 160; // FaceNet input size
-const EMBEDDING_SIZE = 512; // FaceNet output dimension
+const EMBEDDING_SIZE = 128; // FaceNet output dimension (standard FaceNet)
 
 class FaceRecognitionService {
     constructor() {
@@ -74,14 +74,28 @@ class FaceRecognitionService {
             // Create ONNX session
             this.session = await InferenceSession.create(modelPath);
 
-            // Get model metadata for input/output names
+            // Get model metadata for input/output names and shapes
             try {
                 this.inputName = this.session.inputNames?.[0] || 'input';
                 this.outputName = this.session.outputNames?.[0] || 'output';
-                console.log('[FaceRecognition] 📋 Model input name:', this.inputName);
-                console.log('[FaceRecognition] 📋 Model output name:', this.outputName);
+
+                console.log('[FaceRecognition] 📋 Model metadata:');
+                console.log(`[FaceRecognition]   Input name: ${this.inputName}`);
+                console.log(`[FaceRecognition]   Output name: ${this.outputName}`);
+
+                // Log input/output details if available
+                if (this.session._inferenceSession) {
+                    const inputs = this.session.inputNames || [];
+                    const outputs = this.session.outputNames || [];
+                    console.log(`[FaceRecognition]   Total inputs: ${inputs.length}`);
+                    console.log(`[FaceRecognition]   Total outputs: ${outputs.length}`);
+                }
+
+                console.log('[FaceRecognition] ⚠️ Expected input shape: [1, 160, 160, 3] (NHWC)');
+                console.log('[FaceRecognition] ⚠️ Expected output shape: [1, 128] (embedding)');
             } catch (e) {
                 console.log('[FaceRecognition] ⚠️ Could not read model metadata, using defaults');
+                console.log('[FaceRecognition] ⚠️ Error:', e.message);
             }
 
             this.isInitialized = true;
@@ -132,26 +146,13 @@ class FaceRecognitionService {
             if (faceFrame && faceFrame.width > 0 && faceFrame.height > 0) {
                 console.log('[FaceRecognition] ✂️ Cropping face region...');
 
-                // Add 20% margin around face for better recognition
-                const margin = 0.2;
-                const marginX = Math.floor(faceFrame.width * margin);
-                const marginY = Math.floor(faceFrame.height * margin);
-
-                // Calculate crop coordinates with margin (ensure non-negative)
-                const cropX = Math.max(0, Math.floor(faceFrame.left - marginX));
-                const cropY = Math.max(0, Math.floor(faceFrame.top - marginY));
-                const cropWidth = Math.floor(faceFrame.width + (marginX * 2));
-                const cropHeight = Math.floor(faceFrame.height + (marginY * 2));
-
-                console.log(`[FaceRecognition] Crop params: x=${cropX}, y=${cropY}, w=${cropWidth}, h=${cropHeight}`);
-
                 try {
                     // METHOD: Manual crop using jpeg-js
                     // 1. Read original image
                     const originalImageBase64 = await RNFS.readFile(cleanPath, 'base64');
                     const originalImageBuffer = Buffer.from(originalImageBase64, 'base64');
 
-                    // 2. Decode to RGBA pixels
+                    // 2. Decode to RGBA pixels to get ACTUAL image dimensions
                     const originalImageData = decodeJpeg(originalImageBuffer, {
                         useTArray: true,
                         formatAsRGBA: true,
@@ -160,8 +161,49 @@ class FaceRecognitionService {
                     const origWidth = originalImageData.width;
                     const origHeight = originalImageData.height;
                     console.log(`[FaceRecognition] Original image: ${origWidth}x${origHeight}`);
+                    console.log(`[FaceRecognition] Face bbox (raw): ${faceFrame.width}x${faceFrame.height} at (${faceFrame.left}, ${faceFrame.top})`);
 
-                    // 3. Ensure crop bounds are within image
+                    // 3. CRITICAL: Scale face bbox to actual image dimensions
+                    // ML Kit returns bbox in camera preview coordinates (e.g., 1920x2560)
+                    // but saved image might be resized (e.g., 240x320)
+                    // We need to detect if scaling is needed
+                    let scaledFaceFrame = { ...faceFrame };
+
+                    // If bbox is larger than image, it needs scaling
+                    if (faceFrame.left + faceFrame.width > origWidth ||
+                        faceFrame.top + faceFrame.height > origHeight) {
+
+                        // Assume camera preview vs saved image ratio
+                        // Usually saved images are scaled down proportionally
+                        const scaleX = origWidth / (faceFrame.left + faceFrame.width);
+                        const scaleY = origHeight / (faceFrame.top + faceFrame.height);
+                        const scale = Math.min(scaleX, scaleY, 1.0); // Don't upscale
+
+                        scaledFaceFrame = {
+                            left: Math.floor(faceFrame.left * scale),
+                            top: Math.floor(faceFrame.top * scale),
+                            width: Math.floor(faceFrame.width * scale),
+                            height: Math.floor(faceFrame.height * scale),
+                        };
+
+                        console.log(`[FaceRecognition] ⚠️ Bbox out of bounds, scaling by ${scale.toFixed(3)}`);
+                        console.log(`[FaceRecognition] Scaled bbox: ${scaledFaceFrame.width}x${scaledFaceFrame.height} at (${scaledFaceFrame.left}, ${scaledFaceFrame.top})`);
+                    }
+
+                    // 4. Add 20% margin around face for better recognition
+                    const margin = 0.2;
+                    const marginX = Math.floor(scaledFaceFrame.width * margin);
+                    const marginY = Math.floor(scaledFaceFrame.height * margin);
+
+                    // Calculate crop coordinates with margin (ensure non-negative)
+                    const cropX = Math.max(0, Math.floor(scaledFaceFrame.left - marginX));
+                    const cropY = Math.max(0, Math.floor(scaledFaceFrame.top - marginY));
+                    const cropWidth = Math.floor(scaledFaceFrame.width + (marginX * 2));
+                    const cropHeight = Math.floor(scaledFaceFrame.height + (marginY * 2));
+
+                    console.log(`[FaceRecognition] Crop params: x=${cropX}, y=${cropY}, w=${cropWidth}, h=${cropHeight}`);
+
+                    // 5. Ensure crop bounds are within image
                     const safeCropX = Math.min(cropX, origWidth - 1);
                     const safeCropY = Math.min(cropY, origHeight - 1);
                     const safeCropWidth = Math.min(cropWidth, origWidth - safeCropX);
@@ -169,7 +211,7 @@ class FaceRecognitionService {
 
                     console.log(`[FaceRecognition] Safe crop: x=${safeCropX}, y=${safeCropY}, w=${safeCropWidth}, h=${safeCropHeight}`);
 
-                    // 4. Create cropped image buffer (RGBA)
+                    // 6. Create cropped image buffer (RGBA)
                     const croppedData = new Uint8Array(safeCropWidth * safeCropHeight * 4);
 
                     for (let y = 0; y < safeCropHeight; y++) {
@@ -187,7 +229,7 @@ class FaceRecognitionService {
                         }
                     }
 
-                    // 5. Encode back to JPEG
+                    // 7. Encode back to JPEG
                     const { encode: encodeJpeg } = require('jpeg-js');
                     const croppedJpeg = encodeJpeg({
                         data: croppedData,
@@ -195,7 +237,7 @@ class FaceRecognitionService {
                         height: safeCropHeight,
                     }, 100); // quality 100
 
-                    // 6. Save to temp file
+                    // 8. Save to temp file
                     const tempCropPath = `${RNFS.CachesDirectoryPath}/facecrop_${Date.now()}.jpg`;
                     await RNFS.writeFile(tempCropPath, croppedJpeg.data.toString('base64'), 'base64');
 
@@ -323,7 +365,7 @@ class FaceRecognitionService {
      * 
      * @param {string} imagePath - Path to image file
      * @param {Object} faceFrame - Face bounding box from ML Kit
-     * @returns {Float32Array} 512-dim face embedding
+     * @returns {Float32Array} 128-dim face embedding
      */
     async extractEmbedding(imagePath, faceFrame) {
         if (!this.isInitialized) {
@@ -340,23 +382,54 @@ class FaceRecognitionService {
             // Preprocess image
             const inputData = await this.preprocessImage(imagePath, faceFrame);
 
+            // Validate preprocessed data
+            const expectedSize = MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * 3;
+            if (inputData.length !== expectedSize) {
+                throw new Error(
+                    `Preprocessed data size mismatch: got ${inputData.length}, expected ${expectedSize}`
+                );
+            }
+
             // Create input tensor in NHWC format: [1, 160, 160, 3]
-            const inputTensor = new Tensor('float32', inputData, [1, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3]);
+            const inputShape = [1, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3];
+            const inputTensor = new Tensor('float32', inputData, inputShape);
+
+            console.log('[FaceRecognition] 📊 Input tensor created:');
+            console.log(`[FaceRecognition]   Shape: [${inputShape.join(', ')}]`);
+            console.log(`[FaceRecognition]   Type: ${inputTensor.type}`);
+            console.log(`[FaceRecognition]   Data size: ${inputTensor.data.length} floats`);
 
             // Run inference with dynamic input/output names
             console.log('[FaceRecognition] 🧠 Running ONNX inference...');
+            console.log(`[FaceRecognition]   Input name: '${this.inputName}'`);
             const feeds = { [this.inputName]: inputTensor };
             const results = await this.session.run(feeds);
 
             // Get output tensor (512-dim embedding) using dynamic name
             const outputTensor = results[this.outputName];
             if (!outputTensor) {
-                throw new Error(`Output tensor '${this.outputName}' not found in results`);
+                const availableOutputs = Object.keys(results).join(', ');
+                throw new Error(
+                    `Output tensor '${this.outputName}' not found. ` +
+                    `Available outputs: ${availableOutputs}`
+                );
             }
 
             const embedding = outputTensor.data;
 
-            console.log(`[FaceRecognition] ✅ Embedding extracted: ${embedding.length} dimensions`);
+            console.log('[FaceRecognition] 📊 Output tensor:');
+            console.log(`[FaceRecognition]   Shape: [${outputTensor.dims.join(', ')}]`);
+            console.log(`[FaceRecognition]   Type: ${outputTensor.type}`);
+            console.log(`[FaceRecognition]   Embedding size: ${embedding.length} dimensions`);
+
+            // Validate embedding size
+            if (embedding.length !== EMBEDDING_SIZE) {
+                console.warn(
+                    `[FaceRecognition] ⚠️ Unexpected embedding size: ${embedding.length}, expected ${EMBEDDING_SIZE}`
+                );
+            }
+
+            console.log(`[FaceRecognition] ✅ Embedding extracted successfully`);
 
             return embedding;
 
