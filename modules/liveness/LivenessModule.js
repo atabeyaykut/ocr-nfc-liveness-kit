@@ -21,6 +21,7 @@ import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import Tts from 'react-native-tts';
 import FaceDetection from '@react-native-ml-kit/face-detection';
+import RNFS from 'react-native-fs';
 import { compareFacesImproved } from './ImprovedFaceComparison';
 import faceRecognitionService from './FaceRecognitionService';
 
