@@ -103,11 +103,11 @@ class FaceRecognitionService {
      * - Resize to 160x160
      * - Convert to RGB
      * - Normalize to [-1, 1] range
-     * - Convert to NCHW format (1, 3, 160, 160)
+     * - Convert to NHWC format (1, 160, 160, 3)
      * 
      * @param {string} imagePath - Path to image file
      * @param {Object} faceFrame - Face bounding box from ML Kit {left, top, width, height}
-     * @returns {Float32Array} Preprocessed image data in NCHW format
+     * @returns {Float32Array} Preprocessed image data in NHWC format [H, W, C]
      */
     async preprocessImage(imagePath, faceFrame) {
         try {
@@ -280,17 +280,17 @@ class FaceRecognitionService {
             }
 
             // STEP 6: Convert RGBA to RGB and normalize to [-1, 1]
-            // FaceNet expects: NCHW format (1, 3, 160, 160) with values in [-1, 1]
-            console.log('[FaceRecognition] 🔢 Converting to RGB Float32Array...');
+            // FaceNet expects: NHWC format (1, 160, 160, 3) with values in [-1, 1]
+            console.log('[FaceRecognition] 🔢 Converting to RGB Float32Array (NHWC format)...');
 
             const imageSize = MODEL_INPUT_SIZE * MODEL_INPUT_SIZE;
-            const inputData = new Float32Array(1 * 3 * imageSize);
+            const inputData = new Float32Array(imageSize * 3);
 
-            // Separate RGB channels and normalize
-            // NCHW: [batch, channel, height, width]
-            // Channel order: R, G, B
+            // NHWC format: [batch, height, width, channel]
+            // For each pixel: store R, G, B consecutively
             for (let i = 0; i < imageSize; i++) {
                 const pixelIndex = i * 4; // RGBA has 4 bytes per pixel
+                const outputIndex = i * 3; // RGB has 3 floats per pixel
 
                 // Extract RGB values (0-255)
                 const r = data[pixelIndex];
@@ -298,15 +298,15 @@ class FaceRecognitionService {
                 const b = data[pixelIndex + 2];
                 // Alpha channel (pixelIndex + 3) is ignored
 
-                // Normalize to [-1, 1] range
+                // Normalize to [-1, 1] range and store in NHWC order
                 // Formula: (pixel / 127.5) - 1
-                inputData[i] = (r / 127.5) - 1;                    // R channel
-                inputData[imageSize + i] = (g / 127.5) - 1;        // G channel
-                inputData[imageSize * 2 + i] = (b / 127.5) - 1;    // B channel
+                inputData[outputIndex] = (r / 127.5) - 1;       // R
+                inputData[outputIndex + 1] = (g / 127.5) - 1;   // G
+                inputData[outputIndex + 2] = (b / 127.5) - 1;   // B
             }
 
             console.log('[FaceRecognition] ✅ Preprocessing complete');
-            console.log(`[FaceRecognition] Output shape: [1, 3, ${MODEL_INPUT_SIZE}, ${MODEL_INPUT_SIZE}]`);
+            console.log(`[FaceRecognition] Output shape: [1, ${MODEL_INPUT_SIZE}, ${MODEL_INPUT_SIZE}, 3] (NHWC)`);
             console.log(`[FaceRecognition] Output size: ${inputData.length} floats (${(inputData.length * 4 / 1024).toFixed(1)}KB)`);
 
             return inputData;
@@ -340,8 +340,8 @@ class FaceRecognitionService {
             // Preprocess image
             const inputData = await this.preprocessImage(imagePath, faceFrame);
 
-            // Create input tensor [1, 3, 160, 160]
-            const inputTensor = new Tensor('float32', inputData, [1, 3, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE]);
+            // Create input tensor in NHWC format: [1, 160, 160, 3]
+            const inputTensor = new Tensor('float32', inputData, [1, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3]);
 
             // Run inference with dynamic input/output names
             console.log('[FaceRecognition] 🧠 Running ONNX inference...');
