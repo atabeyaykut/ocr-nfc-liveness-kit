@@ -125,14 +125,19 @@ class FaceRecognitionService {
      */
     async preprocessImage(imagePath, faceFrame) {
         try {
+            // Input validation
+            if (!imagePath || typeof imagePath !== 'string' || imagePath.trim() === '') {
+                throw new Error('Invalid image path: must be a non-empty string');
+            }
+
             console.log('[FaceRecognition] Preprocessing image...');
-            console.log(`[FaceRecognition] Input: ${imagePath.substring(0, 50)}...`);
+            console.log(`[FaceRecognition] Input: ${imagePath.substring(0, Math.min(50, imagePath.length))}...`);
             if (faceFrame) {
                 console.log(`[FaceRecognition] Face bbox: ${faceFrame.width}x${faceFrame.height} at (${faceFrame.left}, ${faceFrame.top})`);
             }
 
             // Clean path: remove all file:// prefixes to get absolute path
-            let cleanPath = imagePath.replace(/^file:\/\/+/g, '');
+            let cleanPath = imagePath.trim().replace(/^file:\/\/+/g, '');
             if (!cleanPath.startsWith('/')) {
                 cleanPath = '/' + cleanPath;
             }
@@ -415,6 +420,11 @@ class FaceRecognitionService {
      * @returns {Float32Array} 128-dim face embedding
      */
     async extractEmbedding(imagePath, faceFrame) {
+        // Input validation (in case called directly)
+        if (!imagePath || typeof imagePath !== 'string') {
+            throw new Error('Invalid image path provided to extractEmbedding');
+        }
+
         if (!this.isInitialized) {
             console.log('[FaceRecognition] Not initialized, initializing now...');
             const success = await this.initialize();
@@ -498,8 +508,21 @@ class FaceRecognitionService {
      * @returns {number} Similarity score (0-1, higher = more similar)
      */
     calculateCosineSimilarity(embedding1, embedding2) {
+        // Input validation
+        if (!embedding1 || !embedding2) {
+            throw new Error('Both embeddings are required for similarity calculation');
+        }
+
+        if (!(embedding1 instanceof Float32Array) || !(embedding2 instanceof Float32Array)) {
+            throw new Error('Embeddings must be Float32Array instances');
+        }
+
         if (embedding1.length !== embedding2.length) {
-            throw new Error('Embeddings must have same length');
+            throw new Error(`Embeddings must have same length (got ${embedding1.length} vs ${embedding2.length})`);
+        }
+
+        if (embedding1.length === 0) {
+            throw new Error('Embeddings cannot be empty');
         }
 
         let dotProduct = 0;
@@ -552,6 +575,11 @@ class FaceRecognitionService {
     async compareFaces(image1Path, face1Frame, image2Path, face2Frame) {
         try {
             console.log('[FaceRecognition] Comparing faces...');
+
+            // Input validation
+            if (!image1Path || !image2Path) {
+                throw new Error('Both image paths are required for comparison');
+            }
 
             // Extract embeddings
             const embedding1 = await this.extractEmbedding(image1Path, face1Frame);
