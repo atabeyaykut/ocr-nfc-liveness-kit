@@ -289,25 +289,55 @@ class LivenessDetectionModule {
 
         // CRITICAL: Delete captured photo files from disk to prevent memory leak
         if (this.capturedPhotos.length > 0) {
+            console.log('[LivenessModule][DEBUG] 🧹 stopLiveness() cleanup started');
             console.log(`[LivenessModule] 🧹 Cleaning up ${this.capturedPhotos.length} captured photo files...`);
+            console.log('[LivenessModule][DEBUG] 📸 Photos to delete:', this.capturedPhotos.map(p => ({
+                uri: p.uri?.substring(p.uri.lastIndexOf('/') + 1),
+                challenge: p.challengeId,
+                similarity: p.similarity
+            })));
+
             // CRITICAL: Use Promise.all to wait for all deletions to complete
             // forEach + async doesn't wait for promises!
-            const deletePromises = this.capturedPhotos.map(async (photo) => {
+            const deletePromises = this.capturedPhotos.map(async (photo, index) => {
                 if (photo.uri) {
                     try {
                         const cleanPath = photo.uri.replace(/^file:\/\//, '');
+                        const fileName = cleanPath.substring(cleanPath.lastIndexOf('/') + 1);
+                        console.log(`[LivenessModule][DEBUG] 🗑️ Deleting photo ${index + 1}/${this.capturedPhotos.length}: ${fileName}`);
+
+                        // Check if file exists first
+                        const exists = await RNFS.exists(cleanPath);
+                        if (!exists) {
+                            console.log(`[LivenessModule][DEBUG] ⚠️ Photo ${index + 1} already deleted: ${fileName}`);
+                            return { success: false, reason: 'already_deleted', fileName };
+                        }
+
                         await RNFS.unlink(cleanPath);
-                        console.log(`[LivenessModule] 🧹 Deleted photo: ${cleanPath.substring(cleanPath.lastIndexOf('/') + 1)}`);
+                        console.log(`[LivenessModule] 🧹 Deleted photo ${index + 1}/${this.capturedPhotos.length}: ${fileName}`);
+                        return { success: true, fileName };
                     } catch (error) {
-                        // Photo might have already been deleted, ignore
-                        console.log(`[LivenessModule] ⚠️ Could not delete photo (may not exist):`, error.message);
+                        const fileName = photo.uri.substring(photo.uri.lastIndexOf('/') + 1);
+                        console.log(`[LivenessModule] ⚠️ Could not delete photo ${index + 1} (${fileName}):`, error.message);
+                        return { success: false, reason: error.message, fileName };
                     }
                 }
+                return { success: false, reason: 'no_uri', fileName: 'unknown' };
             });
+
             // Wait for all deletions to complete before clearing array
-            await Promise.all(deletePromises);
+            const results = await Promise.all(deletePromises);
+            const successCount = results.filter(r => r.success).length;
+            const alreadyDeletedCount = results.filter(r => r.reason === 'already_deleted').length;
+            const failedCount = results.filter(r => !r.success && r.reason !== 'already_deleted').length;
+
+            console.log('[LivenessModule][DEBUG] 📊 Cleanup summary:');
+            console.log(`[LivenessModule][DEBUG]   ✅ Deleted: ${successCount}`);
+            console.log(`[LivenessModule][DEBUG]   ⏭️ Already deleted: ${alreadyDeletedCount}`);
+            console.log(`[LivenessModule][DEBUG]   ❌ Failed: ${failedCount}`);
         }
         this.capturedPhotos = []; // Clear array after cleanup
+        console.log('[LivenessModule][DEBUG] 🧹 stopLiveness() cleanup finished');
 
         console.log('[LivenessModule] ✅ Liveness stopped and cleaned up');
         console.log('[LivenessModule] ========================================');
@@ -1675,25 +1705,59 @@ class LivenessDetectionModule {
         } finally {
             // CRITICAL: Delete captured photo files after test completion
             // This runs even if callback throws error!
+            // BUG FIX #21: Check if photos were already deleted by stopLiveness()
             if (this.capturedPhotos.length > 0) {
+                console.log('[LivenessModule][DEBUG] 🧹 completeDetection() cleanup started');
                 console.log(`[LivenessModule] 🧹 Cleaning up ${this.capturedPhotos.length} captured photo files...`);
+                console.log('[LivenessModule][DEBUG] 📸 Photos to delete:', this.capturedPhotos.map(p => ({
+                    uri: p.uri?.substring(p.uri.lastIndexOf('/') + 1),
+                    challenge: p.challengeId,
+                    similarity: p.similarity
+                })));
+
                 // CRITICAL: Use Promise.all to wait for all deletions to complete
                 // forEach + async doesn't wait for promises!
-                const deletePromises = this.capturedPhotos.map(async (photo) => {
+                const deletePromises = this.capturedPhotos.map(async (photo, index) => {
                     if (photo.uri) {
                         try {
                             const cleanPath = photo.uri.replace(/^file:\/\//, '');
+                            const fileName = cleanPath.substring(cleanPath.lastIndexOf('/') + 1);
+                            console.log(`[LivenessModule][DEBUG] 🗑️ Deleting photo ${index + 1}/${this.capturedPhotos.length}: ${fileName}`);
+
+                            // Check if file exists first (might have been deleted by stopLiveness)
+                            const exists = await RNFS.exists(cleanPath);
+                            if (!exists) {
+                                console.log(`[LivenessModule][DEBUG] ⚠️ Photo ${index + 1} already deleted (by stopLiveness?): ${fileName}`);
+                                return { success: false, reason: 'already_deleted', fileName };
+                            }
+
                             await RNFS.unlink(cleanPath);
-                            console.log(`[LivenessModule] 🧹 Deleted photo: ${cleanPath.substring(cleanPath.lastIndexOf('/') + 1)}`);
+                            console.log(`[LivenessModule] 🧹 Deleted photo ${index + 1}/${this.capturedPhotos.length}: ${fileName}`);
+                            return { success: true, fileName };
                         } catch (error) {
-                            // Photo might have already been deleted, ignore
-                            console.log(`[LivenessModule] ⚠️ Could not delete photo:`, error.message);
+                            const fileName = photo.uri.substring(photo.uri.lastIndexOf('/') + 1);
+                            console.log(`[LivenessModule] ⚠️ Could not delete photo ${index + 1} (${fileName}):`, error.message);
+                            return { success: false, reason: error.message, fileName };
                         }
                     }
+                    return { success: false, reason: 'no_uri', fileName: 'unknown' };
                 });
+
                 // Wait for all deletions to complete before clearing array
-                await Promise.all(deletePromises);
+                const results = await Promise.all(deletePromises);
+                const successCount = results.filter(r => r.success).length;
+                const alreadyDeletedCount = results.filter(r => r.reason === 'already_deleted').length;
+                const failedCount = results.filter(r => !r.success && r.reason !== 'already_deleted').length;
+
+                console.log('[LivenessModule][DEBUG] 📊 Cleanup summary:');
+                console.log(`[LivenessModule][DEBUG]   ✅ Deleted: ${successCount}`);
+                console.log(`[LivenessModule][DEBUG]   ⏭️ Already deleted: ${alreadyDeletedCount}`);
+                console.log(`[LivenessModule][DEBUG]   ❌ Failed: ${failedCount}`);
+
                 this.capturedPhotos = []; // Clear array after cleanup
+                console.log('[LivenessModule][DEBUG] 🧹 completeDetection() cleanup finished');
+            } else {
+                console.log('[LivenessModule][DEBUG] ⏭️ No photos to clean up (already cleaned by stopLiveness?)');
             }
         }
     };
