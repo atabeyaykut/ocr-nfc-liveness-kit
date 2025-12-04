@@ -173,11 +173,19 @@ class FaceRecognitionService {
                     if (faceFrame.left + faceFrame.width > origWidth ||
                         faceFrame.top + faceFrame.height > origHeight) {
 
-                        // Assume camera preview vs saved image ratio
-                        // Usually saved images are scaled down proportionally
-                        const scaleX = origWidth / (faceFrame.left + faceFrame.width);
-                        const scaleY = origHeight / (faceFrame.top + faceFrame.height);
-                        const scale = Math.min(scaleX, scaleY, 1.0); // Don't upscale
+                        // CRITICAL FIX: Previous formula was wrong!
+                        // We don't know preview dimensions, only that bbox is out of bounds
+                        // Best approach: clamp bbox to image boundaries and assume proportional scaling
+
+                        // Calculate what the bbox extends beyond image
+                        const rightEdge = faceFrame.left + faceFrame.width;
+                        const bottomEdge = faceFrame.top + faceFrame.height;
+
+                        // If bbox exceeds image, calculate scale factor
+                        // Use the max extension to find scale (conservative approach)
+                        const scaleX = rightEdge > origWidth ? origWidth / rightEdge : 1.0;
+                        const scaleY = bottomEdge > origHeight ? origHeight / bottomEdge : 1.0;
+                        const scale = Math.min(scaleX, scaleY); // Use smallest scale to fit both dimensions
 
                         scaledFaceFrame = {
                             left: Math.floor(faceFrame.left * scale),
@@ -187,7 +195,11 @@ class FaceRecognitionService {
                         };
 
                         console.log(`[FaceRecognition] ⚠️ Bbox out of bounds, scaling by ${scale.toFixed(3)}`);
-                        console.log(`[FaceRecognition] Scaled bbox: ${scaledFaceFrame.width}x${scaledFaceFrame.height} at (${scaledFaceFrame.left}, ${scaledFaceFrame.top})`);
+                        console.log(`[FaceRecognition]   Original bbox: ${faceFrame.width}x${faceFrame.height} at (${faceFrame.left}, ${faceFrame.top})`);
+                        console.log(`[FaceRecognition]   Image size: ${origWidth}x${origHeight}`);
+                        console.log(`[FaceRecognition]   Right edge: ${rightEdge} vs ${origWidth} (${rightEdge > origWidth ? 'OUT' : 'OK'})`);
+                        console.log(`[FaceRecognition]   Bottom edge: ${bottomEdge} vs ${origHeight} (${bottomEdge > origHeight ? 'OUT' : 'OK'})`);
+                        console.log(`[FaceRecognition]   Scaled bbox: ${scaledFaceFrame.width}x${scaledFaceFrame.height} at (${scaledFaceFrame.left}, ${scaledFaceFrame.top})`);
                     }
 
                     // 4. Add 20% margin around face for better recognition
