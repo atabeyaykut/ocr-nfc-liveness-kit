@@ -136,7 +136,7 @@ class FaceRecognitionService {
                 undefined,           // outputPath (auto-generate)
                 false,               // keepMeta
                 {
-                    mode: 'contain',  // CRITICAL: Force exact 160x160 (not 'cover' which preserves aspect ratio)
+                    mode: 'stretch',  // CRITICAL: Ignore aspect ratio, force EXACT 160x160 (FaceNet requirement)
                     onlyScaleDown: false,
                 }
             );
