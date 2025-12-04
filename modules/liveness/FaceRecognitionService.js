@@ -173,9 +173,13 @@ class FaceRecognitionService {
                     console.log(`[FaceRecognition][DEBUG]   Original: ${faceFrame.width}x${faceFrame.height} @ (${faceFrame.left}, ${faceFrame.top})`);
                     console.log(`[FaceRecognition][DEBUG]   Expanded: ${expandedWidth}x${expandedHeight} @ (${expandedLeft}, ${expandedTop})`);
 
+                    // CRITICAL: ImageEditor requires file:// prefix!
                     // Use ImageEditor for native crop (fast, no UI freeze)
                     const ImageEditor = require('@react-native-community/image-editor').default;
-                    const croppedUri = await ImageEditor.cropImage(cleanPath, {
+                    const imageUriForCrop = cleanPath.startsWith('file://') ? cleanPath : `file://${cleanPath}`;
+                    console.log(`[FaceRecognition][DEBUG] 📁 Crop input URI: ${imageUriForCrop.substring(0, 60)}...`);
+
+                    const croppedUri = await ImageEditor.cropImage(imageUriForCrop, {
                         offset: { x: expandedLeft, y: expandedTop },
                         size: { width: expandedWidth, height: expandedHeight },
                     });
