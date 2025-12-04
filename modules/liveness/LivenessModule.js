@@ -129,7 +129,8 @@ class LivenessDetectionModule {
 
         // ML-based face recognition with FaceNet
         this.useFaceNet = true; // Use ONNX FaceNet for high accuracy (target: 80%+ similarity)
-        this.similarityThreshold = 0.70; // 70% threshold for FaceNet (95%+ accuracy for same person)
+        this.similarityThreshold = 0.70; // 70% threshold for FaceNet (true cosine similarity, NOT normalized)
+        // Expected: same person 0.8-0.95, different person 0.3-0.6
         // Fallback: 0.55 for landmark-based if FaceNet fails to initialize
 
         this.currentFaceData = null; // Current face data from processFaceData

@@ -477,6 +477,10 @@ class FaceRecognitionService {
     /**
      * Calculate cosine similarity between two embeddings
      * 
+     * IMPORTANT: FaceNet embeddings are L2-normalized (unit vectors)
+     * Cosine similarity for normalized vectors is already in [0, 1] range
+     * Additional normalization [(x+1)/2] is INCORRECT and breaks thresholds!
+     * 
      * @param {Float32Array} embedding1 
      * @param {Float32Array} embedding2 
      * @returns {number} Similarity score (0-1, higher = more similar)
@@ -500,15 +504,28 @@ class FaceRecognitionService {
         norm2 = Math.sqrt(norm2);
 
         if (norm1 === 0 || norm2 === 0) {
+            console.warn('[FaceRecognition] ⚠️ Zero norm embedding detected!');
             return 0;
         }
 
         const similarity = dotProduct / (norm1 * norm2);
 
-        // Cosine similarity is in range [-1, 1], normalize to [0, 1]
-        const normalizedSimilarity = (similarity + 1) / 2;
+        // CRITICAL: DO NOT normalize cosine similarity for FaceNet!
+        // FaceNet embeddings are L2-normalized (unit vectors: norm ≈ 1)
+        // For normalized vectors: cosine similarity = dot product
+        // Range is already [0, 1] for face embeddings (always positive correlation)
+        // Adding (x+1)/2 normalization would map:
+        //   0.85 (85% match) → 0.925 (92.5% WRONG!)
+        //   0.40 threshold → effectively 0.20 (too permissive!)
 
-        return normalizedSimilarity;
+        // Clamp to [0, 1] for safety (theoretical range is [-1, 1] but face embeddings are always positive)
+        const clampedSimilarity = Math.max(0, Math.min(1, similarity));
+
+        if (similarity < 0) {
+            console.warn(`[FaceRecognition] ⚠️ Negative cosine similarity: ${similarity.toFixed(4)} (unusual for face embeddings)`);
+        }
+
+        return clampedSimilarity;
     }
 
     /**
@@ -528,10 +545,12 @@ class FaceRecognitionService {
             const embedding1 = await this.extractEmbedding(image1Path, face1Frame);
             const embedding2 = await this.extractEmbedding(image2Path, face2Frame);
 
-            // Calculate similarity
+            // Calculate similarity (true cosine similarity, NOT normalized)
             const similarity = this.calculateCosineSimilarity(embedding1, embedding2);
 
             // Threshold for match (0.7 = 70% similarity)
+            // This is the ACTUAL threshold now (normalization bug fixed)
+            // Typical values: same person 0.8-0.95, different person 0.3-0.6
             const isMatch = similarity >= 0.7;
 
             console.log(`[FaceRecognition] Similarity: ${(similarity * 100).toFixed(2)}%`);
