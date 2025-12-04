@@ -288,10 +288,8 @@ class FaceRecognitionService {
             }
 
             // STEP 3: Read image as base64
-            const base64Image = await RNFS.readFile(
-                resizedImage.uri.replace(/^file:\/\//, ''),
-                'base64'
-            );
+            const resizedPath = resizedImage.uri.replace(/^file:\/\//, '');
+            const base64Image = await RNFS.readFile(resizedPath, 'base64');
 
             // STEP 4: Decode JPEG to raw RGB pixels
             console.log('[FaceRecognition] Decoding JPEG...');
@@ -351,6 +349,15 @@ class FaceRecognitionService {
             console.log(`[FaceRecognition] Output shape: [1, ${MODEL_INPUT_SIZE}, ${MODEL_INPUT_SIZE}, 3] (NHWC)`);
             console.log(`[FaceRecognition] Output size: ${inputData.length} floats (${(inputData.length * 4 / 1024).toFixed(1)}KB)`);
 
+            // CRITICAL: Cleanup resized temp file to prevent memory leak
+            try {
+                await RNFS.unlink(resizedPath);
+                console.log('[FaceRecognition] 🧹 Cleaned up resized temp file');
+            } catch (cleanupError) {
+                // Non-critical, just log
+                console.log('[FaceRecognition] ⚠️ Could not cleanup resized file:', cleanupError.message);
+            }
+
             return inputData;
 
         } catch (error) {
@@ -405,7 +412,7 @@ class FaceRecognitionService {
             const feeds = { [this.inputName]: inputTensor };
             const results = await this.session.run(feeds);
 
-            // Get output tensor (512-dim embedding) using dynamic name
+            // Get output tensor (128-dim embedding) using dynamic name
             const outputTensor = results[this.outputName];
             if (!outputTensor) {
                 const availableOutputs = Object.keys(results).join(', ');
