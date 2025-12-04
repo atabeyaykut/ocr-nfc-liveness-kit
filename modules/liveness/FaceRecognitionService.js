@@ -144,22 +144,52 @@ class FaceRecognitionService {
             console.log(`[FaceRecognition] Clean path: ${cleanPath.substring(0, 50)}...`);
 
             // STEP 1: CROP face region if bbox provided
-            // CRITICAL NOTE: Face cropping is DISABLED due to performance issues
-            // - Manual pixel copy (jpeg-js) → UI freeze for large images (1920x2560)
-            // - ImageResizer doesn't support crop coordinates
-            // - Validation + decode (~200-300ms) is wasted if we use full image anyway
+            // BUG FIX #24: Face cropping MUST be enabled for accurate embeddings!
+            // ROOT CAUSE: NFC photo (240x320) has small face (203x199 @ 21,59)
+            //   → Without crop: face becomes ~65x65px after resize → wrong embedding!
+            //   → With crop: face becomes 160x160px → correct embedding!
             // 
-            // CURRENT STRATEGY: Use full image (fastest option)
-            // - FaceNet is robust to backgrounds
-            // - Trade-off: -10% accuracy for +50x speed
-            // - TODO: Find native crop library or implement in native code
+            // PERFORMANCE: Use React Native Image Editor (native, fast)
+            // - No manual pixel manipulation
+            // - No UI freeze
+            // - ~50-100ms per crop (acceptable!)
 
             let processPath = cleanPath;
             let needsCleanup = false;
 
             if (faceFrame && faceFrame.width > 0 && faceFrame.height > 0) {
                 console.log(`[FaceRecognition] 📐 Face bbox: ${faceFrame.width}x${faceFrame.height} at (${faceFrame.left}, ${faceFrame.top})`);
-                console.log('[FaceRecognition] ⚠️ Using full image (crop disabled for performance)');
+                console.log('[FaceRecognition] ✂️ CROPPING face region for accurate embedding...');
+
+                try {
+                    // Add 20% margin around face (helps with alignment/rotation)
+                    const margin = 0.2;
+                    const expandedLeft = Math.max(0, Math.floor(faceFrame.left - faceFrame.width * margin));
+                    const expandedTop = Math.max(0, Math.floor(faceFrame.top - faceFrame.height * margin));
+                    const expandedWidth = Math.floor(faceFrame.width * (1 + 2 * margin));
+                    const expandedHeight = Math.floor(faceFrame.height * (1 + 2 * margin));
+
+                    console.log('[FaceRecognition][DEBUG] 📐 Crop region (with 20% margin):');
+                    console.log(`[FaceRecognition][DEBUG]   Original: ${faceFrame.width}x${faceFrame.height} @ (${faceFrame.left}, ${faceFrame.top})`);
+                    console.log(`[FaceRecognition][DEBUG]   Expanded: ${expandedWidth}x${expandedHeight} @ (${expandedLeft}, ${expandedTop})`);
+
+                    // Use ImageEditor for native crop (fast, no UI freeze)
+                    const ImageEditor = require('@react-native-community/image-editor').default;
+                    const croppedUri = await ImageEditor.cropImage(cleanPath, {
+                        offset: { x: expandedLeft, y: expandedTop },
+                        size: { width: expandedWidth, height: expandedHeight },
+                    });
+
+                    processPath = croppedUri.replace(/^file:\/\//, '');
+                    needsCleanup = true;
+                    console.log('[FaceRecognition] ✅ Face cropped successfully');
+                    console.log(`[FaceRecognition][DEBUG] 📁 Cropped file: ${processPath.substring(0, 50)}...`);
+                } catch (cropError) {
+                    console.error('[FaceRecognition] ❌ Crop failed, using full image:', cropError.message);
+                    console.log('[FaceRecognition] ⚠️ Falling back to full image (accuracy may be reduced)');
+                    processPath = cleanPath;
+                    needsCleanup = false;
+                }
             } else {
                 console.log('[FaceRecognition] ⚠️ No face bbox provided, using full image');
             }
