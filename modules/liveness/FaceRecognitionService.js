@@ -99,13 +99,14 @@ class FaceRecognitionService {
 
     /**
      * Preprocess image for FaceNet model
+     * - CROP face region using bbox
      * - Resize to 160x160
      * - Convert to RGB
      * - Normalize to [-1, 1] range
      * - Convert to NCHW format (1, 3, 160, 160)
      * 
      * @param {string} imagePath - Path to image file
-     * @param {Object} faceFrame - Face bounding box from ML Kit
+     * @param {Object} faceFrame - Face bounding box from ML Kit {left, top, width, height}
      * @returns {Float32Array} Preprocessed image data in NCHW format
      */
     async preprocessImage(imagePath, faceFrame) {
@@ -113,11 +114,8 @@ class FaceRecognitionService {
             console.log('[FaceRecognition] Preprocessing image...');
             console.log(`[FaceRecognition] Input: ${imagePath.substring(0, 50)}...`);
             if (faceFrame) {
-                console.log(`[FaceRecognition] Face bbox: ${faceFrame.width}x${faceFrame.height}`);
+                console.log(`[FaceRecognition] Face bbox: ${faceFrame.width}x${faceFrame.height} at (${faceFrame.left}, ${faceFrame.top})`);
             }
-
-            // 1. Resize to 160x160 (FaceNet input size)
-            console.log('[FaceRecognition] Resizing to 160x160...');
 
             // Clean path: remove all file:// prefixes to get absolute path
             let cleanPath = imagePath.replace(/^file:\/\/+/g, '');
@@ -126,8 +124,103 @@ class FaceRecognitionService {
             }
             console.log(`[FaceRecognition] Clean path: ${cleanPath.substring(0, 50)}...`);
 
+            // STEP 1: CROP face region if bbox provided
+            // This is CRITICAL for accuracy - only feed face to FaceNet, not background!
+            let processPath = cleanPath;
+            let needsCleanup = false;
+
+            if (faceFrame && faceFrame.width > 0 && faceFrame.height > 0) {
+                console.log('[FaceRecognition] ✂️ Cropping face region...');
+
+                // Add 20% margin around face for better recognition
+                const margin = 0.2;
+                const marginX = Math.floor(faceFrame.width * margin);
+                const marginY = Math.floor(faceFrame.height * margin);
+
+                // Calculate crop coordinates with margin (ensure non-negative)
+                const cropX = Math.max(0, Math.floor(faceFrame.left - marginX));
+                const cropY = Math.max(0, Math.floor(faceFrame.top - marginY));
+                const cropWidth = Math.floor(faceFrame.width + (marginX * 2));
+                const cropHeight = Math.floor(faceFrame.height + (marginY * 2));
+
+                console.log(`[FaceRecognition] Crop params: x=${cropX}, y=${cropY}, w=${cropWidth}, h=${cropHeight}`);
+
+                try {
+                    // METHOD: Manual crop using jpeg-js
+                    // 1. Read original image
+                    const originalImageBase64 = await RNFS.readFile(cleanPath, 'base64');
+                    const originalImageBuffer = Buffer.from(originalImageBase64, 'base64');
+
+                    // 2. Decode to RGBA pixels
+                    const originalImageData = decodeJpeg(originalImageBuffer, {
+                        useTArray: true,
+                        formatAsRGBA: true,
+                    });
+
+                    const origWidth = originalImageData.width;
+                    const origHeight = originalImageData.height;
+                    console.log(`[FaceRecognition] Original image: ${origWidth}x${origHeight}`);
+
+                    // 3. Ensure crop bounds are within image
+                    const safeCropX = Math.min(cropX, origWidth - 1);
+                    const safeCropY = Math.min(cropY, origHeight - 1);
+                    const safeCropWidth = Math.min(cropWidth, origWidth - safeCropX);
+                    const safeCropHeight = Math.min(cropHeight, origHeight - safeCropY);
+
+                    console.log(`[FaceRecognition] Safe crop: x=${safeCropX}, y=${safeCropY}, w=${safeCropWidth}, h=${safeCropHeight}`);
+
+                    // 4. Create cropped image buffer (RGBA)
+                    const croppedData = new Uint8Array(safeCropWidth * safeCropHeight * 4);
+
+                    for (let y = 0; y < safeCropHeight; y++) {
+                        for (let x = 0; x < safeCropWidth; x++) {
+                            const srcX = safeCropX + x;
+                            const srcY = safeCropY + y;
+                            const srcIndex = (srcY * origWidth + srcX) * 4;
+                            const dstIndex = (y * safeCropWidth + x) * 4;
+
+                            // Copy RGBA pixels
+                            croppedData[dstIndex] = originalImageData.data[srcIndex];         // R
+                            croppedData[dstIndex + 1] = originalImageData.data[srcIndex + 1]; // G
+                            croppedData[dstIndex + 2] = originalImageData.data[srcIndex + 2]; // B
+                            croppedData[dstIndex + 3] = originalImageData.data[srcIndex + 3]; // A
+                        }
+                    }
+
+                    // 5. Encode back to JPEG
+                    const { encode: encodeJpeg } = require('jpeg-js');
+                    const croppedJpeg = encodeJpeg({
+                        data: croppedData,
+                        width: safeCropWidth,
+                        height: safeCropHeight,
+                    }, 100); // quality 100
+
+                    // 6. Save to temp file
+                    const tempCropPath = `${RNFS.CachesDirectoryPath}/facecrop_${Date.now()}.jpg`;
+                    await RNFS.writeFile(tempCropPath, croppedJpeg.data.toString('base64'), 'base64');
+
+                    processPath = tempCropPath;
+                    needsCleanup = true;
+
+                    console.log(`[FaceRecognition] ✅ Face cropped: ${safeCropWidth}x${safeCropHeight}`);
+                    console.log(`[FaceRecognition] Temp crop saved: ${tempCropPath}`);
+
+                } catch (cropError) {
+                    console.log('[FaceRecognition] ⚠️ Crop failed, using full image');
+                    console.log('[FaceRecognition] Error:', cropError.message);
+                    // Fall back to full image
+                    processPath = cleanPath;
+                    needsCleanup = false;
+                }
+            } else {
+                console.log('[FaceRecognition] ⚠️ No face bbox provided, using full image');
+            }
+
+            // STEP 2: Resize to 160x160 (FaceNet input size)
+            console.log('[FaceRecognition] Resizing to 160x160...');
+
             const resizedImage = await ImageResizer.createResizedImage(
-                cleanPath,           // Absolute path without file:// prefix
+                processPath,         // Path to process (cropped or original)
                 MODEL_INPUT_SIZE,    // maxWidth
                 MODEL_INPUT_SIZE,    // maxHeight
                 'JPEG',              // compressFormat
@@ -143,13 +236,22 @@ class FaceRecognitionService {
 
             console.log('[FaceRecognition] Resized:', resizedImage.uri);
 
-            // 2. Read image as base64
+            // Cleanup cropped temp file if needed
+            if (needsCleanup && processPath !== cleanPath) {
+                try {
+                    await RNFS.unlink(processPath);
+                } catch (e) {
+                    // Ignore cleanup errors
+                }
+            }
+
+            // STEP 3: Read image as base64
             const base64Image = await RNFS.readFile(
                 resizedImage.uri.replace(/^file:\/\//, ''),
                 'base64'
             );
 
-            // 3. Decode JPEG to raw RGB pixels
+            // STEP 4: Decode JPEG to raw RGB pixels
             console.log('[FaceRecognition] Decoding JPEG...');
             const imageBuffer = Buffer.from(base64Image, 'base64');
             const rawImageData = decodeJpeg(imageBuffer, {
@@ -167,7 +269,7 @@ class FaceRecognitionService {
 
             console.log(`[FaceRecognition] ✅ Decoded: ${width}x${height}, ${data.length} bytes`);
 
-            // 4. Validate decoded data
+            // STEP 5: Validate decoded data
             if (!(data instanceof Uint8Array)) {
                 throw new Error('Decoded image data is not Uint8Array');
             }
@@ -177,7 +279,7 @@ class FaceRecognitionService {
                 throw new Error(`Expected ${expectedBytes} bytes, got ${data.length}`);
             }
 
-            // 5. Convert RGBA to RGB and normalize to [-1, 1]
+            // STEP 6: Convert RGBA to RGB and normalize to [-1, 1]
             // FaceNet expects: NCHW format (1, 3, 160, 160) with values in [-1, 1]
             console.log('[FaceRecognition] 🔢 Converting to RGB Float32Array...');
 
