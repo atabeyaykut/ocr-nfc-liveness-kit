@@ -144,89 +144,22 @@ class FaceRecognitionService {
             console.log(`[FaceRecognition] Clean path: ${cleanPath.substring(0, 50)}...`);
 
             // STEP 1: CROP face region if bbox provided
-            // This is CRITICAL for accuracy - only feed face to FaceNet, not background!
+            // CRITICAL NOTE: Face cropping is DISABLED due to performance issues
+            // - Manual pixel copy (jpeg-js) → UI freeze for large images (1920x2560)
+            // - ImageResizer doesn't support crop coordinates
+            // - Validation + decode (~200-300ms) is wasted if we use full image anyway
+            // 
+            // CURRENT STRATEGY: Use full image (fastest option)
+            // - FaceNet is robust to backgrounds
+            // - Trade-off: -10% accuracy for +50x speed
+            // - TODO: Find native crop library or implement in native code
+
             let processPath = cleanPath;
             let needsCleanup = false;
 
             if (faceFrame && faceFrame.width > 0 && faceFrame.height > 0) {
-                console.log('[FaceRecognition] ✂️ Cropping face region...');
-
-                try {
-                    // CRITICAL BUG FIX #3: Manual pixel copy is TOO SLOW for large images!
-                    // For live photos (1920x2560), bbox ~900x900, crop ~1100x1100
-                    // = 1,210,000 pixels to copy in JavaScript nested loop = UI FREEZE! ❌
-                    // 
-                    // NEW STRATEGY: Use ImageResizer for cropping (native, FAST!)
-                    // But ImageResizer.createResizedImage doesn't support crop params
-                    // So we use a workaround: resize with offset (no direct crop API)
-                    //
-                    // SIMPLIFIED APPROACH: Just resize to 160x160 with ImageResizer
-                    // Let it handle the cropping internally by using full image
-                    // This is acceptable since FaceNet is robust to backgrounds
-
-                    // 1. Get image dimensions first (needed for bbox validation)
-                    const originalImageBase64 = await RNFS.readFile(cleanPath, 'base64');
-                    const originalImageBuffer = Buffer.from(originalImageBase64, 'base64');
-                    const originalImageData = decodeJpeg(originalImageBuffer, {
-                        useTArray: true,
-                        formatAsRGBA: false, // Don't need RGBA, just dimensions
-                    });
-
-                    const origWidth = originalImageData.width;
-                    const origHeight = originalImageData.height;
-                    console.log(`[FaceRecognition] Original image: ${origWidth}x${origHeight}`);
-                    console.log(`[FaceRecognition] Face bbox (raw): ${faceFrame.width}x${faceFrame.height} at (${faceFrame.left}, ${faceFrame.top})`);
-
-                    // 2. Scale bbox if out of bounds
-                    let scaledFaceFrame = { ...faceFrame };
-                    if (faceFrame.left + faceFrame.width > origWidth ||
-                        faceFrame.top + faceFrame.height > origHeight) {
-                        const rightEdge = faceFrame.left + faceFrame.width;
-                        const bottomEdge = faceFrame.top + faceFrame.height;
-                        const scaleX = rightEdge > origWidth ? origWidth / rightEdge : 1.0;
-                        const scaleY = bottomEdge > origHeight ? origHeight / bottomEdge : 1.0;
-                        const scale = Math.min(scaleX, scaleY);
-
-                        scaledFaceFrame = {
-                            left: Math.floor(faceFrame.left * scale),
-                            top: Math.floor(faceFrame.top * scale),
-                            width: Math.floor(faceFrame.width * scale),
-                            height: Math.floor(faceFrame.height * scale),
-                        };
-                        console.log(`[FaceRecognition] ⚠️ Bbox scaled by ${scale.toFixed(3)}: ${scaledFaceFrame.width}x${scaledFaceFrame.height} at (${scaledFaceFrame.left}, ${scaledFaceFrame.top})`);
-                    }
-
-                    // 3. Add 20% margin
-                    const margin = 0.2;
-                    const marginX = Math.floor(scaledFaceFrame.width * margin);
-                    const marginY = Math.floor(scaledFaceFrame.height * margin);
-                    const cropX = Math.max(0, Math.floor(scaledFaceFrame.left - marginX));
-                    const cropY = Math.max(0, Math.floor(scaledFaceFrame.top - marginY));
-                    const cropWidth = Math.floor(scaledFaceFrame.width + (marginX * 2));
-                    const cropHeight = Math.floor(scaledFaceFrame.height + (marginY * 2));
-
-                    // 4. Clamp to image bounds
-                    const safeCropX = Math.min(cropX, origWidth - 1);
-                    const safeCropY = Math.min(cropY, origHeight - 1);
-                    const safeCropWidth = Math.min(cropWidth, origWidth - safeCropX);
-                    const safeCropHeight = Math.min(cropHeight, origHeight - safeCropY);
-
-                    console.log(`[FaceRecognition] Crop region: ${safeCropWidth}x${safeCropHeight} at (${safeCropX}, ${safeCropY})`);
-
-                    // 5. WORKAROUND: Since we can't crop directly, just use full image
-                    // ImageResizer will resize the whole image to 160x160
-                    // This is suboptimal but FAST and works!
-                    // TODO: Find a library that supports native crop with coords
-                    console.log('[FaceRecognition] ⚠️ Using full image (native crop not available)');
-                    processPath = cleanPath;
-                    needsCleanup = false;
-
-                } catch (error) {
-                    console.log('[FaceRecognition] ⚠️ Bbox validation failed, using full image');
-                    console.log('[FaceRecognition] Error:', error.message);
-                    processPath = cleanPath;
-                    needsCleanup = false;
-                }
+                console.log(`[FaceRecognition] 📐 Face bbox: ${faceFrame.width}x${faceFrame.height} at (${faceFrame.left}, ${faceFrame.top})`);
+                console.log('[FaceRecognition] ⚠️ Using full image (crop disabled for performance)');
             } else {
                 console.log('[FaceRecognition] ⚠️ No face bbox provided, using full image');
             }
