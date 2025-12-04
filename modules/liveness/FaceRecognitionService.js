@@ -118,8 +118,16 @@ class FaceRecognitionService {
 
             // 1. Resize to 160x160 (FaceNet input size)
             console.log('[FaceRecognition] Resizing to 160x160...');
+
+            // Clean path: remove all file:// prefixes to get absolute path
+            let cleanPath = imagePath.replace(/^file:\/\/+/g, '');
+            if (!cleanPath.startsWith('/')) {
+                cleanPath = '/' + cleanPath;
+            }
+            console.log(`[FaceRecognition] Clean path: ${cleanPath.substring(0, 50)}...`);
+
             const resizedImage = await ImageResizer.createResizedImage(
-                imagePath.replace(/^file:\/\//, ''), // Remove file:// prefix
+                cleanPath,           // Absolute path without file:// prefix
                 MODEL_INPUT_SIZE,    // maxWidth
                 MODEL_INPUT_SIZE,    // maxHeight
                 'JPEG',              // compressFormat
