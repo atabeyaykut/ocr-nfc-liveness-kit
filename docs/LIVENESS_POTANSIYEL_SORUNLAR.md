@@ -34,11 +34,11 @@ LOG  [LivenessWrapper] ⏱️ Frame cycle completed in 2956ms
 
 ---
 
-### 2. FaceNet Face Crop Yapılmıyor
+### 2. ✅ FaceNet Face Crop Yapılmıyor (ÇÖZÜLDÜ!)
 
 **Konum:** `FaceRecognitionService.js` - `preprocessImage()`
 
-**Sorun:**
+**Sorun (Eski):**
 ```javascript
 // faceFrame parametresi alınıyor ama KULLANILMIYOR!
 async preprocessImage(imagePath, faceFrame) {
@@ -55,10 +55,31 @@ async preprocessImage(imagePath, faceFrame) {
 }
 ```
 
-**Etki:**
-- FaceNet'e tüm görüntü gidiyor (arka plan dahil)
-- Benzerlik skorları düşük çıkıyor
-- Model doğruluğu azalıyor
+**Çözüm (Commit: 8d3322d4):**
+```javascript
+// ✅ jpeg-js ile manuel crop implementasyonu eklendi
+if (faceFrame && faceFrame.width > 0 && faceFrame.height > 0) {
+    // 1. Decode original image
+    const originalImageData = decodeJpeg(originalImageBuffer);
+    
+    // 2. Crop face region (+20% margin)
+    const croppedData = new Uint8Array(...);
+    // Pixel-by-pixel copy
+    
+    // 3. Encode and save to temp
+    const croppedJpeg = encodeJpeg({ data: croppedData, ... });
+    processPath = tempCropPath;  // ← Cropped path kullanılıyor!
+}
+
+// Resize cropped image
+const resizedImage = await ImageResizer.createResizedImage(
+    processPath,  // ← Artık crop'lanmış yüz!
+    160, 160, ...
+);
+```
+
+**Durum:** ✅ ÇÖZÜLDÜ  
+**Beklenen İyileşme:** Benzerlik skorları %20-35 → %80-95
 
 ---
 
@@ -356,25 +377,25 @@ if (Platform.OS === 'android') { ... }
 
 ## 📊 ÖZET TABLO
 
-| Seviye | Sorun | Etki | Çözüm Zorluğu |
-|--------|-------|------|---------------|
-| 🔴 Kritik | Frame Processing Yavaş | Blink imkansız | Zor |
-| 🔴 Kritik | Face Crop Yok | Düşük benzerlik | Orta |
-| 🔴 Kritik | NFC Path 4 Slash | Format hatası | Kolay |
-| 🔴 Kritik | Race Condition | Duplicate results | Orta |
-| 🔴 Kritik | Memory Leak | Disk/RAM | Kolay |
-| 🔴 Kritik | No Face Timeout Yanlış | UX kötü | Kolay |
-| 🟠 Orta | Async Eksik | Race condition | Kolay |
-| 🟠 Orta | Baseline Timing | Yanlış algılama | Orta |
-| 🟠 Orta | Blink State Basit | Kaçırılan blink | Orta |
-| 🟠 Orta | Transition Photo | Yanlış etiket | Kolay |
-| 🟠 Orta | TTS Error UX | Sessiz fail | Kolay |
-| 🟠 Orta | Embedding Cache Yok | Performans | Kolay |
-| 🟡 Düşük | Aşırı Logging | Performans | Kolay |
-| 🟡 Düşük | Hard-coded Values | Flexibility | Kolay |
-| 🟡 Düşük | Error Recovery | UX | Orta |
-| 🟡 Düşük | Warm-up Errors | Güvenilirlik | Kolay |
-| 🟡 Düşük | Platform Code | Maintenance | Orta |
+| Seviye | Sorun | Etki | Çözüm Zorluğu | Durum |
+|--------|-------|------|---------------|-------|
+| 🔴 Kritik | Frame Processing Yavaş | Blink imkansız | Zor | 🔴 Açık |
+| 🔴 Kritik | Face Crop Yok | Düşük benzerlik | Orta | ✅ Çözüldü (8d3322d4) |
+| 🔴 Kritik | NFC Path 4 Slash | Format hatası | Kolay | 🟡 Workaround |
+| 🔴 Kritik | Race Condition | Duplicate results | Orta | 🔴 Açık |
+| 🔴 Kritik | Memory Leak | Disk/RAM | Kolay | 🔴 Açık |
+| 🔴 Kritik | No Face Timeout Yanlış | UX kötü | Kolay | 🔴 Açık |
+| 🟠 Orta | Async Eksik | Race condition | Kolay | 🔴 Açık |
+| 🟠 Orta | Baseline Timing | Yanlış algılama | Orta | 🔴 Açık |
+| 🟠 Orta | Blink State Basit | Kaçırılan blink | Orta | 🔴 Açık |
+| 🟠 Orta | Transition Photo | Yanlış etiket | Kolay | 🔴 Açık |
+| 🟠 Orta | TTS Error UX | Sessiz fail | Kolay | 🔴 Açık |
+| 🟠 Orta | Embedding Cache Yok | Performans | Kolay | 🔴 Açık |
+| 🟡 Düşük | Aşırı Logging | Performans | Kolay | 🔴 Açık |
+| 🟡 Düşük | Hard-coded Values | Flexibility | Kolay | 🔴 Açık |
+| 🟡 Düşük | Error Recovery | UX | Orta | 🔴 Açık |
+| 🟡 Düşük | Warm-up Errors | Güvenilirlik | Kolay | 🔴 Açık |
+| 🟡 Düşük | Platform Code | Maintenance | Orta | 🔴 Açık |
 
 ---
 
@@ -382,13 +403,16 @@ if (Platform.OS === 'android') { ... }
 
 ### Hemen Yapılması Gerekenler (P0)
 
-1. **Face Crop Implementasyonu**
-   - FaceNet'e sadece yüz bölgesi gönderilmeli
-   - Benzerlik skorları %80+'a çıkacak
+1. ✅ ~~**Face Crop Implementasyonu**~~ **(TAMAMLANDI - Commit: 8d3322d4)**
+   - ✅ FaceNet'e sadece yüz bölgesi gönderiliyor
+   - ✅ jpeg-js ile manuel crop implementasyonu
+   - ✅ +20% margin ekleniyor
+   - 🔜 Test edilecek: Benzerlik skorları %80+'a çıkmalı
 
-2. **NFC Embedding Caching**
+2. **NFC Embedding Caching** (SONRAKİ ADIM)
    - İlk karşılaştırmada cache'le
    - Sonraki karşılaştırmalarda kullan
+   - ~800ms tasarruf bekleniyor
 
 3. **No Face Timeout Düzeltmesi**
    - Frame süresine göre dinamik hesaplama
