@@ -797,7 +797,8 @@ class LivenessDetectionModule {
                 photosCaptured: this.capturedPhotos.length,
                 totalDuration: Date.now() - startTime
             });
-            this.completeDetection();
+            // CRITICAL: Await completeDetection to ensure photo cleanup finishes
+            await this.completeDetection();
             return;
         }
 
