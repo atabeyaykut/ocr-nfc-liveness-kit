@@ -1659,33 +1659,41 @@ class LivenessDetectionModule {
             }
         }
 
-        if (this.callbacks.onResult) {
-            console.log('[LivenessModule] 📢 Calling onResult callback with:', response);
-            this.callbacks.onResult(response);
-        } else {
-            console.log('[LivenessModule] ⚠️ No onResult callback registered');
-        }
-
-        // CRITICAL: Delete captured photo files after test completion
-        if (this.capturedPhotos.length > 0) {
-            console.log(`[LivenessModule] 🧹 Cleaning up ${this.capturedPhotos.length} captured photo files...`);
-            // CRITICAL: Use Promise.all to wait for all deletions to complete
-            // forEach + async doesn't wait for promises!
-            const deletePromises = this.capturedPhotos.map(async (photo) => {
-                if (photo.uri) {
-                    try {
-                        const cleanPath = photo.uri.replace(/^file:\/\//, '');
-                        await RNFS.unlink(cleanPath);
-                        console.log(`[LivenessModule] 🧹 Deleted photo: ${cleanPath.substring(cleanPath.lastIndexOf('/') + 1)}`);
-                    } catch (error) {
-                        // Photo might have already been deleted, ignore
-                        console.log(`[LivenessModule] ⚠️ Could not delete photo:`, error.message);
+        // CRITICAL: Cleanup MUST happen even if callback throws error
+        // Use try-finally to ensure photo cleanup always runs
+        try {
+            if (this.callbacks.onResult) {
+                console.log('[LivenessModule] 📢 Calling onResult callback with:', response);
+                this.callbacks.onResult(response);
+            } else {
+                console.log('[LivenessModule] ⚠️ No onResult callback registered');
+            }
+        } catch (callbackError) {
+            console.error('[LivenessModule] ❌ onResult callback error:', callbackError);
+            // Don't throw - cleanup must still happen
+        } finally {
+            // CRITICAL: Delete captured photo files after test completion
+            // This runs even if callback throws error!
+            if (this.capturedPhotos.length > 0) {
+                console.log(`[LivenessModule] 🧹 Cleaning up ${this.capturedPhotos.length} captured photo files...`);
+                // CRITICAL: Use Promise.all to wait for all deletions to complete
+                // forEach + async doesn't wait for promises!
+                const deletePromises = this.capturedPhotos.map(async (photo) => {
+                    if (photo.uri) {
+                        try {
+                            const cleanPath = photo.uri.replace(/^file:\/\//, '');
+                            await RNFS.unlink(cleanPath);
+                            console.log(`[LivenessModule] 🧹 Deleted photo: ${cleanPath.substring(cleanPath.lastIndexOf('/') + 1)}`);
+                        } catch (error) {
+                            // Photo might have already been deleted, ignore
+                            console.log(`[LivenessModule] ⚠️ Could not delete photo:`, error.message);
+                        }
                     }
-                }
-            });
-            // Wait for all deletions to complete before clearing array
-            await Promise.all(deletePromises);
-            this.capturedPhotos = []; // Clear array after cleanup
+                });
+                // Wait for all deletions to complete before clearing array
+                await Promise.all(deletePromises);
+                this.capturedPhotos = []; // Clear array after cleanup
+            }
         }
     };
 
