@@ -256,7 +256,7 @@ class LivenessDetectionModule {
         }
     };
 
-    stopLiveness = () => {
+    stopLiveness = async () => {
         console.log('[LivenessModule] ========================================');
         console.log('[LivenessModule] ⏹️ Stopping liveness test...');
         console.log('[LivenessModule] ⏰ Timestamp:', new Date().toISOString());
@@ -289,7 +289,9 @@ class LivenessDetectionModule {
         // CRITICAL: Delete captured photo files from disk to prevent memory leak
         if (this.capturedPhotos.length > 0) {
             console.log(`[LivenessModule] 🧹 Cleaning up ${this.capturedPhotos.length} captured photo files...`);
-            this.capturedPhotos.forEach(async (photo) => {
+            // CRITICAL: Use Promise.all to wait for all deletions to complete
+            // forEach + async doesn't wait for promises!
+            const deletePromises = this.capturedPhotos.map(async (photo) => {
                 if (photo.uri) {
                     try {
                         const cleanPath = photo.uri.replace(/^file:\/\//, '');
@@ -301,6 +303,8 @@ class LivenessDetectionModule {
                     }
                 }
             });
+            // Wait for all deletions to complete before clearing array
+            await Promise.all(deletePromises);
         }
         this.capturedPhotos = []; // Clear array after cleanup
 
@@ -1568,7 +1572,7 @@ class LivenessDetectionModule {
         this.logWithLevel('DEBUG', `📊 Timeout handling completed in ${Date.now() - timeoutStartTime}ms`);
     };
 
-    completeDetection = () => {
+    completeDetection = async () => {
         console.log('[LivenessModule] 🏁 Completing detection...');
 
         // Calculate overall score
@@ -1664,7 +1668,9 @@ class LivenessDetectionModule {
         // CRITICAL: Delete captured photo files after test completion
         if (this.capturedPhotos.length > 0) {
             console.log(`[LivenessModule] 🧹 Cleaning up ${this.capturedPhotos.length} captured photo files...`);
-            this.capturedPhotos.forEach(async (photo) => {
+            // CRITICAL: Use Promise.all to wait for all deletions to complete
+            // forEach + async doesn't wait for promises!
+            const deletePromises = this.capturedPhotos.map(async (photo) => {
                 if (photo.uri) {
                     try {
                         const cleanPath = photo.uri.replace(/^file:\/\//, '');
@@ -1676,6 +1682,8 @@ class LivenessDetectionModule {
                     }
                 }
             });
+            // Wait for all deletions to complete before clearing array
+            await Promise.all(deletePromises);
             this.capturedPhotos = []; // Clear array after cleanup
         }
     };
