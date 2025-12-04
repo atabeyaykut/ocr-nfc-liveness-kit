@@ -184,6 +184,11 @@ class FaceRecognitionService {
                         size: { width: expandedWidth, height: expandedHeight },
                     });
 
+                    // BUG FIX: ImageEditor may return undefined if crop fails silently
+                    if (!croppedUri) {
+                        throw new Error('ImageEditor.cropImage returned undefined (package not installed or API error)');
+                    }
+
                     processPath = croppedUri.replace(/^file:\/\//, '');
                     needsCleanup = true;
                     console.log('[FaceRecognition] ✅ Face cropped successfully');
