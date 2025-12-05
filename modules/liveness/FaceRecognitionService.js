@@ -288,11 +288,25 @@ class FaceRecognitionService {
             }
 
             // STEP 3: Read image as base64
+            console.log('[FaceRecognition][DEBUG] 📖 Reading resized image as base64...');
+            console.log(`[FaceRecognition][DEBUG] 📁 File path: ${resizedPath}`);
+
+            // Verify file exists before reading
+            const fileExists = await RNFS.exists(resizedPath);
+            if (!fileExists) {
+                throw new Error(`Resized image file not found: ${resizedPath}`);
+            }
+
+            const fileStats = await RNFS.stat(resizedPath);
+            console.log(`[FaceRecognition][DEBUG] 📊 File size: ${(fileStats.size / 1024).toFixed(2)}KB`);
+
             const base64Image = await RNFS.readFile(resizedPath, 'base64');
+            console.log(`[FaceRecognition][DEBUG] ✅ Base64 read complete: ${base64Image.length} chars`);
 
             // STEP 4: Decode JPEG to raw RGB pixels
             console.log('[FaceRecognition] Decoding JPEG...');
             const imageBuffer = Buffer.from(base64Image, 'base64');
+            console.log(`[FaceRecognition][DEBUG] 📦 Buffer created: ${imageBuffer.length} bytes`);
             const rawImageData = decodeJpeg(imageBuffer, {
                 useTArray: true,      // Return Uint8Array instead of Buffer
                 formatAsRGBA: true,   // Ensure RGBA format (4 bytes per pixel)
@@ -314,9 +328,16 @@ class FaceRecognitionService {
             // This ensures consistent histogram profiles across all photos (NFC + Selfie)
             // Critical for FaceNet embedding quality!
             console.log('[FaceRecognition] 🎨 Applying gamma correction and white balance...');
+            console.log('[FaceRecognition][DEBUG] ⚙️ Gamma value: 1.0 (neutral)');
             this.applyGammaCorrectionInPlace(data, width, height, 1.0); // γ = 1.0 (neutral, adjustable)
+            console.log('[FaceRecognition][DEBUG] ⚙️ Applying white balance normalization...');
             this.applyWhiteBalanceInPlace(data, width, height);
             console.log('[FaceRecognition] ✅ Image normalization complete');
+
+            // Log post-normalization statistics
+            const postNormSample = Array.from(data.slice(0, 40));
+            console.log('[FaceRecognition][DEBUG] 📊 Post-normalization sample (first 10 RGBA):');
+            console.log(`[FaceRecognition][DEBUG]   ${postNormSample.join(', ')}`);
 
             // STEP 5: Validate decoded data
             if (!(data instanceof Uint8Array)) {
@@ -642,42 +663,86 @@ class FaceRecognitionService {
             console.log('[FaceRecognition] ========================================');
             console.log('[FaceRecognition] 🔍 FACE COMPARISON STARTED');
             console.log('[FaceRecognition] ========================================');
+            const comparisonStartTime = Date.now();
 
             // Input validation
             if (!image1Path || !image2Path) {
                 throw new Error('Both image paths are required for comparison');
             }
 
+            // Validate file paths
+            const cleanPath1 = image1Path.replace(/^file:\/\//, '');
+            const cleanPath2 = image2Path.replace(/^file:\/\//, '');
+
+            console.log('[FaceRecognition][DEBUG] 📁 Validating image files...');
+            const exists1 = await RNFS.exists(cleanPath1);
+            const exists2 = await RNFS.exists(cleanPath2);
+
+            if (!exists1) {
+                throw new Error(`Reference image not found: ${cleanPath1}`);
+            }
+            if (!exists2) {
+                throw new Error(`Live image not found: ${cleanPath2}`);
+            }
+
+            const stats1 = await RNFS.stat(cleanPath1);
+            const stats2 = await RNFS.stat(cleanPath2);
+
             console.log('[FaceRecognition][DEBUG] 📸 Image 1 (Reference):');
             console.log(`[FaceRecognition][DEBUG]   Path: ${image1Path.substring(0, 50)}...`);
             console.log(`[FaceRecognition][DEBUG]   Face bbox: ${JSON.stringify(face1Frame)}`);
+            console.log(`[FaceRecognition][DEBUG]   File size: ${(stats1.size / 1024).toFixed(2)}KB`);
+            console.log(`[FaceRecognition][DEBUG]   Face area: ${face1Frame?.width || 0}x${face1Frame?.height || 0}px`);
 
             console.log('[FaceRecognition][DEBUG] 📸 Image 2 (Live):');
             console.log(`[FaceRecognition][DEBUG]   Path: ${image2Path.substring(0, 50)}...`);
             console.log(`[FaceRecognition][DEBUG]   Face bbox: ${JSON.stringify(face2Frame)}`);
+            console.log(`[FaceRecognition][DEBUG]   File size: ${(stats2.size / 1024).toFixed(2)}KB`);
+            console.log(`[FaceRecognition][DEBUG]   Face area: ${face2Frame?.width || 0}x${face2Frame?.height || 0}px`);
 
             // Extract embeddings (L2-normalized by extractEmbedding function)
             console.log('[FaceRecognition][DEBUG] 🧠 Extracting embedding 1...');
+            const embed1StartTime = Date.now();
             const embedding1 = await this.extractEmbedding(image1Path, face1Frame);
             const norm1 = Math.sqrt(Array.from(embedding1).reduce((sum, val) => sum + val * val, 0));
+            const embed1Time = Date.now() - embed1StartTime;
             console.log('[FaceRecognition][DEBUG] ✅ Embedding 1 extracted (L2-normalized):', {
                 length: embedding1.length,
                 type: embedding1.constructor.name,
                 sample: `[${Array.from(embedding1.slice(0, 5)).map(v => v.toFixed(4)).join(', ')}...]`,
                 norm: norm1.toFixed(4),
-                isNormalized: Math.abs(norm1 - 1.0) < 0.01 ? '✅' : '❌'
+                isNormalized: Math.abs(norm1 - 1.0) < 0.01 ? '✅' : '❌',
+                extractionTime: `${embed1Time}ms`
             });
 
             console.log('[FaceRecognition][DEBUG] 🧠 Extracting embedding 2...');
+            const embed2StartTime = Date.now();
             const embedding2 = await this.extractEmbedding(image2Path, face2Frame);
             const norm2 = Math.sqrt(Array.from(embedding2).reduce((sum, val) => sum + val * val, 0));
+            const embed2Time = Date.now() - embed2StartTime;
             console.log('[FaceRecognition][DEBUG] ✅ Embedding 2 extracted (L2-normalized):', {
                 length: embedding2.length,
                 type: embedding2.constructor.name,
                 sample: `[${Array.from(embedding2.slice(0, 5)).map(v => v.toFixed(4)).join(', ')}...]`,
                 norm: norm2.toFixed(4),
-                isNormalized: Math.abs(norm2 - 1.0) < 0.01 ? '✅' : '❌'
+                isNormalized: Math.abs(norm2 - 1.0) < 0.01 ? '✅' : '❌',
+                extractionTime: `${embed2Time}ms`
             });
+
+            // Compare embedding statistics
+            console.log('[FaceRecognition][DEBUG] 📊 Embedding comparison:');
+            const embed1Stats = {
+                min: Math.min(...embedding1),
+                max: Math.max(...embedding1),
+                mean: Array.from(embedding1).reduce((a, b) => a + b, 0) / embedding1.length
+            };
+            const embed2Stats = {
+                min: Math.min(...embedding2),
+                max: Math.max(...embedding2),
+                mean: Array.from(embedding2).reduce((a, b) => a + b, 0) / embedding2.length
+            };
+            console.log(`[FaceRecognition][DEBUG]   Embed1: min=${embed1Stats.min.toFixed(4)}, max=${embed1Stats.max.toFixed(4)}, mean=${embed1Stats.mean.toFixed(4)}`);
+            console.log(`[FaceRecognition][DEBUG]   Embed2: min=${embed2Stats.min.toFixed(4)}, max=${embed2Stats.max.toFixed(4)}, mean=${embed2Stats.mean.toFixed(4)}`);
 
             // Calculate similarity (cosine similarity of L2-normalized embeddings)
             // For normalized vectors: cosine similarity = dot product
@@ -691,11 +756,16 @@ class FaceRecognitionService {
             // - Different person: 0.30-0.60 (30-60%)
             // - Poor quality/angle: 0.40-0.70 (40-70%)
             const isMatch = similarity >= 0.7;
+            const totalTime = Date.now() - comparisonStartTime;
 
             console.log('[FaceRecognition] ========================================');
             console.log(`[FaceRecognition] 🎯 RESULT: Similarity: ${(similarity * 100).toFixed(2)}%`);
             console.log(`[FaceRecognition] 🎯 RESULT: Match: ${isMatch ? '✅ YES' : '❌ NO'}`);
             console.log(`[FaceRecognition] 🎯 RESULT: Threshold: 70%`);
+            console.log(`[FaceRecognition][DEBUG] ⌚ Total comparison time: ${totalTime}ms`);
+            console.log(`[FaceRecognition][DEBUG]   - Embedding 1: ${embed1Time}ms`);
+            console.log(`[FaceRecognition][DEBUG]   - Embedding 2: ${embed2Time}ms`);
+            console.log(`[FaceRecognition][DEBUG]   - Similarity calc: ${totalTime - embed1Time - embed2Time}ms`);
 
             if (!isMatch) {
                 console.log('[FaceRecognition][DEBUG] ⚠️ LOW SIMILARITY DETECTED!');
