@@ -259,21 +259,25 @@ public class NFCPassportReaderJMRTD {
 
             Log.d(TAG, "✓ Bitmap decoded: " + bitmap.getWidth() + "x" + bitmap.getHeight() + "px");
 
-            // ENHANCEMENT: Apply CLAHE + Histogram Equalization
-            // NFC photos often have low contrast due to compression and lighting
-            // This significantly improves face recognition accuracy
-            Log.d(TAG, "🎨 Enhancing NFC photo with CLAHE and histogram equalization...");
-            Bitmap enhanced = ImageEnhancer.enhanceNFCPhoto(bitmap);
+            // TEMPORARY DISABLE: Testing if enhancement is causing low face similarity
+            // Native enhancement may be over-processing and destroying facial features
+            // TODO: Re-enable after testing with original photo quality
+            Log.d(TAG, "⚠️ ENHANCEMENT TEMPORARILY DISABLED FOR TESTING");
+            Log.d(TAG, "📸 Using ORIGINAL NFC photo without enhancement");
+            Bitmap enhanced = bitmap;
 
-            if (enhanced == null) {
-                Log.w(TAG, "⚠️ Enhancement failed, using original bitmap");
-                enhanced = bitmap;
-            } else {
-                // Recycle original if enhancement created a new bitmap
-                if (enhanced != bitmap) {
-                    bitmap.recycle();
-                }
-            }
+            // ORIGINAL CODE (DISABLED):
+            // Log.d(TAG, "🎨 Enhancing NFC photo with CLAHE and histogram
+            // equalization...");
+            // Bitmap enhanced = ImageEnhancer.enhanceNFCPhoto(bitmap);
+            // if (enhanced == null) {
+            // Log.w(TAG, "⚠️ Enhancement failed, using original bitmap");
+            // enhanced = bitmap;
+            // } else {
+            // if (enhanced != bitmap) {
+            // bitmap.recycle();
+            // }
+            // }
 
             // Compress to JPEG with high quality (90%)
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
