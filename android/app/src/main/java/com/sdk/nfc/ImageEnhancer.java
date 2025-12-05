@@ -26,10 +26,13 @@ public class ImageEnhancer {
     private static final double CLAHE_CLIP_LIMIT = 2.0; // Contrast limit factor
 
     /**
-     * Enhance NFC photo with histogram equalization and CLAHE
+     * Enhance NFC photo with intelligent preprocessing
+     * - Detects and corrects overexposure
+     * - Applies histogram equalization and CLAHE
+     * - Normalizes brightness and contrast
      * 
      * @param bitmap Input bitmap (NFC photo)
-     * @return Enhanced bitmap with improved contrast
+     * @return Enhanced bitmap with improved contrast and corrected exposure
      */
     public static Bitmap enhanceNFCPhoto(Bitmap bitmap) {
         if (bitmap == null) {
@@ -43,6 +46,18 @@ public class ImageEnhancer {
         try {
             // Create mutable copy
             Bitmap enhanced = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+
+            // Step 0: Check and correct overexposure
+            double avgBrightness = calculateAverageBrightness(enhanced);
+            Log.d(TAG, "📊 Average brightness: " + String.format("%.1f", avgBrightness));
+
+            if (avgBrightness > 180) {
+                Log.d(TAG, "⚠️ Overexposed photo detected, applying correction...");
+                correctOverexposure(enhanced, avgBrightness);
+            } else if (avgBrightness < 80) {
+                Log.d(TAG, "⚠️ Underexposed photo detected, applying correction...");
+                correctUnderexposure(enhanced, avgBrightness);
+            }
 
             // Step 1: Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
             applyCLAHE(enhanced);
@@ -62,6 +77,113 @@ public class ImageEnhancer {
             Log.e(TAG, "❌ Enhancement failed: " + e.getMessage(), e);
             return bitmap; // Return original on error
         }
+    }
+
+    /**
+     * Calculate average brightness of the image
+     */
+    private static double calculateAverageBrightness(Bitmap bitmap) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        long sum = 0;
+        int pixelCount = width * height;
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pixel = bitmap.getPixel(x, y);
+                int r = Color.red(pixel);
+                int g = Color.green(pixel);
+                int b = Color.blue(pixel);
+                sum += (r + g + b) / 3;
+            }
+        }
+
+        return (double) sum / pixelCount;
+    }
+
+    /**
+     * Correct overexposed photos by reducing brightness and increasing contrast
+     */
+    private static void correctOverexposure(Bitmap bitmap, double currentBrightness) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+
+        // Calculate correction factors
+        // Target brightness: 127.5 (mid-gray)
+        double targetBrightness = 127.5;
+        double brightnessRatio = targetBrightness / currentBrightness;
+
+        // Apply gamma correction to darken image
+        // gamma > 1.0 makes image darker
+        double gamma = 1.3 + (currentBrightness - 180) / 100.0; // 1.3 to 2.0 range
+        gamma = Math.min(2.0, Math.max(1.3, gamma));
+
+        Log.d(TAG, "🎯 Correction - Ratio: " + String.format("%.2f", brightnessRatio) + ", Gamma: "
+                + String.format("%.2f", gamma));
+
+        // Build gamma lookup table
+        int[] lut = new int[256];
+        for (int i = 0; i < 256; i++) {
+            lut[i] = (int) (Math.pow(i / 255.0, gamma) * 255.0 * brightnessRatio);
+            lut[i] = Math.max(0, Math.min(255, lut[i]));
+        }
+
+        // Apply correction
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pixel = bitmap.getPixel(x, y);
+                int alpha = Color.alpha(pixel);
+                int r = lut[Color.red(pixel)];
+                int g = lut[Color.green(pixel)];
+                int b = lut[Color.blue(pixel)];
+                bitmap.setPixel(x, y, Color.argb(alpha, r, g, b));
+            }
+        }
+
+        double newBrightness = calculateAverageBrightness(bitmap);
+        Log.d(TAG, "✅ Overexposure corrected: " + String.format("%.1f -> %.1f", currentBrightness, newBrightness));
+    }
+
+    /**
+     * Correct underexposed photos by increasing brightness
+     */
+    private static void correctUnderexposure(Bitmap bitmap, double currentBrightness) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+
+        // Calculate correction factors
+        double targetBrightness = 127.5;
+        double brightnessRatio = targetBrightness / currentBrightness;
+
+        // Apply gamma correction to brighten image
+        // gamma < 1.0 makes image brighter
+        double gamma = 0.7 - (80 - currentBrightness) / 100.0; // 0.5 to 0.7 range
+        gamma = Math.min(0.7, Math.max(0.5, gamma));
+
+        Log.d(TAG, "🎯 Correction - Ratio: " + String.format("%.2f", brightnessRatio) + ", Gamma: "
+                + String.format("%.2f", gamma));
+
+        // Build gamma lookup table
+        int[] lut = new int[256];
+        for (int i = 0; i < 256; i++) {
+            lut[i] = (int) (Math.pow(i / 255.0, gamma) * 255.0 * brightnessRatio);
+            lut[i] = Math.max(0, Math.min(255, lut[i]));
+        }
+
+        // Apply correction
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pixel = bitmap.getPixel(x, y);
+                int alpha = Color.alpha(pixel);
+                int r = lut[Color.red(pixel)];
+                int g = lut[Color.green(pixel)];
+                int b = lut[Color.blue(pixel)];
+                bitmap.setPixel(x, y, Color.argb(alpha, r, g, b));
+            }
+        }
+
+        double newBrightness = calculateAverageBrightness(bitmap);
+        Log.d(TAG, "✅ Underexposure corrected: " + String.format("%.1f -> %.1f", currentBrightness, newBrightness));
     }
 
     /**

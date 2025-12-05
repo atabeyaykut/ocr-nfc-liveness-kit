@@ -343,12 +343,13 @@ class NFCReaderModule: RCTEventEmitter {
         cardData["validUntil"] = passport.documentExpiryDate
         cardData["gender"] = passport.gender
         
-        // Add image if available (no enhancement - using original)
+        // Add image if available (with intelligent enhancement)
         if let image = reader.passportImage {
-            print("[NFC] 📸 Using ORIGINAL NFC photo (no enhancement applied)")
-            if let imageData = image.jpegData(compressionQuality: 0.9) {
+            print("[NFC] 🎨 Applying intelligent NFC photo enhancement...")
+            let enhancedImage = enhanceNFCPhoto(image)
+            if let imageData = enhancedImage.jpegData(compressionQuality: 0.9) {
                 cardData["photoBase64"] = imageData.base64EncodedString()
-                print("[NFC] ✅ Photo encoded: \(imageData.count) bytes")
+                print("[NFC] ✅ Enhanced photo encoded: \(imageData.count) bytes")
             }
         }
         
@@ -935,15 +936,14 @@ extension NFCReaderModule: NFCTagReaderSessionDelegate {
 extension NFCReaderModule {
     
     /**
-     * Enhance NFC passport photo with CoreImage filters
+     * Enhance NFC passport photo with intelligent preprocessing
      * 
-     * Applies:
-     * - CLAHE-like local contrast enhancement
-     * - Histogram equalization
+     * - Detects and corrects overexposure/underexposure
+     * - Applies CLAHE-like local contrast enhancement
+     * - Histogram equalization via tone curves
      * - Brightness/Contrast normalization
-     * - Gamma correction
      * 
-     * Significantly improves face recognition accuracy on low-contrast NFC photos
+     * Dramatically improves face recognition accuracy on NFC photos
      */
     private func enhanceNFCPhoto(_ image: UIImage) -> UIImage {
         guard let ciImage = CIImage(image: image) else {
@@ -954,52 +954,78 @@ extension NFCReaderModule {
         let context = CIContext(options: [.useSoftwareRenderer: false])
         var outputImage = ciImage
         
+        // Step 0: Detect and correct exposure
+        let avgBrightness = calculateAverageBrightness(ciImage: ciImage, context: context)
+        print("[NFC] 📊 Average brightness: \(String(format: "%.1f", avgBrightness))")
+        
+        if avgBrightness > 180 {
+            // Overexposed - darken and increase contrast
+            print("[NFC] ⚠️ Overexposed photo detected, correcting...")
+            if let filter = CIFilter(name: "CIExposureAdjust") {
+                let exposureAdjust = -1.0 - (avgBrightness - 180) / 75.0 // -1.0 to -2.0
+                filter.setValue(outputImage, forKey: kCIInputImageKey)
+                filter.setValue(max(-2.0, exposureAdjust), forKey: kCIInputEVKey)
+                if let result = filter.outputImage {
+                    outputImage = result
+                    print("[NFC] ✅ Exposure corrected: \(String(format: "%.2f", exposureAdjust)) EV")
+                }
+            }
+            // Apply gamma to further darken
+            if let filter = CIFilter(name: "CIGammaAdjust") {
+                filter.setValue(outputImage, forKey: kCIInputImageKey)
+                filter.setValue(1.4, forKey: "inputPower") // Darker
+                if let result = filter.outputImage {
+                    outputImage = result
+                }
+            }
+        } else if avgBrightness < 80 {
+            // Underexposed - brighten
+            print("[NFC] ⚠️ Underexposed photo detected, correcting...")
+            if let filter = CIFilter(name: "CIExposureAdjust") {
+                let exposureAdjust = 1.0 + (80 - avgBrightness) / 80.0 // 1.0 to 2.0
+                filter.setValue(outputImage, forKey: kCIInputImageKey)
+                filter.setValue(min(2.0, exposureAdjust), forKey: kCIInputEVKey)
+                if let result = filter.outputImage {
+                    outputImage = result
+                    print("[NFC] ✅ Exposure corrected: +\(String(format: "%.2f", exposureAdjust)) EV")
+                }
+            }
+        }
+        
         // Step 1: Local contrast enhancement (CLAHE-like)
-        // CILocalContrastEnhancement is similar to CLAHE
         if let filter = CIFilter(name: "CILocalContrastEnhancement") {
             filter.setValue(outputImage, forKey: kCIInputImageKey)
-            filter.setValue(0.4, forKey: "inputAmount") // Moderate enhancement
+            filter.setValue(0.5, forKey: "inputAmount") // Moderate-strong enhancement
             if let result = filter.outputImage {
                 outputImage = result
-                print("[NFC] ✅ Applied local contrast enhancement")
+                print("[NFC] ✅ Applied CLAHE-like enhancement")
             }
         }
         
-        // Step 2: Color controls (brightness/contrast)
-        if let filter = CIFilter(name: "CIColorControls") {
-            filter.setValue(outputImage, forKey: kCIInputImageKey)
-            filter.setValue(1.15, forKey: kCIInputContrastKey) // Increase contrast 15%
-            filter.setValue(1.05, forKey: kCIInputSaturationKey) // Slightly increase saturation
-            filter.setValue(0.05, forKey: kCIInputBrightnessKey) // Slightly increase brightness
-            if let result = filter.outputImage {
-                outputImage = result
-                print("[NFC] ✅ Applied color controls")
-            }
-        }
-        
-        // Step 3: Tone curve adjustment (histogram-like effect)
+        // Step 2: Histogram equalization via tone curve
         if let filter = CIFilter(name: "CIToneCurve") {
             filter.setValue(outputImage, forKey: kCIInputImageKey)
-            // Define control points: (input, output) from 0-1 range
-            // Slightly S-curve to increase mid-tone contrast
+            // S-curve to increase contrast
             filter.setValue(CIVector(x: 0.0, y: 0.0), forKey: "inputPoint0")
-            filter.setValue(CIVector(x: 0.25, y: 0.20), forKey: "inputPoint1") // Darken shadows slightly
+            filter.setValue(CIVector(x: 0.25, y: 0.15), forKey: "inputPoint1") // Darken shadows more
             filter.setValue(CIVector(x: 0.5, y: 0.5), forKey: "inputPoint2") // Keep mid-tones
-            filter.setValue(CIVector(x: 0.75, y: 0.80), forKey: "inputPoint3") // Brighten highlights
+            filter.setValue(CIVector(x: 0.75, y: 0.85), forKey: "inputPoint3") // Brighten highlights more
             filter.setValue(CIVector(x: 1.0, y: 1.0), forKey: "inputPoint4")
             if let result = filter.outputImage {
                 outputImage = result
-                print("[NFC] ✅ Applied tone curve")
+                print("[NFC] ✅ Applied histogram equalization (tone curve)")
             }
         }
         
-        // Step 4: Gamma adjustment (subtle)
-        if let filter = CIFilter(name: "CIGammaAdjust") {
+        // Step 3: Color controls (brightness/contrast normalization)
+        if let filter = CIFilter(name: "CIColorControls") {
             filter.setValue(outputImage, forKey: kCIInputImageKey)
-            filter.setValue(1.1, forKey: "inputPower") // Gamma = 1/1.1 ≈ 0.91 (slightly brighter)
+            filter.setValue(1.2, forKey: kCIInputContrastKey) // Increase contrast 20%
+            filter.setValue(1.0, forKey: kCIInputSaturationKey) // Keep saturation neutral
+            filter.setValue(0.0, forKey: kCIInputBrightnessKey) // Keep brightness neutral after exposure adjust
             if let result = filter.outputImage {
                 outputImage = result
-                print("[NFC] ✅ Applied gamma adjustment")
+                print("[NFC] ✅ Applied color normalization")
             }
         }
         
@@ -1010,7 +1036,35 @@ extension NFCReaderModule {
         }
         
         let enhanced = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
-        print("[NFC] ✅ Photo enhancement complete")
+        let newBrightness = calculateAverageBrightness(ciImage: CIImage(image: enhanced)!, context: context)
+        print("[NFC] ✅ Enhancement complete: \(String(format: "%.1f -> %.1f", avgBrightness, newBrightness))")
         return enhanced
+    }
+    
+    /**
+     * Calculate average brightness of CIImage
+     */
+    private func calculateAverageBrightness(ciImage: CIImage, context: CIContext) -> Double {
+        let extent = ciImage.extent
+        let inputImage = ciImage
+        
+        // Use CIAreaAverage to get average color
+        guard let filter = CIFilter(name: "CIAreaAverage", parameters: [
+            kCIInputImageKey: inputImage,
+            kCIInputExtentKey: CIVector(cgRect: extent)
+        ]) else {
+            return 127.5 // Default mid-gray
+        }
+        
+        guard let outputImage = filter.outputImage else {
+            return 127.5
+        }
+        
+        var bitmap = [UInt8](repeating: 0, count: 4)
+        context.render(outputImage, toBitmap: &bitmap, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBA8, colorSpace: nil)
+        
+        // Calculate brightness (average of RGB)
+        let brightness = (Double(bitmap[0]) + Double(bitmap[1]) + Double(bitmap[2])) / 3.0
+        return brightness
     }
 }
