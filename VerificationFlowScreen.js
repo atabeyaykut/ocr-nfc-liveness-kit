@@ -23,6 +23,8 @@ import NfcManager from 'react-native-nfc-manager';
 import RNFS from 'react-native-fs';
 import { LivenessModule } from './modules/liveness/LivenessWrapper';
 
+const { ImageProcessor } = require('./utils/imageProcessor');
+
 const OCRReaderModule = require('./modules/ocr/OCRReaderModule').default || require('./modules/ocr/OCRReaderModule');
 const { NFCReaderModule } = require('./modules/nfc/NFCReaderModule');
 
@@ -99,8 +101,32 @@ const formatLogValue = (value) => {
  * @param {function} addLog - Log function
  * @returns {Promise<string>} File URI (file://...)
  */
+const enhanceNfcReferencePhoto = async (fileUri, addLog) => {
+    try {
+        if (!fileUri) {
+            return fileUri;
+        }
+
+        addLog('✨ Enhancing NFC photo contrast (CLAHE simulation)...');
+        const enhancedUri = await ImageProcessor.applyAdvancedPreprocessing(fileUri);
+
+        if (enhancedUri && enhancedUri !== fileUri) {
+            addLog(`✅ NFC photo enhanced: ${enhancedUri.substring(0, 60)}...`);
+            return enhancedUri;
+        }
+
+        addLog('ℹ️ Enhancement did not modify URI, using original photo.');
+        return fileUri;
+    } catch (error) {
+        addLog(`⚠️ NFC photo enhancement failed: ${error.message}. Using original photo.`);
+    }
+    return fileUri;
+};
+
 const convertPhotoToFileUri = async (photoUri, addLog) => {
     try {
+        let normalizedUri = null;
+
         // Already a file URI
         if (photoUri.startsWith('file://')) {
             addLog('✅ Photo already in file:// format');
@@ -113,96 +139,86 @@ const convertPhotoToFileUri = async (photoUri, addLog) => {
             }
 
             // Ensure exactly 3 slashes for Android ML Kit
-            const normalizedUri = `file:///${cleanPath}`;
+            normalizedUri = `file:///${cleanPath}`;
             addLog(`🔧 Normalized to: ${normalizedUri}`);
+        } else {
+            // Log cache directory for debugging
+            addLog(`📁 Cache directory: ${RNFS.CachesDirectoryPath}`);
 
-            return normalizedUri;
+            // Data URI format (data:image/jpeg;base64,...)
+            if (photoUri.startsWith('data:image')) {
+                addLog('🔄 Converting data URI to file...');
+
+                const base64Data = photoUri.split(',')[1];
+                if (!base64Data || base64Data.length < 100) {
+                    throw new Error('Invalid data URI: base64 data too short or missing');
+                }
+
+                const timestamp = Date.now();
+                const filePath = `${RNFS.CachesDirectoryPath}/nfc_photo_${timestamp}.jpg`;
+
+                addLog(`📝 Writing to: ${filePath}`);
+                await RNFS.writeFile(filePath, base64Data, 'base64');
+
+                // Verify file was written
+                const exists = await RNFS.exists(filePath);
+                if (!exists) {
+                    throw new Error(`Failed to write file: ${filePath}`);
+                }
+
+                const stat = await RNFS.stat(filePath);
+                addLog(`✅ File written: ${stat.size} bytes`);
+
+                normalizedUri = `file:///${filePath}`;
+                addLog(`✅ Data URI converted: ${normalizedUri}`);
+            } else if (/^[A-Za-z0-9+/=]+$/.test(photoUri.substring(0, 100))) {
+                // Raw base64 (no data:image prefix)
+                addLog('🔄 Converting raw base64 to file...');
+
+                if (photoUri.length < 100) {
+                    throw new Error('Invalid base64: data too short');
+                }
+
+                const timestamp = Date.now();
+                const filePath = `${RNFS.CachesDirectoryPath}/nfc_photo_${timestamp}.jpg`;
+
+                addLog(`📝 Writing to: ${filePath}`);
+                await RNFS.writeFile(filePath, photoUri, 'base64');
+
+                // Verify file was written
+                const exists = await RNFS.exists(filePath);
+                if (!exists) {
+                    throw new Error(`Failed to write file: ${filePath}`);
+                }
+
+                const stat = await RNFS.stat(filePath);
+                addLog(`✅ File written: ${stat.size} bytes`);
+
+                normalizedUri = `file:///${filePath}`;
+                addLog(`✅ Base64 converted: ${normalizedUri}`);
+            } else if (photoUri.startsWith('/')) {
+                // Absolute path (/data/user/0/...)
+                addLog('🔄 Converting absolute path to file URI...');
+
+                // Verify file exists
+                const exists = await RNFS.exists(photoUri);
+                if (!exists) {
+                    throw new Error(`File does not exist: ${photoUri}`);
+                }
+
+                normalizedUri = `file:///${photoUri}`;
+            } else {
+                throw new Error(`Unsupported photo format: ${photoUri.substring(0, 20)}...`);
+            }
         }
 
-        // Log cache directory for debugging
-        addLog(`📁 Cache directory: ${RNFS.CachesDirectoryPath}`);
-
-        // Data URI format (data:image/jpeg;base64,...)
-        if (photoUri.startsWith('data:image')) {
-            addLog('🔄 Converting data URI to file...');
-
-            const base64Data = photoUri.split(',')[1];
-            if (!base64Data || base64Data.length < 100) {
-                throw new Error('Invalid data URI: base64 data too short or missing');
-            }
-
-            const timestamp = Date.now();
-            const filePath = `${RNFS.CachesDirectoryPath}/nfc_photo_${timestamp}.jpg`;
-
-            addLog(`📝 Writing to: ${filePath}`);
-            await RNFS.writeFile(filePath, base64Data, 'base64');
-
-            // Verify file was written
-            const exists = await RNFS.exists(filePath);
-            if (!exists) {
-                throw new Error(`Failed to write file: ${filePath}`);
-            }
-
-            const stat = await RNFS.stat(filePath);
-            addLog(`✅ File written: ${stat.size} bytes`);
-
-            // Android ML Kit needs file:/// (3 slashes) for absolute paths
-            const fileUri = `file:///${filePath}`;
-            addLog(`✅ Data URI converted: ${fileUri}`);
-
-            return fileUri;
-        }
-
-        // Raw base64 (no data:image prefix)
-        if (/^[A-Za-z0-9+/=]+$/.test(photoUri.substring(0, 100))) {
-            addLog('🔄 Converting raw base64 to file...');
-
-            if (photoUri.length < 100) {
-                throw new Error('Invalid base64: data too short');
-            }
-
-            const timestamp = Date.now();
-            const filePath = `${RNFS.CachesDirectoryPath}/nfc_photo_${timestamp}.jpg`;
-
-            addLog(`📝 Writing to: ${filePath}`);
-            await RNFS.writeFile(filePath, photoUri, 'base64');
-
-            // Verify file was written
-            const exists = await RNFS.exists(filePath);
-            if (!exists) {
-                throw new Error(`Failed to write file: ${filePath}`);
-            }
-
-            const stat = await RNFS.stat(filePath);
-            addLog(`✅ File written: ${stat.size} bytes`);
-
-            // Android ML Kit needs file:/// (3 slashes) for absolute paths
-            const fileUri = `file:///${filePath}`;
-            addLog(`✅ Base64 converted: ${fileUri}`);
-
-            return fileUri;
-        }
-
-        // Absolute path (/data/user/0/...)
-        if (photoUri.startsWith('/')) {
-            addLog('🔄 Converting absolute path to file URI...');
-
-            // Verify file exists
-            const exists = await RNFS.exists(photoUri);
-            if (!exists) {
-                throw new Error(`File does not exist: ${photoUri}`);
-            }
-
-            // Android ML Kit needs file:/// (3 slashes) for absolute paths
-            return `file:///${photoUri}`;
-        }
-
-        // Unknown format
-        throw new Error(`Unsupported photo format: ${photoUri.substring(0, 50)}`);
-
+        // REMOVED: JS-side enhancement is redundant with native enhancement
+        // Native Android/iOS already applies CLAHE and histogram equalization
+        // Double preprocessing can degrade image quality and face recognition
+        addLog('ℹ️ Using native-enhanced NFC photo (no JS preprocessing)');
+        return normalizedUri;
     } catch (error) {
-        addLog(`❌ Photo conversion error: ${error.message}`);
-        addLog(`❌ Error stack: ${error.stack?.split('\n')[0]}`);
+        addLog(`❌ convertPhotoToFileUri error: ${error.message}`);
         throw error;
     }
 };
