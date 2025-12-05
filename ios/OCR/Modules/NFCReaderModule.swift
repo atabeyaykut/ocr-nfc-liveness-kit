@@ -343,13 +343,12 @@ class NFCReaderModule: RCTEventEmitter {
         cardData["validUntil"] = passport.documentExpiryDate
         cardData["gender"] = passport.gender
         
-        // Add image if available (with enhancement)
+        // Add image if available (no enhancement - using original)
         if let image = reader.passportImage {
-            print("[NFC] 🎨 Enhancing passport photo with CLAHE and histogram equalization...")
-            let enhanced = enhanceNFCPhoto(image)
-            if let imageData = enhanced.jpegData(compressionQuality: 0.8) {
+            print("[NFC] 📸 Using ORIGINAL NFC photo (no enhancement applied)")
+            if let imageData = image.jpegData(compressionQuality: 0.9) {
                 cardData["photoBase64"] = imageData.base64EncodedString()
-                print("[NFC] ✅ Enhanced photo encoded: \(imageData.count) bytes")
+                print("[NFC] ✅ Photo encoded: \(imageData.count) bytes")
             }
         }
         
