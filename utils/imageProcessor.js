@@ -598,11 +598,23 @@ class ImageProcessor {
     try {
       Logger.info('Applying advanced preprocessing (CLAHE simulation)');
 
+      // CRITICAL FIX: ImageResizer no longer accepts null width/height
+      // Get image dimensions first
+      const dimensions = await this.getImageDimensions(nativePath);
+
+      if (!dimensions || !dimensions.width || !dimensions.height) {
+        Logger.warn('Could not get image dimensions, skipping preprocessing');
+        return imageUri;
+      }
+
+      Logger.info(`Image dimensions: ${dimensions.width}x${dimensions.height}`);
+
       // Apply contrast enhancement (simulating CLAHE effect)
+      // Use original dimensions to preserve quality
       const enhanced = await ImageResizer.createResizedImage(
         nativePath,
-        null, // Keep original width
-        null, // Keep original height
+        dimensions.width,  // Keep original width
+        dimensions.height, // Keep original height
         'JPEG',
         95, // Higher quality
         0,
