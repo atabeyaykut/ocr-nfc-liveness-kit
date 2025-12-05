@@ -324,20 +324,10 @@ class FaceRecognitionService {
             console.log('[FaceRecognition][DEBUG] 📊 Raw pixel data sample (first 10 RGBA values):');
             console.log(`[FaceRecognition][DEBUG]   ${Array.from(data.slice(0, 40)).join(', ')}`);
 
-            // STEP 4.5: Apply gamma correction and white balance normalization
-            // This ensures consistent histogram profiles across all photos (NFC + Selfie)
-            // Critical for FaceNet embedding quality!
-            console.log('[FaceRecognition] 🎨 Applying gamma correction and white balance...');
-            console.log('[FaceRecognition][DEBUG] ⚙️ Gamma value: 1.0 (neutral)');
-            this.applyGammaCorrectionInPlace(data, width, height, 1.0); // γ = 1.0 (neutral, adjustable)
-            console.log('[FaceRecognition][DEBUG] ⚙️ Applying white balance normalization...');
-            this.applyWhiteBalanceInPlace(data, width, height);
-            console.log('[FaceRecognition] ✅ Image normalization complete');
-
-            // Log post-normalization statistics
-            const postNormSample = Array.from(data.slice(0, 40));
-            console.log('[FaceRecognition][DEBUG] 📊 Post-normalization sample (first 10 RGBA):');
-            console.log(`[FaceRecognition][DEBUG]   ${postNormSample.join(', ')}`);
+            // STEP 4.5: No preprocessing - use raw pixel values
+            // Standard FaceNet preprocessing: normalize to [-1, 1] only
+            // Formula: (pixel - 127.5) / 128.0 = (pixel / 127.5) - 1
+            console.log('[FaceRecognition] ℹ️ Using standard FaceNet preprocessing (no gamma/white balance)');
 
             // STEP 5: Validate decoded data
             if (!(data instanceof Uint8Array)) {
