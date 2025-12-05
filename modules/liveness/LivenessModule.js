@@ -575,10 +575,29 @@ class LivenessDetectionModule {
 
     capturePhotoForComparison = async (photoUri, faceData) => {
         try {
+            console.log('[LivenessModule] ========================================');
             console.log('[LivenessModule] 📸 capturePhotoForComparison called');
             console.log('[LivenessModule] 📸 Photo URI:', photoUri?.substring(0, 80) + '...');
             console.log('[LivenessModule] 📸 Face comparison enabled:', this.enableFaceComparison);
             console.log('[LivenessModule] 📸 Reference face loaded:', !!this.referenceFaceData);
+
+            // Detailed input validation
+            console.log('[LivenessModule][DEBUG] 🔍 Input validation:');
+            console.log(`[LivenessModule][DEBUG]   photoUri type: ${typeof photoUri}`);
+            console.log(`[LivenessModule][DEBUG]   photoUri length: ${photoUri?.length || 0}`);
+            console.log(`[LivenessModule][DEBUG]   faceData type: ${typeof faceData}`);
+            console.log(`[LivenessModule][DEBUG]   faceData keys: ${faceData ? Object.keys(faceData).join(', ') : 'null'}`);
+
+            if (!photoUri || typeof photoUri !== 'string') {
+                console.error('[LivenessModule] ❌ Invalid photo URI provided');
+                return;
+            }
+
+            if (!faceData || !faceData.frame) {
+                console.error('[LivenessModule] ❌ Invalid face data provided');
+                console.error('[LivenessModule][DEBUG] faceData:', JSON.stringify(faceData));
+                return;
+            }
 
             if (!this.enableFaceComparison || !this.referenceFaceData) {
                 console.log('[LivenessModule] ⚠️ Skipping photo capture (comparison disabled or no reference)');
@@ -586,8 +605,9 @@ class LivenessDetectionModule {
             }
 
             console.log('[LivenessModule] 🔄 Calculating face similarity...');
-            console.log('[LivenessModule] 🔄 Reference face frame:', this.referenceFaceData.frame);
-            console.log('[LivenessModule] 🔄 Live face frame:', faceData.frame);
+            console.log('[LivenessModule][DEBUG] � Reference photo URI:', this.referencePhotoUri?.substring(0, 60) + '...');
+            console.log('[LivenessModule][DEBUG] 📋 Reference face frame:', JSON.stringify(this.referenceFaceData.frame));
+            console.log('[LivenessModule][DEBUG] � Live face frame:', JSON.stringify(faceData.frame));
 
             // Calculate similarity (async if using FaceNet)
             const similarity = await this.compareFaces(
@@ -661,16 +681,28 @@ class LivenessDetectionModule {
 
                 // Use FaceNet if initialized
                 if (this.faceNetInitialized) {
+                    console.log('[LivenessModule] ========================================');
                     console.log('[LivenessModule] 🤖 Using FaceNet ML-based comparison...');
+                    console.log('[LivenessModule][DEBUG] 📸 Input validation:');
+                    console.log(`[LivenessModule][DEBUG]   Ref URI: ${refPhotoUri?.substring(0, 50)}...`);
+                    console.log(`[LivenessModule][DEBUG]   Live URI: ${livePhotoUri?.substring(0, 50)}...`);
+                    console.log(`[LivenessModule][DEBUG]   Ref frame: ${JSON.stringify(refFaceData.frame)}`);
+                    console.log(`[LivenessModule][DEBUG]   Live frame: ${JSON.stringify(liveFaceData.frame)}`);
+
+                    const startTime = Date.now();
                     const result = await faceRecognitionService.compareFaces(
                         refPhotoUri,
                         refFaceData.frame,
                         livePhotoUri,
                         liveFaceData.frame
                     );
+                    const elapsed = Date.now() - startTime;
 
+                    console.log('[LivenessModule] ========================================');
                     console.log(`[LivenessModule] 🤖 FaceNet similarity: ${(result.similarity * 100).toFixed(2)}%`);
                     console.log(`[LivenessModule] 🤖 Match: ${result.isMatch ? '✅' : '❌'} (threshold: ${(result.threshold * 100)}%)`);
+                    console.log(`[LivenessModule][DEBUG] ⌚ Processing time: ${elapsed}ms`);
+                    console.log('[LivenessModule] ========================================');
 
                     return result.similarity;
                 }
