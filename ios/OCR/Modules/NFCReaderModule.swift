@@ -343,10 +343,13 @@ class NFCReaderModule: RCTEventEmitter {
         cardData["validUntil"] = passport.documentExpiryDate
         cardData["gender"] = passport.gender
         
-        // Add image if available
+        // Add image if available (with enhancement)
         if let image = reader.passportImage {
-            if let imageData = image.jpegData(compressionQuality: 0.8) {
+            print("[NFC] 🎨 Enhancing passport photo with CLAHE and histogram equalization...")
+            let enhanced = enhanceNFCPhoto(image)
+            if let imageData = enhanced.jpegData(compressionQuality: 0.8) {
                 cardData["photoBase64"] = imageData.base64EncodedString()
+                print("[NFC] ✅ Enhanced photo encoded: \(imageData.count) bytes")
             }
         }
         
@@ -924,5 +927,91 @@ extension NFCReaderModule: NFCTagReaderSessionDelegate {
         
         // Process the first detected tag
         processTag(firstTag)
+    }
+}
+
+// MARK: - Image Enhancement Extension
+
+@available(iOS 13.0, *)
+extension NFCReaderModule {
+    
+    /**
+     * Enhance NFC passport photo with CoreImage filters
+     * 
+     * Applies:
+     * - CLAHE-like local contrast enhancement
+     * - Histogram equalization
+     * - Brightness/Contrast normalization
+     * - Gamma correction
+     * 
+     * Significantly improves face recognition accuracy on low-contrast NFC photos
+     */
+    private func enhanceNFCPhoto(_ image: UIImage) -> UIImage {
+        guard let ciImage = CIImage(image: image) else {
+            print("[NFC] ⚠️ Could not create CIImage, returning original")
+            return image
+        }
+        
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        var outputImage = ciImage
+        
+        // Step 1: Local contrast enhancement (CLAHE-like)
+        // CILocalContrastEnhancement is similar to CLAHE
+        if let filter = CIFilter(name: "CILocalContrastEnhancement") {
+            filter.setValue(outputImage, forKey: kCIInputImageKey)
+            filter.setValue(0.4, forKey: "inputAmount") // Moderate enhancement
+            if let result = filter.outputImage {
+                outputImage = result
+                print("[NFC] ✅ Applied local contrast enhancement")
+            }
+        }
+        
+        // Step 2: Color controls (brightness/contrast)
+        if let filter = CIFilter(name: "CIColorControls") {
+            filter.setValue(outputImage, forKey: kCIInputImageKey)
+            filter.setValue(1.15, forKey: kCIInputContrastKey) // Increase contrast 15%
+            filter.setValue(1.05, forKey: kCIInputSaturationKey) // Slightly increase saturation
+            filter.setValue(0.05, forKey: kCIInputBrightnessKey) // Slightly increase brightness
+            if let result = filter.outputImage {
+                outputImage = result
+                print("[NFC] ✅ Applied color controls")
+            }
+        }
+        
+        // Step 3: Tone curve adjustment (histogram-like effect)
+        if let filter = CIFilter(name: "CIToneCurve") {
+            filter.setValue(outputImage, forKey: kCIInputImageKey)
+            // Define control points: (input, output) from 0-1 range
+            // Slightly S-curve to increase mid-tone contrast
+            filter.setValue(CIVector(x: 0.0, y: 0.0), forKey: "inputPoint0")
+            filter.setValue(CIVector(x: 0.25, y: 0.20), forKey: "inputPoint1") // Darken shadows slightly
+            filter.setValue(CIVector(x: 0.5, y: 0.5), forKey: "inputPoint2") // Keep mid-tones
+            filter.setValue(CIVector(x: 0.75, y: 0.80), forKey: "inputPoint3") // Brighten highlights
+            filter.setValue(CIVector(x: 1.0, y: 1.0), forKey: "inputPoint4")
+            if let result = filter.outputImage {
+                outputImage = result
+                print("[NFC] ✅ Applied tone curve")
+            }
+        }
+        
+        // Step 4: Gamma adjustment (subtle)
+        if let filter = CIFilter(name: "CIGammaAdjust") {
+            filter.setValue(outputImage, forKey: kCIInputImageKey)
+            filter.setValue(1.1, forKey: "inputPower") // Gamma = 1/1.1 ≈ 0.91 (slightly brighter)
+            if let result = filter.outputImage {
+                outputImage = result
+                print("[NFC] ✅ Applied gamma adjustment")
+            }
+        }
+        
+        // Convert back to UIImage
+        guard let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else {
+            print("[NFC] ⚠️ Could not create CGImage, returning original")
+            return image
+        }
+        
+        let enhanced = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+        print("[NFC] ✅ Photo enhancement complete")
+        return enhanced
     }
 }

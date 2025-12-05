@@ -240,8 +240,11 @@ public class NFCPassportReaderJMRTD {
      * Convert any image format (especially JPEG2000) to standard JPEG
      * using Android's BitmapFactory and Bitmap compression
      * 
+     * ENHANCEMENT: Applies CLAHE and histogram equalization to improve
+     * contrast and brightness for better face recognition accuracy
+     * 
      * @param imageData Raw image bytes
-     * @return JPEG bytes or null if conversion fails
+     * @return Enhanced JPEG bytes or null if conversion fails
      */
     private static byte[] convertToJpeg(byte[] imageData) {
         try {
@@ -256,27 +259,43 @@ public class NFCPassportReaderJMRTD {
 
             Log.d(TAG, "✓ Bitmap decoded: " + bitmap.getWidth() + "x" + bitmap.getHeight() + "px");
 
+            // ENHANCEMENT: Apply CLAHE + Histogram Equalization
+            // NFC photos often have low contrast due to compression and lighting
+            // This significantly improves face recognition accuracy
+            Log.d(TAG, "🎨 Enhancing NFC photo with CLAHE and histogram equalization...");
+            Bitmap enhanced = ImageEnhancer.enhanceNFCPhoto(bitmap);
+
+            if (enhanced == null) {
+                Log.w(TAG, "⚠️ Enhancement failed, using original bitmap");
+                enhanced = bitmap;
+            } else {
+                // Recycle original if enhancement created a new bitmap
+                if (enhanced != bitmap) {
+                    bitmap.recycle();
+                }
+            }
+
             // Compress to JPEG with high quality (90%)
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            boolean success = bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream);
+            boolean success = enhanced.compress(Bitmap.CompressFormat.JPEG, 90, outputStream);
 
             if (!success) {
                 Log.w(TAG, "⚠️ Bitmap.compress failed");
-                bitmap.recycle();
+                enhanced.recycle();
                 return null;
             }
 
             byte[] jpegData = outputStream.toByteArray();
-            Log.d(TAG, "✓ JPEG compressed: " + jpegData.length + " bytes");
+            Log.d(TAG, "✓ Enhanced JPEG compressed: " + jpegData.length + " bytes");
 
             // Clean up
-            bitmap.recycle();
+            enhanced.recycle();
             outputStream.close();
 
             return jpegData;
 
         } catch (Exception e) {
-            Log.e(TAG, "❌ Image conversion error: " + e.getMessage());
+            Log.e(TAG, "❌ Image conversion/enhancement error: " + e.getMessage());
             return null;
         }
     }

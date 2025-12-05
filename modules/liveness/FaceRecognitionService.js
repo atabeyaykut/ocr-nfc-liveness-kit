@@ -12,7 +12,7 @@ import { InferenceSession, Tensor } from 'onnxruntime-react-native';
 import RNFS from 'react-native-fs';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { decode as decodeJpeg } from 'jpeg-js';
-import { Platform } from 'react-native';
+import { Platform, Image } from 'react-native';
 
 const MODEL_INPUT_SIZE = 160; // FaceNet input size
 const EMBEDDING_SIZE = 128; // FaceNet output dimension (standard FaceNet)
@@ -179,17 +179,57 @@ class FaceRecognitionService {
                     const imageUriForCrop = cleanPath.startsWith('file://') ? cleanPath : `file://${cleanPath}`;
                     console.log(`[FaceRecognition][DEBUG] 📁 Crop input URI: ${imageUriForCrop.substring(0, 60)}...`);
 
-                    const croppedUri = await ImageEditor.cropImage(imageUriForCrop, {
-                        offset: { x: expandedLeft, y: expandedTop },
-                        size: { width: expandedWidth, height: expandedHeight },
-                    });
-
-                    // BUG FIX: ImageEditor may return undefined if crop fails silently
-                    if (!croppedUri) {
-                        throw new Error('ImageEditor.cropImage returned undefined (package not installed or API error)');
+                    let imageWidth;
+                    let imageHeight;
+                    try {
+                        ({ width: imageWidth, height: imageHeight } = await new Promise((resolve, reject) => {
+                            Image.getSize(
+                                imageUriForCrop,
+                                (width, height) => resolve({ width, height }),
+                                error => reject(error)
+                            );
+                        }));
+                        console.log(`[FaceRecognition][DEBUG] 🖼️ Source image size: ${imageWidth}x${imageHeight}`);
+                    } catch (dimError) {
+                        console.log('[FaceRecognition][WARN] ⚠️ Could not read image dimensions, using expanded region as-is:', dimError?.message || dimError);
                     }
 
-                    processPath = croppedUri.replace(/^file:\/\//, '');
+                    const cropWidth = imageWidth
+                        ? Math.min(expandedWidth, Math.max(1, imageWidth - expandedLeft))
+                        : expandedWidth;
+                    const cropHeight = imageHeight
+                        ? Math.min(expandedHeight, Math.max(1, imageHeight - expandedTop))
+                        : expandedHeight;
+
+                    if (cropWidth <= 0 || cropHeight <= 0) {
+                        throw new Error('Calculated crop region is invalid (non-positive size after clamping)');
+                    }
+
+                    if (imageWidth && imageHeight) {
+                        console.log('[FaceRecognition][DEBUG] 📐 Clamped crop region within bounds:');
+                        console.log(`[FaceRecognition][DEBUG]   Final: ${cropWidth}x${cropHeight} @ (${expandedLeft}, ${expandedTop}) of ${imageWidth}x${imageHeight}`);
+                    }
+
+                    const cropResult = await ImageEditor.cropImage(imageUriForCrop, {
+                        offset: { x: expandedLeft, y: expandedTop },
+                        size: { width: cropWidth, height: cropHeight },
+                    });
+
+                    const cropResultType = typeof cropResult;
+                    console.log(`[FaceRecognition][DEBUG] 📁 Crop result type: ${cropResultType}`);
+
+                    // Some versions return string, others return { uri } / { path }
+                    const normalizedCroppedUri =
+                        cropResultType === 'string'
+                            ? cropResult
+                            : (cropResult?.uri || cropResult?.path || cropResult?.url);
+
+                    if (!normalizedCroppedUri || typeof normalizedCroppedUri !== 'string') {
+                        const serializedResult = cropResultType === 'object' ? JSON.stringify(cropResult) : String(cropResult);
+                        throw new Error(`ImageEditor.cropImage returned unexpected value (${cropResultType}): ${serializedResult}`);
+                    }
+
+                    processPath = normalizedCroppedUri.replace(/^file:\/\//, '');
                     needsCleanup = true;
                     console.log('[FaceRecognition] ✅ Face cropped successfully');
                     console.log(`[FaceRecognition][DEBUG] 📁 Cropped file: ${processPath.substring(0, 50)}...`);
@@ -269,6 +309,14 @@ class FaceRecognitionService {
             console.log(`[FaceRecognition] ✅ Decoded: ${width}x${height}, ${data.length} bytes`);
             console.log('[FaceRecognition][DEBUG] 📊 Raw pixel data sample (first 10 RGBA values):');
             console.log(`[FaceRecognition][DEBUG]   ${Array.from(data.slice(0, 40)).join(', ')}`);
+
+            // STEP 4.5: Apply gamma correction and white balance normalization
+            // This ensures consistent histogram profiles across all photos (NFC + Selfie)
+            // Critical for FaceNet embedding quality!
+            console.log('[FaceRecognition] 🎨 Applying gamma correction and white balance...');
+            this.applyGammaCorrectionInPlace(data, width, height, 1.0); // γ = 1.0 (neutral, adjustable)
+            this.applyWhiteBalanceInPlace(data, width, height);
+            console.log('[FaceRecognition] ✅ Image normalization complete');
 
             // STEP 5: Validate decoded data
             if (!(data instanceof Uint8Array)) {
@@ -670,6 +718,131 @@ class FaceRecognitionService {
             console.error('[FaceRecognition] ❌ Face comparison failed:', error);
             throw error;
         }
+    }
+
+    /**
+     * Apply gamma correction to image data (in-place)
+     * 
+     * Gamma correction adjusts pixel intensities non-linearly.
+     * - γ < 1.0: Brightens image (boosts shadows)
+     * - γ = 1.0: No change
+     * - γ > 1.0: Darkens image (boosts highlights)
+     * 
+     * Formula: output = 255 * (input/255)^γ
+     * 
+     * @param {Uint8Array} data - RGBA pixel data (modified in-place)
+     * @param {number} width - Image width
+     * @param {number} height - Image height
+     * @param {number} gamma - Gamma value (typically 0.8 - 1.2)
+     */
+    applyGammaCorrectionInPlace(data, width, height, gamma) {
+        if (gamma === 1.0) {
+            console.log('[FaceRecognition] γ=1.0, skipping gamma correction');
+            return; // No correction needed
+        }
+
+        // Build lookup table for performance (256 values)
+        const lut = new Uint8Array(256);
+        for (let i = 0; i < 256; i++) {
+            lut[i] = Math.round(255 * Math.pow(i / 255, gamma));
+        }
+
+        console.log(`[FaceRecognition] 🎨 Applying gamma correction: γ=${gamma.toFixed(2)}`);
+
+        // Apply LUT to RGB channels (skip alpha)
+        const pixelCount = width * height;
+        for (let i = 0; i < pixelCount; i++) {
+            const idx = i * 4;
+            data[idx] = lut[data[idx]];         // R
+            data[idx + 1] = lut[data[idx + 1]]; // G
+            data[idx + 2] = lut[data[idx + 2]]; // B
+            // data[idx + 3] = alpha (unchanged)
+        }
+
+        console.log('[FaceRecognition] ✅ Gamma correction applied');
+    }
+
+    /**
+     * Apply white balance normalization (in-place)
+     * 
+     * Normalizes each RGB channel independently to have:
+     * - Mean ≈ 127.5 (mid-gray)
+     * - Standard deviation ≈ consistent across channels
+     * 
+     * This ensures consistent color distribution across all images,
+     * improving FaceNet's ability to match faces under different lighting.
+     * 
+     * @param {Uint8Array} data - RGBA pixel data (modified in-place)
+     * @param {number} width - Image width
+     * @param {number} height - Image height
+     */
+    applyWhiteBalanceInPlace(data, width, height) {
+        console.log('[FaceRecognition] ⚖️ Applying white balance normalization...');
+
+        const pixelCount = width * height;
+
+        // Calculate channel means
+        let sumR = 0, sumG = 0, sumB = 0;
+        for (let i = 0; i < pixelCount; i++) {
+            const idx = i * 4;
+            sumR += data[idx];
+            sumG += data[idx + 1];
+            sumB += data[idx + 2];
+        }
+
+        const meanR = sumR / pixelCount;
+        const meanG = sumG / pixelCount;
+        const meanB = sumB / pixelCount;
+
+        console.log(`[FaceRecognition][DEBUG] 📊 Channel means: R=${meanR.toFixed(1)}, G=${meanG.toFixed(1)}, B=${meanB.toFixed(1)}`);
+
+        // Calculate channel standard deviations
+        let sumSqR = 0, sumSqG = 0, sumSqB = 0;
+        for (let i = 0; i < pixelCount; i++) {
+            const idx = i * 4;
+            sumSqR += Math.pow(data[idx] - meanR, 2);
+            sumSqG += Math.pow(data[idx + 1] - meanG, 2);
+            sumSqB += Math.pow(data[idx + 2] - meanB, 2);
+        }
+
+        const stdR = Math.sqrt(sumSqR / pixelCount);
+        const stdG = Math.sqrt(sumSqG / pixelCount);
+        const stdB = Math.sqrt(sumSqB / pixelCount);
+
+        console.log(`[FaceRecognition][DEBUG] 📊 Channel std: R=${stdR.toFixed(1)}, G=${stdG.toFixed(1)}, B=${stdB.toFixed(1)}`);
+
+        // Target values
+        const targetMean = 127.5; // Mid-gray
+        const targetStd = 50.0;   // Moderate spread
+
+        // Calculate normalization parameters for each channel
+        // Formula: output = (input - mean) * (targetStd / std) + targetMean
+        const scaleR = stdR > 0 ? targetStd / stdR : 1.0;
+        const scaleG = stdG > 0 ? targetStd / stdG : 1.0;
+        const scaleB = stdB > 0 ? targetStd / stdB : 1.0;
+
+        console.log(`[FaceRecognition][DEBUG] 🎯 Normalization scales: R=${scaleR.toFixed(2)}, G=${scaleG.toFixed(2)}, B=${scaleB.toFixed(2)}`);
+
+        // Apply normalization (in-place)
+        for (let i = 0; i < pixelCount; i++) {
+            const idx = i * 4;
+
+            // R channel
+            let r = (data[idx] - meanR) * scaleR + targetMean;
+            data[idx] = Math.max(0, Math.min(255, Math.round(r)));
+
+            // G channel
+            let g = (data[idx + 1] - meanG) * scaleG + targetMean;
+            data[idx + 1] = Math.max(0, Math.min(255, Math.round(g)));
+
+            // B channel
+            let b = (data[idx + 2] - meanB) * scaleB + targetMean;
+            data[idx + 2] = Math.max(0, Math.min(255, Math.round(b)));
+
+            // Alpha unchanged
+        }
+
+        console.log('[FaceRecognition] ✅ White balance normalization complete');
     }
 
     /**
