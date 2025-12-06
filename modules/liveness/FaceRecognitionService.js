@@ -113,9 +113,9 @@ class FaceRecognitionService {
 
     /**
      * Apply adaptive gamma correction based on image brightness
-     * - Overexposed (mean > 180): gamma > 1.0 to darken and recover highlights
-     * - Underexposed (mean < 80): gamma < 1.0 to brighten and recover shadows
-     * - Normal (80-180): no gamma correction needed
+     * - Overexposed (mean > 140): gamma > 1.0 to darken and recover highlights
+     * - Underexposed (mean < 110): gamma < 1.0 to brighten and recover shadows
+     * - Normal (110-140): no gamma correction needed
      * 
      * @param {Uint8Array} data - RGBA pixel data
      * @param {number} width - Image width
@@ -188,93 +188,6 @@ class FaceRecognitionService {
         console.log(`[FaceRecognition][DEBUG] ✅ After gamma: ${correctedMean.toFixed(2)}/255 (change: ${(correctedMean - overallMean).toFixed(2)})`);
 
         return correctedData;
-    }
-
-    /**
-     * Apply per-channel mean/std normalization (ImageNet-style)
-     * This normalizes brightness and contrast more effectively than histogram equalization
-     * Brings all images to same brightness/contrast distribution
-     * 
-     * @param {Uint8Array} data - RGBA pixel data
-     * @param {number} width - Image width
-     * @param {number} height - Image height
-     * @returns {Uint8Array} Normalized RGBA pixel data
-     */
-    applyMeanStdNormalization(data, width, height) {
-        const imageSize = width * height;
-        const normalizedData = new Uint8Array(data.length);
-
-        console.log('[FaceRecognition][DEBUG] 📊 Calculating per-channel statistics...');
-
-        // Process each channel (R, G, B) separately
-        for (let channel = 0; channel < 3; channel++) {
-            // Calculate mean
-            let sum = 0;
-            for (let i = 0; i < imageSize; i++) {
-                const pixelIndex = i * 4 + channel;
-                sum += data[pixelIndex];
-            }
-            const mean = sum / imageSize;
-
-            // Calculate standard deviation
-            let varianceSum = 0;
-            for (let i = 0; i < imageSize; i++) {
-                const pixelIndex = i * 4 + channel;
-                const diff = data[pixelIndex] - mean;
-                varianceSum += diff * diff;
-            }
-            const std = Math.sqrt(varianceSum / imageSize);
-
-            // Prevent division by zero
-            const safeStd = std < 1.0 ? 1.0 : std;
-
-            console.log(`[FaceRecognition][DEBUG]   Channel ${channel}: mean=${mean.toFixed(2)}, std=${std.toFixed(2)}`);
-
-            // Normalize: (pixel - mean) / std, then scale to [0, 255]
-            // Target mean=128, std=50 (moderate contrast)
-            const targetMean = 128;
-            const targetStd = 50;
-
-            for (let i = 0; i < imageSize; i++) {
-                const pixelIndex = i * 4 + channel;
-                const normalized = ((data[pixelIndex] - mean) / safeStd) * targetStd + targetMean;
-                // Clamp to [0, 255]
-                normalizedData[pixelIndex] = Math.max(0, Math.min(255, Math.round(normalized)));
-            }
-        }
-
-        // Copy alpha channel as-is
-        for (let i = 0; i < imageSize; i++) {
-            normalizedData[i * 4 + 3] = data[i * 4 + 3];
-        }
-
-        console.log('[FaceRecognition][DEBUG] ✅ Per-channel normalization complete');
-
-        // VERIFICATION: Check if normalization worked correctly
-        console.log('[FaceRecognition][DEBUG] 🔍 Verifying normalization results...');
-        for (let channel = 0; channel < 3; channel++) {
-            let sum = 0;
-            for (let i = 0; i < imageSize; i++) {
-                sum += normalizedData[i * 4 + channel];
-            }
-            const verifyMean = sum / imageSize;
-
-            let varianceSum = 0;
-            for (let i = 0; i < imageSize; i++) {
-                const diff = normalizedData[i * 4 + channel] - verifyMean;
-                varianceSum += diff * diff;
-            }
-            const verifyStd = Math.sqrt(varianceSum / imageSize);
-
-            const meanError = Math.abs(verifyMean - 128);
-            const stdError = Math.abs(verifyStd - 50);
-            const meanOk = meanError < 1.0 ? '✅' : '⚠️';
-            const stdOk = stdError < 2.0 ? '✅' : '⚠️';
-
-            console.log(`[FaceRecognition][DEBUG]   Channel ${channel}: mean=${verifyMean.toFixed(2)} ${meanOk}, std=${verifyStd.toFixed(2)} ${stdOk}`);
-        }
-
-        return normalizedData;
     }
 
     /**
@@ -995,89 +908,6 @@ class FaceRecognitionService {
         }
 
         console.log('[FaceRecognition] ✅ Gamma correction applied');
-    }
-
-    /**
-     * Apply white balance normalization (in-place)
-     * 
-     * Normalizes each RGB channel independently to have:
-     * - Mean ≈ 127.5 (mid-gray)
-     * - Standard deviation ≈ consistent across channels
-     * 
-     * This ensures consistent color distribution across all images,
-     * improving FaceNet's ability to match faces under different lighting.
-     * 
-     * @param {Uint8Array} data - RGBA pixel data (modified in-place)
-     * @param {number} width - Image width
-     * @param {number} height - Image height
-     */
-    applyWhiteBalanceInPlace(data, width, height) {
-        console.log('[FaceRecognition] ⚖️ Applying white balance normalization...');
-
-        const pixelCount = width * height;
-
-        // Calculate channel means
-        let sumR = 0, sumG = 0, sumB = 0;
-        for (let i = 0; i < pixelCount; i++) {
-            const idx = i * 4;
-            sumR += data[idx];
-            sumG += data[idx + 1];
-            sumB += data[idx + 2];
-        }
-
-        const meanR = sumR / pixelCount;
-        const meanG = sumG / pixelCount;
-        const meanB = sumB / pixelCount;
-
-        console.log(`[FaceRecognition][DEBUG] 📊 Channel means: R=${meanR.toFixed(1)}, G=${meanG.toFixed(1)}, B=${meanB.toFixed(1)}`);
-
-        // Calculate channel standard deviations
-        let sumSqR = 0, sumSqG = 0, sumSqB = 0;
-        for (let i = 0; i < pixelCount; i++) {
-            const idx = i * 4;
-            sumSqR += Math.pow(data[idx] - meanR, 2);
-            sumSqG += Math.pow(data[idx + 1] - meanG, 2);
-            sumSqB += Math.pow(data[idx + 2] - meanB, 2);
-        }
-
-        const stdR = Math.sqrt(sumSqR / pixelCount);
-        const stdG = Math.sqrt(sumSqG / pixelCount);
-        const stdB = Math.sqrt(sumSqB / pixelCount);
-
-        console.log(`[FaceRecognition][DEBUG] 📊 Channel std: R=${stdR.toFixed(1)}, G=${stdG.toFixed(1)}, B=${stdB.toFixed(1)}`);
-
-        // Target values
-        const targetMean = 127.5; // Mid-gray
-        const targetStd = 50.0;   // Moderate spread
-
-        // Calculate normalization parameters for each channel
-        // Formula: output = (input - mean) * (targetStd / std) + targetMean
-        const scaleR = stdR > 0 ? targetStd / stdR : 1.0;
-        const scaleG = stdG > 0 ? targetStd / stdG : 1.0;
-        const scaleB = stdB > 0 ? targetStd / stdB : 1.0;
-
-        console.log(`[FaceRecognition][DEBUG] 🎯 Normalization scales: R=${scaleR.toFixed(2)}, G=${scaleG.toFixed(2)}, B=${scaleB.toFixed(2)}`);
-
-        // Apply normalization (in-place)
-        for (let i = 0; i < pixelCount; i++) {
-            const idx = i * 4;
-
-            // R channel
-            let r = (data[idx] - meanR) * scaleR + targetMean;
-            data[idx] = Math.max(0, Math.min(255, Math.round(r)));
-
-            // G channel
-            let g = (data[idx + 1] - meanG) * scaleG + targetMean;
-            data[idx + 1] = Math.max(0, Math.min(255, Math.round(g)));
-
-            // B channel
-            let b = (data[idx + 2] - meanB) * scaleB + targetMean;
-            data[idx + 2] = Math.max(0, Math.min(255, Math.round(b)));
-
-            // Alpha unchanged
-        }
-
-        console.log('[FaceRecognition] ✅ White balance normalization complete');
     }
 
     /**
