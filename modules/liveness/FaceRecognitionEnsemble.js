@@ -268,10 +268,10 @@ export default class FaceRecognitionEnsemble {
                     inputData[outputIndex + 1] = (g / 127.5) - 1;
                     inputData[outputIndex + 2] = (b / 127.5) - 1;
                 } else if (model.preprocessing === 'arcface') {
-                    // ArcFace: (x - 127.5) / 128.0 → [-1, 1] | BGR order (reversed!)
-                    inputData[outputIndex] = (b - 127.5) / 128.0;      // B
+                    // ArcFace: (x - 127.5) / 128.0 → [-1, 1] | RGB order (same as FaceNet)
+                    inputData[outputIndex] = (r - 127.5) / 128.0;      // R
                     inputData[outputIndex + 1] = (g - 127.5) / 128.0;  // G
-                    inputData[outputIndex + 2] = (r - 127.5) / 128.0;  // R
+                    inputData[outputIndex + 2] = (b - 127.5) / 128.0;  // B
                 }
             }
         }
