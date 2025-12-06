@@ -171,6 +171,30 @@ class FaceRecognitionService {
 
         console.log('[FaceRecognition][DEBUG] ✅ Per-channel normalization complete');
 
+        // VERIFICATION: Check if normalization worked correctly
+        console.log('[FaceRecognition][DEBUG] 🔍 Verifying normalization results...');
+        for (let channel = 0; channel < 3; channel++) {
+            let sum = 0;
+            for (let i = 0; i < imageSize; i++) {
+                sum += normalizedData[i * 4 + channel];
+            }
+            const verifyMean = sum / imageSize;
+
+            let varianceSum = 0;
+            for (let i = 0; i < imageSize; i++) {
+                const diff = normalizedData[i * 4 + channel] - verifyMean;
+                varianceSum += diff * diff;
+            }
+            const verifyStd = Math.sqrt(varianceSum / imageSize);
+
+            const meanError = Math.abs(verifyMean - 128);
+            const stdError = Math.abs(verifyStd - 50);
+            const meanOk = meanError < 1.0 ? '✅' : '⚠️';
+            const stdOk = stdError < 2.0 ? '✅' : '⚠️';
+
+            console.log(`[FaceRecognition][DEBUG]   Channel ${channel}: mean=${verifyMean.toFixed(2)} ${meanOk}, std=${verifyStd.toFixed(2)} ${stdOk}`);
+        }
+
         return normalizedData;
     }
 
