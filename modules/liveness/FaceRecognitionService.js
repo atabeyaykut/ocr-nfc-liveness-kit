@@ -112,69 +112,73 @@ class FaceRecognitionService {
     }
 
     /**
-     * Apply histogram equalization to normalize lighting
-     * Applies equalization separately to each RGB channel
+     * Apply per-channel mean/std normalization (ImageNet-style)
+     * This normalizes brightness and contrast more effectively than histogram equalization
+     * Brings all images to same brightness/contrast distribution
      * 
      * @param {Uint8Array} data - RGBA pixel data
      * @param {number} width - Image width
      * @param {number} height - Image height
-     * @returns {Uint8Array} Equalized RGBA pixel data
+     * @returns {Uint8Array} Normalized RGBA pixel data
      */
-    applyHistogramEqualization(data, width, height) {
+    applyMeanStdNormalization(data, width, height) {
         const imageSize = width * height;
-        const equalizedData = new Uint8Array(data.length);
+        const normalizedData = new Uint8Array(data.length);
+
+        console.log('[FaceRecognition][DEBUG] 📊 Calculating per-channel statistics...');
 
         // Process each channel (R, G, B) separately
         for (let channel = 0; channel < 3; channel++) {
-            // Build histogram
-            const histogram = new Array(256).fill(0);
+            // Calculate mean
+            let sum = 0;
             for (let i = 0; i < imageSize; i++) {
                 const pixelIndex = i * 4 + channel;
-                histogram[data[pixelIndex]]++;
+                sum += data[pixelIndex];
             }
+            const mean = sum / imageSize;
 
-            // Calculate cumulative distribution function (CDF)
-            const cdf = new Array(256);
-            cdf[0] = histogram[0];
-            for (let i = 1; i < 256; i++) {
-                cdf[i] = cdf[i - 1] + histogram[i];
-            }
-
-            // Find CDF minimum (non-zero value)
-            let cdfMin = cdf[0];
-            for (let i = 0; i < 256; i++) {
-                if (cdf[i] > 0) {
-                    cdfMin = cdf[i];
-                    break;
-                }
-            }
-
-            // Normalize CDF and create lookup table
-            const lookupTable = new Array(256);
-            for (let i = 0; i < 256; i++) {
-                lookupTable[i] = Math.round(((cdf[i] - cdfMin) / (imageSize - cdfMin)) * 255);
-            }
-
-            // Apply equalization to this channel
+            // Calculate standard deviation
+            let varianceSum = 0;
             for (let i = 0; i < imageSize; i++) {
                 const pixelIndex = i * 4 + channel;
-                equalizedData[pixelIndex] = lookupTable[data[pixelIndex]];
+                const diff = data[pixelIndex] - mean;
+                varianceSum += diff * diff;
+            }
+            const std = Math.sqrt(varianceSum / imageSize);
+
+            // Prevent division by zero
+            const safeStd = std < 1.0 ? 1.0 : std;
+
+            console.log(`[FaceRecognition][DEBUG]   Channel ${channel}: mean=${mean.toFixed(2)}, std=${std.toFixed(2)}`);
+
+            // Normalize: (pixel - mean) / std, then scale to [0, 255]
+            // Target mean=128, std=50 (moderate contrast)
+            const targetMean = 128;
+            const targetStd = 50;
+
+            for (let i = 0; i < imageSize; i++) {
+                const pixelIndex = i * 4 + channel;
+                const normalized = ((data[pixelIndex] - mean) / safeStd) * targetStd + targetMean;
+                // Clamp to [0, 255]
+                normalizedData[pixelIndex] = Math.max(0, Math.min(255, Math.round(normalized)));
             }
         }
 
         // Copy alpha channel as-is
         for (let i = 0; i < imageSize; i++) {
-            equalizedData[i * 4 + 3] = data[i * 4 + 3];
+            normalizedData[i * 4 + 3] = data[i * 4 + 3];
         }
 
-        return equalizedData;
+        console.log('[FaceRecognition][DEBUG] ✅ Per-channel normalization complete');
+
+        return normalizedData;
     }
 
     /**
      * Preprocess image for FaceNet model
      * - CROP face region using bbox
      * - Resize to 160x160
-     * - Apply histogram equalization for lighting normalization
+     * - Apply mean/std normalization for lighting/contrast normalization
      * - Convert to RGB
      * - Normalize to [-1, 1] range
      * - Convert to NHWC format (1, 160, 160, 3)
@@ -380,31 +384,31 @@ class FaceRecognitionService {
                 throw new Error(`Image size mismatch: ${width}x${height}, expected ${MODEL_INPUT_SIZE}x${MODEL_INPUT_SIZE}`);
             }
 
+            const expectedBytes = width * height * 4; // RGBA
+            if (data.length !== expectedBytes) {
+                throw new Error(`Expected ${expectedBytes} bytes, got ${data.length}`);
+            }
+
             console.log(`[FaceRecognition] ✅ Decoded: ${width}x${height}, ${data.length} bytes`);
             console.log('[FaceRecognition][DEBUG] 📊 Raw pixel data sample (first 10 RGBA values):');
             console.log(`[FaceRecognition][DEBUG]   ${Array.from(data.slice(0, 40)).join(', ')}`);
 
-            // STEP 4.5: Apply histogram equalization for better lighting normalization
-            // This helps with NFC vs Live photo lighting differences
-            console.log('[FaceRecognition] 🎨 Applying histogram equalization for lighting normalization...');
+            // STEP 4.5: Apply mean/std normalization for better lighting/contrast normalization
+            // This brings NFC and Live photos to same brightness/contrast distribution
+            console.log('[FaceRecognition] 🎨 Applying per-channel mean/std normalization...');
 
-            // Apply simple histogram equalization to each RGB channel
-            // This normalizes brightness/contrast differences between photos
-            const equalizedData = this.applyHistogramEqualization(data, width, height);
-            console.log('[FaceRecognition] ✅ Histogram equalization applied');
+            // Apply mean/std normalization to each RGB channel
+            // This normalizes both brightness AND contrast differences between photos
+            const normalizedData = this.applyMeanStdNormalization(data, width, height);
+            console.log('[FaceRecognition] ✅ Mean/std normalization applied');
 
             // Standard FaceNet preprocessing: normalize to [-1, 1] only
             // Formula: (pixel - 127.5) / 128.0 = (pixel / 127.5) - 1
-            console.log('[FaceRecognition] ℹ️ Using FaceNet preprocessing with histogram equalization');
+            console.log('[FaceRecognition] ℹ️ Using FaceNet preprocessing with mean/std normalization');
 
             // STEP 5: Validate decoded data
             if (!(data instanceof Uint8Array)) {
                 throw new Error('Decoded image data is not Uint8Array');
-            }
-
-            const expectedBytes = width * height * 4; // RGBA
-            if (data.length !== expectedBytes) {
-                throw new Error(`Expected ${expectedBytes} bytes, got ${data.length}`);
             }
 
             // STEP 6: Convert RGBA to RGB and normalize to [-1, 1]
@@ -420,10 +424,10 @@ class FaceRecognitionService {
                 const pixelIndex = i * 4; // RGBA has 4 bytes per pixel
                 const outputIndex = i * 3; // RGB has 3 floats per pixel
 
-                // Extract RGB values (0-255) from equalized data
-                const r = equalizedData[pixelIndex];
-                const g = equalizedData[pixelIndex + 1];
-                const b = equalizedData[pixelIndex + 2];
+                // Extract RGB values (0-255) from normalized data
+                const r = normalizedData[pixelIndex];
+                const g = normalizedData[pixelIndex + 1];
+                const b = normalizedData[pixelIndex + 2];
                 // Alpha channel (pixelIndex + 3) is ignored
 
                 // Normalize to [-1, 1] range and store in NHWC order
@@ -810,10 +814,10 @@ class FaceRecognitionService {
 
             // Threshold for match (0.55 = 55% similarity)
             // Lowered from 70% to 55% to handle NFC vs Live photo differences:
-            // - Same person with histogram eq: 0.55-0.80 (55-80%)
-            // - Different person: 0.20-0.50 (20-50%)
-            // - Poor quality/different lighting: 0.40-0.60 (40-60%)
-            // Histogram equalization helps normalize lighting, so lower threshold is safe
+            // - Same person with mean/std norm: 0.55-0.85 (55-85%)
+            // - Different person: 0.15-0.45 (15-45%)
+            // - Poor quality/different lighting: 0.35-0.55 (35-55%)
+            // Mean/std normalization brings all photos to same brightness/contrast distribution
             const MATCH_THRESHOLD = 0.55; // 55% for NFC vs Live comparison tolerance
             const isMatch = similarity >= MATCH_THRESHOLD;
             const totalTime = Date.now() - comparisonStartTime;

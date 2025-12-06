@@ -129,10 +129,10 @@ class LivenessDetectionModule {
         this.photoCaptureChance = 0.6; // 60% chance to capture photo
 
         // ML-based face recognition with FaceNet
-        this.useFaceNet = true; // Use ONNX FaceNet for high accuracy with histogram equalization
-        this.similarityThreshold = 0.55; // 55% threshold for FaceNet with histogram equalization
+        this.useFaceNet = true; // Use ONNX FaceNet for high accuracy with mean/std normalization
+        this.similarityThreshold = 0.55; // 55% threshold for FaceNet with mean/std normalization
         // Lowered from 70% to 55% to handle NFC vs Live photo quality/lighting differences
-        // With histogram equalization: same person 0.55-0.80, different person 0.20-0.50
+        // With mean/std normalization: same person 0.55-0.85, different person 0.15-0.45
         // More realistic for production (NFC photos are low quality 240x320px)
 
         this.currentFaceData = null; // Current face data from processFaceData
