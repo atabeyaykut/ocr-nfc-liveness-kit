@@ -15,9 +15,10 @@
  */
 
 import { InferenceSession, Tensor } from 'onnxruntime-react-native';
-import ImageResizer from 'react-native-image-resizer';
+import ImageResizer from '@bam.tech/react-native-image-resizer';
 import RNFS from 'react-native-fs';
 import { decode } from 'base64-arraybuffer';
+import { Image } from 'react-native';
 
 export default class FaceRecognitionEnsemble {
     constructor() {
@@ -59,7 +60,7 @@ export default class FaceRecognitionEnsemble {
 
         try {
             // Initialize FaceNet
-            await this.initializeModel('facenet', 'facenet_160.onnx');
+            await this.initializeModel('facenet', 'facenet.onnx');
 
             // Initialize ArcFace
             await this.initializeModel('arcface', 'arcface_512.onnx');
@@ -81,8 +82,8 @@ export default class FaceRecognitionEnsemble {
 
         const model = this.models[modelName];
 
-        // Get model path
-        const sourceAssetPath = `models/${modelFileName}`;
+        // Get model path (assets root, not in models/ subfolder)
+        const sourceAssetPath = modelFileName; // e.g., 'facenet.onnx' or 'arcface_512.onnx'
         const destPath = `${RNFS.DocumentDirectoryPath}/${modelFileName}`;
         model.modelPath = destPath;
 
@@ -132,36 +133,80 @@ export default class FaceRecognitionEnsemble {
 
         console.log(`[FaceEnsemble][${modelName}] Preprocessing for ${inputSize}x${inputSize}...`);
 
-        // Step 1: Crop face with margin
-        const margin = 0.2; // 20% margin
-        const faceWidth = faceFrame.width;
-        const faceHeight = faceFrame.height;
-        const expandedWidth = Math.round(faceWidth * (1 + 2 * margin));
-        const expandedHeight = Math.round(faceHeight * (1 + 2 * margin));
-        const cropX = Math.max(0, faceFrame.left - Math.round(faceWidth * margin));
-        const cropY = Math.max(0, faceFrame.top - Math.round(faceHeight * margin));
+        const cleanPath = imagePath.replace('file://', '');
+        let processPath = cleanPath;
+        let needsCleanup = false;
 
-        console.log(`[FaceEnsemble][${modelName}] Cropping: ${expandedWidth}x${expandedHeight} @ (${cropX}, ${cropY})`);
+        // Step 1: Crop face with margin using ImageEditor (native, fast)
+        if (faceFrame && faceFrame.width > 0 && faceFrame.height > 0) {
+            console.log(`[FaceEnsemble][${modelName}] ✂️ CROPPING face region...`);
 
-        // Crop image
-        const croppedResult = await ImageResizer.createResizedImage(
-            imagePath.replace('file://', ''),
-            expandedWidth,
-            expandedHeight,
-            'JPEG',
-            100,
-            0,
-            null,
-            false,
-            {
-                mode: 'contain',
-                onlyScaleDown: false,
+            try {
+                const margin = 0.2; // 20% margin
+                const expandedLeft = Math.max(0, Math.floor(faceFrame.left - faceFrame.width * margin));
+                const expandedTop = Math.max(0, Math.floor(faceFrame.top - faceFrame.height * margin));
+                const expandedWidth = Math.floor(faceFrame.width * (1 + 2 * margin));
+                const expandedHeight = Math.floor(faceFrame.height * (1 + 2 * margin));
+
+                console.log(`[FaceEnsemble][${modelName}] Crop: ${expandedWidth}x${expandedHeight} @ (${expandedLeft}, ${expandedTop})`);
+
+                // Use ImageEditor for native crop
+                const ImageEditor = require('@react-native-community/image-editor').default;
+                const imageUriForCrop = cleanPath.startsWith('file://') ? cleanPath : `file://${cleanPath}`;
+
+                // Get image dimensions to clamp crop region
+                let imageWidth, imageHeight;
+                try {
+                    ({ width: imageWidth, height: imageHeight } = await new Promise((resolve, reject) => {
+                        Image.getSize(
+                            imageUriForCrop,
+                            (width, height) => resolve({ width, height }),
+                            error => reject(error)
+                        );
+                    }));
+                    console.log(`[FaceEnsemble][${modelName}] Source: ${imageWidth}x${imageHeight}`);
+                } catch (dimError) {
+                    console.log(`[FaceEnsemble][${modelName}] ⚠️ Could not read dimensions:`, dimError?.message);
+                }
+
+                // Clamp crop region within image bounds
+                const cropWidth = imageWidth
+                    ? Math.min(expandedWidth, Math.max(1, imageWidth - expandedLeft))
+                    : expandedWidth;
+                const cropHeight = imageHeight
+                    ? Math.min(expandedHeight, Math.max(1, imageHeight - expandedTop))
+                    : expandedHeight;
+
+                if (cropWidth <= 0 || cropHeight <= 0) {
+                    throw new Error('Invalid crop region (non-positive size)');
+                }
+
+                console.log(`[FaceEnsemble][${modelName}] Final crop: ${cropWidth}x${cropHeight}`);
+
+                const cropResult = await ImageEditor.cropImage(imageUriForCrop, {
+                    offset: { x: expandedLeft, y: expandedTop },
+                    size: { width: cropWidth, height: cropHeight },
+                });
+
+                // Handle different return types (string or object)
+                const normalizedCroppedUri =
+                    typeof cropResult === 'string'
+                        ? cropResult
+                        : (cropResult?.uri || cropResult?.path || cropResult);
+
+                processPath = normalizedCroppedUri.replace('file://', '');
+                needsCleanup = true;
+                console.log(`[FaceEnsemble][${modelName}] ✅ Face cropped`);
+            } catch (cropError) {
+                console.error(`[FaceEnsemble][${modelName}] ⚠️ Crop failed:`, cropError.message);
+                console.log(`[FaceEnsemble][${modelName}] Continuing without crop...`);
+                processPath = cleanPath;
             }
-        );
+        }
 
         // Step 2: Resize to model input size
         const resizedResult = await ImageResizer.createResizedImage(
-            croppedResult.uri.replace('file://', ''),
+            processPath,
             inputSize,
             inputSize,
             'JPEG',
@@ -218,8 +263,10 @@ export default class FaceRecognitionEnsemble {
 
         console.log(`[FaceEnsemble][${modelName}] ✅ Preprocessing complete`);
 
-        // Cleanup
-        await RNFS.unlink(croppedResult.uri.replace('file://', '')).catch(() => { });
+        // Cleanup temp files
+        if (needsCleanup && processPath !== cleanPath) {
+            await RNFS.unlink(processPath).catch(() => { });
+        }
         await RNFS.unlink(resizedResult.uri.replace('file://', '')).catch(() => { });
 
         return inputData;
