@@ -263,15 +263,15 @@ export default class FaceRecognitionEnsemble {
 
                 // Apply model-specific normalization
                 if (model.preprocessing === 'standard') {
-                    // FaceNet: (x - 127.5) / 127.5 → [-1, 1]
+                    // FaceNet: (x / 127.5) - 1 → [-1, 1] | RGB order
                     inputData[outputIndex] = (r / 127.5) - 1;
                     inputData[outputIndex + 1] = (g / 127.5) - 1;
                     inputData[outputIndex + 2] = (b / 127.5) - 1;
                 } else if (model.preprocessing === 'arcface') {
-                    // ArcFace: (x - 127.5) / 128.0 → approximately [-1, 1]
-                    inputData[outputIndex] = (r - 127.5) / 128.0;
-                    inputData[outputIndex + 1] = (g - 127.5) / 128.0;
-                    inputData[outputIndex + 2] = (b - 127.5) / 128.0;
+                    // ArcFace: (x - 127.5) / 128.0 → [-1, 1] | BGR order (reversed!)
+                    inputData[outputIndex] = (b - 127.5) / 128.0;      // B
+                    inputData[outputIndex + 1] = (g - 127.5) / 128.0;  // G
+                    inputData[outputIndex + 2] = (r - 127.5) / 128.0;  // R
                 }
             }
         }
