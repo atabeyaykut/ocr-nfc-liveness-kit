@@ -278,6 +278,13 @@ export default class FaceRecognitionEnsemble {
 
         console.log(`[FaceEnsemble][${modelName}] ✅ Preprocessing complete`);
 
+        // Debug: Sample normalized values
+        const samples = [
+            inputData[0], inputData[1], inputData[2],  // First pixel
+            inputData[inputData.length - 3], inputData[inputData.length - 2], inputData[inputData.length - 1]  // Last pixel
+        ];
+        console.log(`[FaceEnsemble][${modelName}] 📊 Sample values: first=[${samples[0].toFixed(3)}, ${samples[1].toFixed(3)}, ${samples[2].toFixed(3)}], last=[${samples[3].toFixed(3)}, ${samples[4].toFixed(3)}, ${samples[5].toFixed(3)}]`);
+
         // Cleanup temp files
         if (needsCleanup && processPath !== cleanPath) {
             await RNFS.unlink(processPath).catch(() => { });
@@ -348,6 +355,14 @@ export default class FaceRecognitionEnsemble {
 
         // Create tensor
         const inputSize = model.inputSize;
+
+        // Log actual model expected input shape from metadata
+        const expectedShape = model.session.inputNames.map(name => {
+            const input = model.session._inputs.find(i => i.name === name);
+            return input ? input.dims : 'unknown';
+        });
+        console.log(`[FaceEnsemble][${modelName}] Expected input shape from model: ${JSON.stringify(expectedShape)}`);
+
         const inputTensor = new Tensor('float32', inputData, [1, inputSize, inputSize, 3]);
 
         // Run inference
