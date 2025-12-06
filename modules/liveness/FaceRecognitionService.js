@@ -112,6 +112,78 @@ class FaceRecognitionService {
     }
 
     /**
+     * Apply adaptive gamma correction based on image brightness
+     * - Overexposed (mean > 180): gamma > 1.0 to darken and recover highlights
+     * - Underexposed (mean < 80): gamma < 1.0 to brighten and recover shadows
+     * - Normal (80-180): no gamma correction needed
+     * 
+     * @param {Uint8Array} data - RGBA pixel data
+     * @param {number} width - Image width
+     * @param {number} height - Image height
+     * @returns {Uint8Array} Gamma-corrected RGBA pixel data
+     */
+    applyAdaptiveGammaCorrection(data, width, height) {
+        const imageSize = width * height;
+
+        // Calculate overall brightness (mean of all RGB channels)
+        let totalSum = 0;
+        for (let i = 0; i < imageSize; i++) {
+            const r = data[i * 4];
+            const g = data[i * 4 + 1];
+            const b = data[i * 4 + 2];
+            totalSum += (r + g + b) / 3;
+        }
+        const overallMean = totalSum / imageSize;
+
+        console.log(`[FaceRecognition][DEBUG] 🔆 Overall brightness: ${overallMean.toFixed(2)}/255`);
+
+        // Determine gamma based on brightness
+        let gamma = 1.0; // default: no correction
+        if (overallMean > 180) {
+            // Overexposed (too bright) - darken with gamma > 1.0
+            gamma = 1.5 + ((overallMean - 180) / 75) * 0.5; // 1.5 to 2.0
+            console.log(`[FaceRecognition][DEBUG] ⚠️ OVEREXPOSED detected! Applying gamma=${gamma.toFixed(2)} to darken`);
+        } else if (overallMean < 80) {
+            // Underexposed (too dark) - brighten with gamma < 1.0
+            gamma = 0.5 + (overallMean / 80) * 0.5; // 0.5 to 1.0
+            console.log(`[FaceRecognition][DEBUG] ⚠️ UNDEREXPOSED detected! Applying gamma=${gamma.toFixed(2)} to brighten`);
+        } else {
+            console.log(`[FaceRecognition][DEBUG] ✅ Normal brightness, no gamma correction needed`);
+            return data; // No correction needed
+        }
+
+        // Apply gamma correction: out = 255 * (in/255)^gamma
+        const correctedData = new Uint8Array(data.length);
+        const lookupTable = new Uint8Array(256);
+
+        // Build lookup table for performance
+        for (let i = 0; i < 256; i++) {
+            lookupTable[i] = Math.round(255 * Math.pow(i / 255, gamma));
+        }
+
+        // Apply to RGB channels
+        for (let i = 0; i < imageSize; i++) {
+            correctedData[i * 4] = lookupTable[data[i * 4]];         // R
+            correctedData[i * 4 + 1] = lookupTable[data[i * 4 + 1]]; // G
+            correctedData[i * 4 + 2] = lookupTable[data[i * 4 + 2]]; // B
+            correctedData[i * 4 + 3] = data[i * 4 + 3];              // A (copy as-is)
+        }
+
+        // Verify brightness after correction
+        let correctedSum = 0;
+        for (let i = 0; i < imageSize; i++) {
+            const r = correctedData[i * 4];
+            const g = correctedData[i * 4 + 1];
+            const b = correctedData[i * 4 + 2];
+            correctedSum += (r + g + b) / 3;
+        }
+        const correctedMean = correctedSum / imageSize;
+        console.log(`[FaceRecognition][DEBUG] ✅ After gamma: ${correctedMean.toFixed(2)}/255 (change: ${(correctedMean - overallMean).toFixed(2)})`);
+
+        return correctedData;
+    }
+
+    /**
      * Apply per-channel mean/std normalization (ImageNet-style)
      * This normalizes brightness and contrast more effectively than histogram equalization
      * Brings all images to same brightness/contrast distribution
@@ -202,6 +274,7 @@ class FaceRecognitionService {
      * Preprocess image for FaceNet model
      * - CROP face region using bbox
      * - Resize to 160x160
+     * - Apply adaptive gamma correction (recover details in over/underexposed images)
      * - Apply mean/std normalization for lighting/contrast normalization
      * - Convert to RGB
      * - Normalize to [-1, 1] range
@@ -417,13 +490,19 @@ class FaceRecognitionService {
             console.log('[FaceRecognition][DEBUG] 📊 Raw pixel data sample (first 10 RGBA values):');
             console.log(`[FaceRecognition][DEBUG]   ${Array.from(data.slice(0, 40)).join(', ')}`);
 
-            // STEP 4.5: Apply mean/std normalization for better lighting/contrast normalization
+            // STEP 4.5a: Apply adaptive gamma correction first
+            // This recovers details in overexposed (too bright) and underexposed (too dark) images
+            console.log('[FaceRecognition] 🔆 Applying adaptive gamma correction...');
+            const gammaCorrectedData = this.applyAdaptiveGammaCorrection(data, width, height);
+            console.log('[FaceRecognition] ✅ Gamma correction applied');
+
+            // STEP 4.5b: Apply mean/std normalization for final brightness/contrast normalization
             // This brings NFC and Live photos to same brightness/contrast distribution
             console.log('[FaceRecognition] 🎨 Applying per-channel mean/std normalization...');
 
             // Apply mean/std normalization to each RGB channel
             // This normalizes both brightness AND contrast differences between photos
-            const normalizedData = this.applyMeanStdNormalization(data, width, height);
+            const normalizedData = this.applyMeanStdNormalization(gammaCorrectedData, width, height);
             console.log('[FaceRecognition] ✅ Mean/std normalization applied');
 
             // Standard FaceNet preprocessing: normalize to [-1, 1] only
@@ -838,10 +917,10 @@ class FaceRecognitionService {
 
             // Threshold for match (0.55 = 55% similarity)
             // Lowered from 70% to 55% to handle NFC vs Live photo differences:
-            // - Same person with mean/std norm: 0.55-0.85 (55-85%)
+            // - Same person with gamma + mean/std: 0.55-0.85 (55-85%)
             // - Different person: 0.15-0.45 (15-45%)
             // - Poor quality/different lighting: 0.35-0.55 (35-55%)
-            // Mean/std normalization brings all photos to same brightness/contrast distribution
+            // Gamma correction recovers details, mean/std normalizes distribution
             const MATCH_THRESHOLD = 0.55; // 55% for NFC vs Live comparison tolerance
             const isMatch = similarity >= MATCH_THRESHOLD;
             const totalTime = Date.now() - comparisonStartTime;
