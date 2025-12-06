@@ -18,7 +18,7 @@ import { InferenceSession, Tensor } from 'onnxruntime-react-native';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import RNFS from 'react-native-fs';
 import { decode } from 'base64-arraybuffer';
-import { Image } from 'react-native';
+import { Image, Platform } from 'react-native';
 
 export default class FaceRecognitionEnsemble {
     constructor() {
@@ -93,7 +93,26 @@ export default class FaceRecognitionEnsemble {
         if (!modelExists) {
             console.log(`[FaceEnsemble] Copying ${modelName} from assets...`);
             try {
-                await RNFS.copyFileAssets(sourceAssetPath, destPath);
+                // Platform-specific model copying
+                if (Platform.OS === 'android') {
+                    // Android: Copy from assets folder
+                    await RNFS.copyFileAssets(sourceAssetPath, destPath);
+                } else if (Platform.OS === 'ios') {
+                    // iOS: Copy from bundle (model must be added to Xcode project)
+                    const bundlePath = `${RNFS.MainBundlePath}/${modelFileName}`;
+                    const bundleExists = await RNFS.exists(bundlePath);
+
+                    if (!bundleExists) {
+                        throw new Error(
+                            `${modelName} model not found in iOS bundle. ` +
+                            `Please add ${modelFileName} to Xcode project as a resource.`
+                        );
+                    }
+
+                    await RNFS.copyFile(bundlePath, destPath);
+                } else {
+                    throw new Error(`Unsupported platform: ${Platform.OS}`);
+                }
                 console.log(`[FaceEnsemble] ✅ ${modelName} copied successfully`);
             } catch (copyError) {
                 console.error(`[FaceEnsemble] ❌ Failed to copy ${modelName}:`, copyError);
