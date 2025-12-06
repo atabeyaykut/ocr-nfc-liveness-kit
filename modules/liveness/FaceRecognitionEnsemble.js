@@ -161,7 +161,7 @@ export default class FaceRecognitionEnsemble {
             console.log(`[FaceEnsemble][${modelName}] ✂️ CROPPING face region...`);
 
             try {
-                const margin = 0.2; // 20% margin
+                const margin = 0.1; // 10% margin (reduced from 20% to prevent overflow on low-res NFC photos)
                 const expandedLeft = Math.max(0, Math.floor(faceFrame.left - faceFrame.width * margin));
                 const expandedTop = Math.max(0, Math.floor(faceFrame.top - faceFrame.height * margin));
                 const expandedWidth = Math.floor(faceFrame.width * (1 + 2 * margin));
@@ -246,12 +246,8 @@ export default class FaceRecognitionEnsemble {
 
         console.log(`[FaceEnsemble][${modelName}] Decoded: ${rawImageData.width}x${rawImageData.height}`);
 
-        // Step 4: Apply gamma correction
-        const gammaCorrectedData = this.applyAdaptiveGammaCorrection(
-            rawImageData.data,
-            rawImageData.width,
-            rawImageData.height
-        );
+        // Step 4: Skip gamma correction for consistency between reference and live photos
+        const gammaCorrectedData = rawImageData.data; // Direct use without gamma correction
 
         // Step 5: Normalize based on model type
         const inputData = new Float32Array(1 * inputSize * inputSize * 3);
@@ -439,8 +435,14 @@ export default class FaceRecognitionEnsemble {
             console.log(`[FaceEnsemble]   ${modelName}: ${(similarity * 100).toFixed(2)}% × ${(weight * 100).toFixed(0)}% = ${(similarity * weight * 100).toFixed(2)}%`);
         }
 
-        const finalSimilarity = weightedSum / totalWeight;
+        // Calculate final weighted average with safety check
+        const finalSimilarity = totalWeight > 0 ? (weightedSum / totalWeight) : 0;
         const elapsedTime = Date.now() - startTime;
+
+        // Warn if all models failed
+        if (Object.values(similarities).every(s => s === 0)) {
+            console.warn('[FaceEnsemble] ⚠️ WARNING: All models failed or returned 0 similarity!');
+        }
 
         console.log('[FaceEnsemble] ========================================');
         console.log('[FaceEnsemble] 🎯 ENSEMBLE RESULT');
