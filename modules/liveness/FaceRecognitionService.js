@@ -922,13 +922,13 @@ class FaceRecognitionService {
             console.log('[FaceRecognition][DEBUG] 📏 Calculating cosine similarity...');
             const similarity = this.calculateCosineSimilarity(embedding1, embedding2);
 
-            // Threshold for match (0.55 = 55% similarity)
-            // Lowered from 70% to 55% to handle NFC vs Live photo differences:
-            // - Same person with gamma + mean/std: 0.55-0.85 (55-85%)
-            // - Different person: 0.15-0.45 (15-45%)
-            // - Poor quality/different lighting: 0.35-0.55 (35-55%)
-            // Gamma correction recovers details, mean/std normalizes distribution
-            const MATCH_THRESHOLD = 0.55; // 55% for NFC vs Live comparison tolerance
+            // Threshold for match (0.40 = 40% similarity)
+            // Lowered from 55% to 40% due to low-quality NFC photos (240x320px) + physical changes:
+            // - Same person with gamma + mean/std: 0.40-0.85 (40-85%)
+            // - Different person: 0.05-0.30 (5-30%)
+            // - Low quality NFC + physical changes: 0.25-0.50 (25-50%)
+            // Gamma correction + mean/std help, but NFC resolution is too low for higher thresholds
+            const MATCH_THRESHOLD = 0.40; // 40% threshold accommodates low-quality NFC passport photos
             const isMatch = similarity >= MATCH_THRESHOLD;
             const totalTime = Date.now() - comparisonStartTime;
 
