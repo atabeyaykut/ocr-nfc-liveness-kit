@@ -24,6 +24,7 @@ import FaceDetection from '@react-native-ml-kit/face-detection';
 import RNFS from 'react-native-fs';
 import { compareFacesImproved } from './ImprovedFaceComparison';
 import faceRecognitionService from './FaceRecognitionService';
+import FaceRecognitionEnsemble from './FaceRecognitionEnsemble';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -128,16 +129,20 @@ class LivenessDetectionModule {
         this.enableFaceComparison = true; // Enable face photo comparison
         this.photoCaptureChance = 0.6; // 60% chance to capture photo
 
-        // ML-based face recognition with FaceNet
-        this.useFaceNet = true; // Use ONNX FaceNet with gamma correction + STANDARD normalization
-        this.similarityThreshold = 0.40; // 40% threshold for FaceNet with standard preprocessing
-        // Lowered from 70% to 40% to handle NFC vs Live photo quality/lighting differences
-        // With gamma + standard [-1,1]: same person 0.40-0.85, different person 0.05-0.30
-        // Gamma correction recovers details, then standard FaceNet normalization (x-127.5)/127.5
-        // More realistic for production (NFC photos are low quality 240x320px)
+        // ML-based face recognition with Multi-Model Ensemble
+        this.useEnsemble = true; // Use multi-model ensemble (FaceNet + ArcFace)
+        this.useFaceNet = true; // Backward compatibility - keep for fallback
+        this.similarityThreshold = 0.35; // 35% threshold for ensemble (lowered from 40%)
+        // Ensemble combines FaceNet (40% weight) + ArcFace (60% weight)
+        // Expected ranges with ensemble:
+        // - Same person: 0.35-0.90 (more robust, higher scores)
+        // - Different person: 0.05-0.25 (lower scores)
+        // Ensemble reduces false negatives while maintaining security
 
         this.currentFaceData = null; // Current face data from processFaceData
         this.faceNetInitialized = false; // Track FaceNet initialization status
+        this.ensembleService = null; // Ensemble service instance
+        this.ensembleInitialized = false; // Track ensemble initialization
     }
 
     // Enhanced logging utilities - CLASS METHODS
@@ -664,11 +669,65 @@ class LivenessDetectionModule {
      */
     compareFaces = async (refPhotoUri, refFaceData, livePhotoUri, liveFaceData) => {
         try {
-            // Try FaceNet ML-based comparison first (if enabled)
+            // Try Multi-Model Ensemble first (if enabled)
+            if (this.useEnsemble) {
+                // Initialize Ensemble on first use
+                if (!this.ensembleInitialized) {
+                    console.log('[LivenessModule] 🎯 Initializing Multi-Model Ensemble...');
+                    try {
+                        if (!this.ensembleService) {
+                            this.ensembleService = new FaceRecognitionEnsemble();
+                        }
+                        await this.ensembleService.initialize();
+                        this.ensembleInitialized = true;
+                        console.log('[LivenessModule] ✅ Ensemble initialized successfully');
+                    } catch (ensembleError) {
+                        console.log('[LivenessModule] ⚠️ Ensemble initialization failed:', ensembleError.message);
+                        console.log('[LivenessModule] ⚠️ Falling back to single FaceNet model');
+                        this.useEnsemble = false;
+                        this.ensembleInitialized = false;
+                    }
+                }
+
+                // Use Ensemble if initialized
+                if (this.ensembleInitialized && this.ensembleService) {
+                    console.log('[LivenessModule] ========================================');
+                    console.log('[LivenessModule] 🎯 Using Multi-Model Ensemble...');
+                    console.log('[LivenessModule][DEBUG] 📸 Input validation:');
+                    console.log(`[LivenessModule][DEBUG]   Ref URI: ${refPhotoUri?.substring(0, 50)}...`);
+                    console.log(`[LivenessModule][DEBUG]   Live URI: ${livePhotoUri?.substring(0, 50)}...`);
+                    console.log(`[LivenessModule][DEBUG]   Ref frame: ${JSON.stringify(refFaceData.frame)}`);
+                    console.log(`[LivenessModule][DEBUG]   Live frame: ${JSON.stringify(liveFaceData.frame)}`);
+
+                    const startTime = Date.now();
+                    const result = await this.ensembleService.compareFaces(
+                        refPhotoUri,
+                        refFaceData.frame,
+                        livePhotoUri,
+                        liveFaceData.frame
+                    );
+                    const elapsed = Date.now() - startTime;
+
+                    const isMatch = result.similarity >= this.similarityThreshold;
+
+                    console.log('[LivenessModule] ========================================');
+                    console.log('[LivenessModule] 🎯 ENSEMBLE RESULT:');
+                    console.log(`[LivenessModule]   FaceNet: ${(result.individualScores.facenet * 100).toFixed(2)}%`);
+                    console.log(`[LivenessModule]   ArcFace: ${(result.individualScores.arcface * 100).toFixed(2)}%`);
+                    console.log(`[LivenessModule]   Weighted Avg: ${(result.similarity * 100).toFixed(2)}%`);
+                    console.log(`[LivenessModule]   Match: ${isMatch ? '✅' : '❌'} (threshold: ${(this.similarityThreshold * 100)}%)`);
+                    console.log(`[LivenessModule][DEBUG] ⌚ Processing time: ${elapsed}ms`);
+                    console.log('[LivenessModule] ========================================');
+
+                    return result.similarity;
+                }
+            }
+
+            // Fallback to single FaceNet model if ensemble failed
             if (this.useFaceNet) {
                 // Initialize FaceNet on first use
                 if (!this.faceNetInitialized) {
-                    console.log('[LivenessModule] 🤖 Initializing FaceNet...');
+                    console.log('[LivenessModule] 🤖 Initializing FaceNet (fallback)...');
                     const initialized = await faceRecognitionService.initialize();
                     this.faceNetInitialized = initialized;
 
@@ -684,7 +743,7 @@ class LivenessDetectionModule {
                 // Use FaceNet if initialized
                 if (this.faceNetInitialized) {
                     console.log('[LivenessModule] ========================================');
-                    console.log('[LivenessModule] 🤖 Using FaceNet ML-based comparison...');
+                    console.log('[LivenessModule] 🤖 Using FaceNet ML-based comparison (fallback)...');
                     console.log('[LivenessModule][DEBUG] 📸 Input validation:');
                     console.log(`[LivenessModule][DEBUG]   Ref URI: ${refPhotoUri?.substring(0, 50)}...`);
                     console.log(`[LivenessModule][DEBUG]   Live URI: ${livePhotoUri?.substring(0, 50)}...`);
