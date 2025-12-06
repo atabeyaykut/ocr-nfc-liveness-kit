@@ -138,17 +138,24 @@ class FaceRecognitionService {
         console.log(`[FaceRecognition][DEBUG] 🔆 Overall brightness: ${overallMean.toFixed(2)}/255`);
 
         // Determine gamma based on brightness
+        // MORE AGGRESSIVE thresholds for NFC passport photos (often overexposed)
+        // and live photos in dark environments (often underexposed)
         let gamma = 1.0; // default: no correction
-        if (overallMean > 180) {
+
+        if (overallMean > 140) {
             // Overexposed (too bright) - darken with gamma > 1.0
-            gamma = 1.5 + ((overallMean - 180) / 75) * 0.5; // 1.5 to 2.0
+            // NFC passport photos often have 140-200 brightness with white backgrounds
+            gamma = 1.2 + ((overallMean - 140) / 115) * 1.3; // 1.2 to 2.5
             console.log(`[FaceRecognition][DEBUG] ⚠️ OVEREXPOSED detected! Applying gamma=${gamma.toFixed(2)} to darken`);
-        } else if (overallMean < 80) {
+            console.log(`[FaceRecognition][DEBUG]   Brightness ${overallMean.toFixed(1)} > 140 threshold`);
+        } else if (overallMean < 110) {
             // Underexposed (too dark) - brighten with gamma < 1.0
-            gamma = 0.5 + (overallMean / 80) * 0.5; // 0.5 to 1.0
+            // Live photos in dark rooms often have 50-110 brightness
+            gamma = 0.4 + (overallMean / 110) * 0.6; // 0.4 to 1.0
             console.log(`[FaceRecognition][DEBUG] ⚠️ UNDEREXPOSED detected! Applying gamma=${gamma.toFixed(2)} to brighten`);
+            console.log(`[FaceRecognition][DEBUG]   Brightness ${overallMean.toFixed(1)} < 110 threshold`);
         } else {
-            console.log(`[FaceRecognition][DEBUG] ✅ Normal brightness, no gamma correction needed`);
+            console.log(`[FaceRecognition][DEBUG] ✅ Normal brightness (110-140 range), no gamma correction needed`);
             return data; // No correction needed
         }
 
