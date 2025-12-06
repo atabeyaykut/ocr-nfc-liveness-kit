@@ -282,9 +282,8 @@ class FaceRecognitionService {
      * - CROP face region using bbox
      * - Resize to 160x160
      * - Apply adaptive gamma correction (recover details in over/underexposed images)
-     * - Apply mean/std normalization for lighting/contrast normalization
      * - Convert to RGB
-     * - Normalize to [-1, 1] range
+     * - Normalize to [-1, 1] range using STANDARD FaceNet formula: (x - 127.5) / 127.5
      * - Convert to NHWC format (1, 160, 160, 3)
      * 
      * @param {string} imagePath - Path to image file
@@ -497,24 +496,16 @@ class FaceRecognitionService {
             console.log('[FaceRecognition][DEBUG] 📊 Raw pixel data sample (first 10 RGBA values):');
             console.log(`[FaceRecognition][DEBUG]   ${Array.from(data.slice(0, 40)).join(', ')}`);
 
-            // STEP 4.5a: Apply adaptive gamma correction first
+            // STEP 4.5: Apply adaptive gamma correction first
             // This recovers details in overexposed (too bright) and underexposed (too dark) images
             console.log('[FaceRecognition] 🔆 Applying adaptive gamma correction...');
             const gammaCorrectedData = this.applyAdaptiveGammaCorrection(data, width, height);
             console.log('[FaceRecognition] ✅ Gamma correction applied');
 
-            // STEP 4.5b: Apply mean/std normalization for final brightness/contrast normalization
-            // This brings NFC and Live photos to same brightness/contrast distribution
-            console.log('[FaceRecognition] 🎨 Applying per-channel mean/std normalization...');
-
-            // Apply mean/std normalization to each RGB channel
-            // This normalizes both brightness AND contrast differences between photos
-            const normalizedData = this.applyMeanStdNormalization(gammaCorrectedData, width, height);
-            console.log('[FaceRecognition] ✅ Mean/std normalization applied');
-
-            // Standard FaceNet preprocessing: normalize to [-1, 1] only
-            // Formula: (pixel - 127.5) / 128.0 = (pixel / 127.5) - 1
-            console.log('[FaceRecognition] ℹ️ Using FaceNet preprocessing with mean/std normalization');
+            // STEP 4.6: Use STANDARD FaceNet preprocessing
+            // REMOVED mean/std normalization - testing simpler approach
+            // Now using: Gamma correction + simple [-1, 1] normalization
+            console.log('[FaceRecognition] ℹ️ Using STANDARD FaceNet preprocessing: (x - 127.5) / 127.5');
 
             // STEP 5: Validate decoded data
             if (!(data instanceof Uint8Array)) {
@@ -534,10 +525,10 @@ class FaceRecognitionService {
                 const pixelIndex = i * 4; // RGBA has 4 bytes per pixel
                 const outputIndex = i * 3; // RGB has 3 floats per pixel
 
-                // Extract RGB values (0-255) from normalized data
-                const r = normalizedData[pixelIndex];
-                const g = normalizedData[pixelIndex + 1];
-                const b = normalizedData[pixelIndex + 2];
+                // Extract RGB values (0-255) from gamma-corrected data (NO mean/std normalization)
+                const r = gammaCorrectedData[pixelIndex];
+                const g = gammaCorrectedData[pixelIndex + 1];
+                const b = gammaCorrectedData[pixelIndex + 2];
                 // Alpha channel (pixelIndex + 3) is ignored
 
                 // Normalize to [-1, 1] range and store in NHWC order
@@ -924,10 +915,10 @@ class FaceRecognitionService {
 
             // Threshold for match (0.40 = 40% similarity)
             // Lowered from 55% to 40% due to low-quality NFC photos (240x320px) + physical changes:
-            // - Same person with gamma + mean/std: 0.40-0.85 (40-85%)
+            // - Same person with gamma + standard normalization: 0.40-0.85 (40-85%)
             // - Different person: 0.05-0.30 (5-30%)
             // - Low quality NFC + physical changes: 0.25-0.50 (25-50%)
-            // Gamma correction + mean/std help, but NFC resolution is too low for higher thresholds
+            // Using: Gamma correction + standard FaceNet normalization (x-127.5)/127.5
             const MATCH_THRESHOLD = 0.40; // 40% threshold accommodates low-quality NFC passport photos
             const isMatch = similarity >= MATCH_THRESHOLD;
             const totalTime = Date.now() - comparisonStartTime;

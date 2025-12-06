@@ -129,11 +129,11 @@ class LivenessDetectionModule {
         this.photoCaptureChance = 0.6; // 60% chance to capture photo
 
         // ML-based face recognition with FaceNet
-        this.useFaceNet = true; // Use ONNX FaceNet with gamma correction + mean/std normalization
-        this.similarityThreshold = 0.40; // 40% threshold for FaceNet with advanced preprocessing
+        this.useFaceNet = true; // Use ONNX FaceNet with gamma correction + STANDARD normalization
+        this.similarityThreshold = 0.40; // 40% threshold for FaceNet with standard preprocessing
         // Lowered from 70% to 40% to handle NFC vs Live photo quality/lighting differences
-        // With gamma + mean/std: same person 0.40-0.85, different person 0.15-0.40
-        // Gamma correction recovers details in over/underexposed images before normalization
+        // With gamma + standard [-1,1]: same person 0.40-0.85, different person 0.05-0.30
+        // Gamma correction recovers details, then standard FaceNet normalization (x-127.5)/127.5
         // More realistic for production (NFC photos are low quality 240x320px)
 
         this.currentFaceData = null; // Current face data from processFaceData
