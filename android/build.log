@@ -1,0 +1,654 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/deneme/.gradle/wrapper/dists/gradle-8.7-bin/bhs2wmbdwecv87pi65oeuq5iu/gradle-8.7/lib/native-platform-0.22-milestone-25.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.7/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Configuration on demand is an incubating feature.
+
+> Configure project :
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by build file 'build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven2' was added by build file 'build.gradle'
+
+> Configure project :bam.tech_react-native-image-resizer
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo2' was added by build file '../node_modules/@bam.tech/react-native-image-resizer/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google2' was added by build file '../node_modules/@bam.tech/react-native-image-resizer/android/build.gradle'
+
+> Configure project :react-native-gesture-handler
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo2' was added by build file '../node_modules/react-native-gesture-handler/android/build.gradle'
+
+> Configure project :react-native-image-crop-picker
+Build was configured to prefer settings repositories over project repositories but repository 'maven3' was added by build file '../node_modules/react-native-image-crop-picker/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google2' was added by build file '../node_modules/react-native-image-crop-picker/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo2' was added by build file '../node_modules/react-native-image-crop-picker/android/build.gradle'
+
+> Configure project :react-native-ml-kit_text-recognition
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo2' was added by build file '../node_modules/@react-native-ml-kit/text-recognition/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenLocal' was added by build file '../node_modules/@react-native-ml-kit/text-recognition/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven3' was added by build file '../node_modules/@react-native-ml-kit/text-recognition/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven4' was added by build file '../node_modules/@react-native-ml-kit/text-recognition/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google2' was added by build file '../node_modules/@react-native-ml-kit/text-recognition/android/build.gradle'
+
+> Configure project :react-native-nfc-manager
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo2' was added by build file '../node_modules/react-native-nfc-manager/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven3' was added by build file '../node_modules/react-native-nfc-manager/android/build.gradle'
+
+> Configure project :react-native-permissions
+Build was configured to prefer settings repositories over project repositories but repository 'MavenLocal' was added by build file '../node_modules/react-native-permissions/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo2' was added by build file '../node_modules/react-native-permissions/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven3' was added by build file '../node_modules/react-native-permissions/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven4' was added by build file '../node_modules/react-native-permissions/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google2' was added by build file '../node_modules/react-native-permissions/android/build.gradle'
+
+> Configure project :react-native-reanimated
+Android gradle plugin: 8.6.1
+Gradle: 8.7
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo2' was added by build file '../node_modules/react-native-reanimated/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenLocal' was added by build file '../node_modules/react-native-reanimated/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven3' was added by build file '../node_modules/react-native-reanimated/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven4' was added by build file '../node_modules/react-native-reanimated/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google2' was added by build file '../node_modules/react-native-reanimated/android/build.gradle'
+
+> Configure project :react-native-safe-area-context
+Build was configured to prefer settings repositories over project repositories but repository 'Google2' was added by build file '../node_modules/react-native-safe-area-context/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'maven3' was added by build file '../node_modules/react-native-safe-area-context/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo2' was added by build file '../node_modules/react-native-safe-area-context/android/build.gradle'
+
+> Configure project :react-native-screens
+Build was configured to prefer settings repositories over project repositories but repository 'maven3' was added by build file '../node_modules/react-native-screens/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo2' was added by build file '../node_modules/react-native-screens/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenLocal' was added by build file '../node_modules/react-native-screens/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'Google2' was added by build file '../node_modules/react-native-screens/android/build.gradle'
+
+> Configure project :react-native-tts
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo2' was added by build file '../node_modules/react-native-tts/android/build.gradle'
+
+> Configure project :react-native-vision-camera
+[VisionCamera] Thank you for using VisionCamera ❤️
+[VisionCamera] If you enjoy using VisionCamera, please consider sponsoring this project: https://github.com/sponsors/mrousavy
+[VisionCamera] node_modules found at /Users/deneme/Documents/GitHub/ocr/node_modules
+[VisionCamera] VisionCamera_enableFrameProcessors is set to true!
+[VisionCamera] react-native-worklets-core found, Frame Processors are enabled!
+[VisionCamera] VisionCamera_enableCodeScanner is set to false!
+Build was configured to prefer settings repositories over project repositories but repository 'Google2' was added by build file '../node_modules/react-native-vision-camera/android/build.gradle'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo2' was added by build file '../node_modules/react-native-vision-camera/android/build.gradle'
+
+> Task :react-native-nfc-manager:preBuild UP-TO-DATE
+> Task :react-native-safe-area-context:preBuild UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:preBuild UP-TO-DATE
+> Task :react-native-permissions:preBuild UP-TO-DATE
+> Task :react-native-gesture-handler:preBuild UP-TO-DATE
+> Task :react-native-reanimated:assertLatestReactNativeWithNewArchitectureTask SKIPPED
+> Task :bam.tech_react-native-image-resizer:preBuild UP-TO-DATE
+> Task :react-native-image-crop-picker:preBuild UP-TO-DATE
+> Task :react-native-fs:preBuild UP-TO-DATE
+> Task :react-native-reanimated:assertMinimalReactNativeVersionTask SKIPPED
+> Task :bam.tech_react-native-image-resizer:preDebugBuild UP-TO-DATE
+> Task :react-native-fs:preDebugBuild UP-TO-DATE
+> Task :react-native-safe-area-context:preDebugBuild UP-TO-DATE
+> Task :react-native-nfc-manager:preDebugBuild UP-TO-DATE
+> Task :react-native-gesture-handler:preDebugBuild UP-TO-DATE
+> Task :react-native-image-crop-picker:preDebugBuild UP-TO-DATE
+> Task :react-native-permissions:preDebugBuild UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:preDebugBuild UP-TO-DATE
+> Task :app:generatePackageList
+> Task :app:preBuild
+> Task :app:preDebugBuild
+> Task :react-native-permissions:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-safe-area-context:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-image-crop-picker:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-fs:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-gesture-handler:writeDebugAarMetadata UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-nfc-manager:writeDebugAarMetadata UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :react-native-screens:preBuild UP-TO-DATE
+> Task :react-native-tts:preBuild UP-TO-DATE
+> Task :react-native-screens:preDebugBuild UP-TO-DATE
+> Task :react-native-tts:preDebugBuild UP-TO-DATE
+> Task :react-native-gesture-handler:generateDebugResValues UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:generateDebugResValues UP-TO-DATE
+> Task :react-native-image-crop-picker:generateDebugResValues UP-TO-DATE
+> Task :react-native-fs:generateDebugResValues UP-TO-DATE
+> Task :react-native-screens:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-tts:writeDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:generateDebugResValues UP-TO-DATE
+> Task :react-native-reanimated:prepareHeadersForPrefab UP-TO-DATE
+> Task :react-native-reanimated:preBuild UP-TO-DATE
+> Task :react-native-reanimated:preDebugBuild UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:generateDebugResources UP-TO-DATE
+> Task :react-native-reanimated:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-image-crop-picker:generateDebugResources UP-TO-DATE
+> Task :react-native-nfc-manager:generateDebugResValues UP-TO-DATE
+> Task :react-native-fs:generateDebugResources UP-TO-DATE
+> Task :react-native-gesture-handler:generateDebugResources UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:generateDebugResources UP-TO-DATE
+> Task :react-native-nfc-manager:generateDebugResources UP-TO-DATE
+> Task :react-native-permissions:generateDebugResValues UP-TO-DATE
+> Task :react-native-permissions:generateDebugResources UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :react-native-reanimated:generateDebugResValues UP-TO-DATE
+> Task :react-native-reanimated:generateDebugResources UP-TO-DATE
+> Task :react-native-permissions:packageDebugResources UP-TO-DATE
+> Task :react-native-nfc-manager:packageDebugResources UP-TO-DATE
+> Task :react-native-fs:packageDebugResources UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:packageDebugResources UP-TO-DATE
+> Task :react-native-image-crop-picker:packageDebugResources UP-TO-DATE
+> Task :react-native-worklets-core:prepareHeaders UP-TO-DATE
+> Task :react-native-gesture-handler:packageDebugResources UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:packageDebugResources UP-TO-DATE
+> Task :react-native-reanimated:packageDebugResources UP-TO-DATE
+> Task :react-native-worklets-core:preBuild UP-TO-DATE
+> Task :react-native-worklets-core:preDebugBuild UP-TO-DATE
+> Task :react-native-safe-area-context:generateDebugResValues UP-TO-DATE
+> Task :react-native-screens:generateDebugResValues UP-TO-DATE
+> Task :react-native-tts:generateDebugResValues UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-fs:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-gesture-handler:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-safe-area-context:generateDebugResources UP-TO-DATE
+> Task :react-native-vision-camera:prepareHeaders UP-TO-DATE
+> Task :react-native-worklets-core:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-vision-camera:preBuild UP-TO-DATE
+> Task :react-native-image-crop-picker:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-vision-camera:preDebugBuild UP-TO-DATE
+> Task :react-native-worklets-core:generateDebugResValues UP-TO-DATE
+> Task :react-native-vision-camera:writeDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :react-native-tts:generateDebugResources UP-TO-DATE
+> Task :react-native-vision-camera:generateDebugResValues UP-TO-DATE
+> Task :react-native-worklets-core:generateDebugResources UP-TO-DATE
+> Task :react-native-screens:generateDebugResources UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:processDebugManifest UP-TO-DATE
+> Task :react-native-gesture-handler:processDebugManifest UP-TO-DATE
+> Task :react-native-vision-camera:generateDebugResources UP-TO-DATE
+> Task :react-native-fs:processDebugManifest UP-TO-DATE
+> Task :react-native-safe-area-context:packageDebugResources UP-TO-DATE
+> Task :react-native-image-crop-picker:processDebugManifest UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-nfc-manager:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-reanimated:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-safe-area-context:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-permissions:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-tts:packageDebugResources UP-TO-DATE
+> Task :react-native-worklets-core:packageDebugResources UP-TO-DATE
+> Task :react-native-tts:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-vision-camera:packageDebugResources UP-TO-DATE
+> Task :react-native-nfc-manager:processDebugManifest UP-TO-DATE
+> Task :react-native-worklets-core:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:processDebugManifest UP-TO-DATE
+> Task :react-native-vision-camera:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-fs:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-permissions:processDebugManifest UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-reanimated:processDebugManifest UP-TO-DATE
+> Task :react-native-gesture-handler:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-tts:processDebugManifest UP-TO-DATE
+> Task :react-native-worklets-core:processDebugManifest UP-TO-DATE
+> Task :react-native-image-crop-picker:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-vision-camera:processDebugManifest UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-safe-area-context:processDebugManifest UP-TO-DATE
+> Task :react-native-nfc-manager:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-screens:packageDebugResources UP-TO-DATE
+> Task :react-native-permissions:compileDebugLibraryResources UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-gesture-handler:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-fs:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-reanimated:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-permissions:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-screens:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-safe-area-context:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-nfc-manager:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-image-crop-picker:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-safe-area-context:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-screens:processDebugManifest UP-TO-DATE
+> Task :react-native-screens:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-screens:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-permissions:generateDebugRFile UP-TO-DATE
+> Task :react-native-tts:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-fs:generateDebugRFile UP-TO-DATE
+> Task :react-native-tts:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-vision-camera:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-vision-camera:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-worklets-core:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-safe-area-context:generateDebugRFile UP-TO-DATE
+> Task :react-native-reanimated:generateDebugRFile UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:generateDebugRFile UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:generateDebugRFile UP-TO-DATE
+> Task :react-native-reanimated:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-fs:generateDebugBuildConfig UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-reanimated:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-tts:generateDebugRFile UP-TO-DATE
+> Task :react-native-fs:javaPreCompileDebug UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-reanimated:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-reanimated:packageNdkLibs NO-SOURCE
+> Task :react-native-ml-kit_text-recognition:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-image-crop-picker:generateDebugRFile FROM-CACHE
+> Task :react-native-worklets-core:generateDebugRFile UP-TO-DATE
+> Task :react-native-worklets-core:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-gesture-handler:generateDebugRFile UP-TO-DATE
+> Task :react-native-gesture-handler:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-gesture-handler:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-image-crop-picker:generateDebugBuildConfig FROM-CACHE
+> Task :react-native-permissions:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-image-crop-picker:javaPreCompileDebug FROM-CACHE
+> Task :react-native-permissions:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-nfc-manager:generateDebugRFile UP-TO-DATE
+> Task :react-native-screens:generateDebugRFile UP-TO-DATE
+> Task :react-native-safe-area-context:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-nfc-manager:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-vision-camera:generateDebugRFile UP-TO-DATE
+> Task :react-native-nfc-manager:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-screens:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-fs:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-permissions:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-reanimated:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:compileDebugJavaWithJavac UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-fs:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-permissions:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-reanimated:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-tts:generateDebugBuildConfig UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:mergeDebugShaders UP-TO-DATE
+> Task :react-native-vision-camera:generateDebugBuildConfig UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:compileDebugShaders NO-SOURCE
+> Task :bam.tech_react-native-image-resizer:generateDebugAssets UP-TO-DATE
+> Task :react-native-tts:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-nfc-manager:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-vision-camera:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-nfc-manager:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-fs:mergeDebugShaders UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:mergeDebugShaders UP-TO-DATE
+> Task :react-native-fs:compileDebugShaders NO-SOURCE
+> Task :react-native-fs:generateDebugAssets UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:compileDebugShaders NO-SOURCE
+> Task :react-native-ml-kit_text-recognition:generateDebugAssets UP-TO-DATE
+> Task :react-native-fs:packageDebugAssets UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:packageDebugAssets UP-TO-DATE
+> Task :react-native-permissions:mergeDebugShaders UP-TO-DATE
+> Task :react-native-nfc-manager:mergeDebugShaders UP-TO-DATE
+> Task :react-native-permissions:compileDebugShaders NO-SOURCE
+> Task :react-native-permissions:generateDebugAssets UP-TO-DATE
+> Task :react-native-nfc-manager:compileDebugShaders NO-SOURCE
+> Task :react-native-nfc-manager:generateDebugAssets UP-TO-DATE
+> Task :react-native-permissions:packageDebugAssets UP-TO-DATE
+> Task :react-native-nfc-manager:packageDebugAssets UP-TO-DATE
+> Task :react-native-reanimated:mergeDebugShaders UP-TO-DATE
+> Task :react-native-image-crop-picker:compileDebugJavaWithJavac FROM-CACHE
+> Task :react-native-reanimated:compileDebugShaders NO-SOURCE
+> Task :react-native-reanimated:generateDebugAssets UP-TO-DATE
+> Task :react-native-reanimated:packageDebugAssets UP-TO-DATE
+> Task :react-native-vision-camera:mergeDebugShaders UP-TO-DATE
+> Task :react-native-vision-camera:compileDebugShaders NO-SOURCE
+> Task :react-native-vision-camera:generateDebugAssets UP-TO-DATE
+> Task :react-native-vision-camera:packageDebugAssets UP-TO-DATE
+> Task :react-native-reanimated:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:packageDebugAssets UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-worklets-core:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-worklets-core:javaPreCompileDebug UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-fs:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :app:checkDebugAarMetadata
+> Task :react-native-nfc-manager:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-permissions:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-fs:processDebugJavaRes NO-SOURCE
+> Task :bam.tech_react-native-image-resizer:processDebugJavaRes NO-SOURCE
+> Task :react-native-ml-kit_text-recognition:processDebugJavaRes NO-SOURCE
+> Task :react-native-nfc-manager:processDebugJavaRes NO-SOURCE
+> Task :react-native-permissions:processDebugJavaRes NO-SOURCE
+> Task :react-native-reanimated:processDebugJavaRes NO-SOURCE
+> Task :react-native-ml-kit_text-recognition:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-reanimated:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-tts:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-worklets-core:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-worklets-core:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-tts:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-worklets-core:mergeDebugShaders UP-TO-DATE
+> Task :react-native-tts:mergeDebugShaders UP-TO-DATE
+> Task :react-native-worklets-core:compileDebugShaders NO-SOURCE
+> Task :react-native-worklets-core:generateDebugAssets UP-TO-DATE
+> Task :react-native-tts:compileDebugShaders NO-SOURCE
+> Task :react-native-tts:generateDebugAssets UP-TO-DATE
+> Task :react-native-worklets-core:packageDebugAssets UP-TO-DATE
+> Task :react-native-tts:packageDebugAssets UP-TO-DATE
+> Task :react-native-worklets-core:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-tts:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-worklets-core:processDebugJavaRes NO-SOURCE
+> Task :react-native-tts:processDebugJavaRes NO-SOURCE
+> Task :react-native-permissions:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-nfc-manager:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-fs:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-tts:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-worklets-core:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:mergeDebugJniLibFolders UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-fs:mergeDebugJniLibFolders UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:mergeDebugJniLibFolders UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-fs:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-image-crop-picker:bundleLibCompileToJarDebug
+> Task :react-native-ml-kit_text-recognition:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-fs:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-permissions:mergeDebugJniLibFolders UP-TO-DATE
+> Task :react-native-permissions:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-permissions:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-tts:mergeDebugJniLibFolders UP-TO-DATE
+> Task :react-native-tts:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-tts:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths
+> Task :react-native-nfc-manager:mergeDebugJniLibFolders UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:stripDebugDebugSymbols NO-SOURCE
+> Task :react-native-nfc-manager:mergeDebugNativeLibs NO-SOURCE
+> Task :bam.tech_react-native-image-resizer:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-nfc-manager:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-fs:stripDebugDebugSymbols NO-SOURCE
+> Task :react-native-fs:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-gesture-handler:compileDebugKotlin UP-TO-DATE
+> Task :react-native-image-crop-picker:mergeDebugShaders
+> Task :react-native-screens:compileDebugKotlin UP-TO-DATE
+> Task :react-native-image-crop-picker:compileDebugShaders NO-SOURCE
+> Task :react-native-image-crop-picker:generateDebugAssets UP-TO-DATE
+> Task :react-native-fs:extractDebugAnnotations UP-TO-DATE
+> Task :react-native-screens:javaPreCompileDebug UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:extractDebugAnnotations UP-TO-DATE
+> Task :react-native-safe-area-context:compileDebugKotlin UP-TO-DATE
+> Task :react-native-image-crop-picker:packageDebugAssets
+> Task :react-native-fs:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :react-native-safe-area-context:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-fs:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-fs:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-image-crop-picker:processDebugJavaRes NO-SOURCE
+> Task :bam.tech_react-native-image-resizer:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:prepareDebugArtProfile UP-TO-DATE
+> Task :react-native-image-crop-picker:bundleLibRuntimeToJarDebug
+> Task :react-native-fs:prepareDebugArtProfile UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-gesture-handler:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-screens:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-safe-area-context:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-image-crop-picker:mergeDebugJniLibFolders
+> Task :react-native-screens:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-gesture-handler:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-safe-area-context:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-screens:mergeDebugShaders UP-TO-DATE
+> Task :react-native-gesture-handler:mergeDebugShaders UP-TO-DATE
+> Task :react-native-safe-area-context:mergeDebugShaders UP-TO-DATE
+> Task :react-native-image-crop-picker:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-screens:compileDebugShaders NO-SOURCE
+> Task :bam.tech_react-native-image-resizer:mergeDebugJavaResource UP-TO-DATE
+> Task :react-native-screens:generateDebugAssets UP-TO-DATE
+> Task :react-native-gesture-handler:compileDebugShaders NO-SOURCE
+> Task :react-native-safe-area-context:compileDebugShaders NO-SOURCE
+> Task :react-native-gesture-handler:generateDebugAssets UP-TO-DATE
+> Task :react-native-safe-area-context:generateDebugAssets UP-TO-DATE
+> Task :react-native-safe-area-context:packageDebugAssets UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:syncDebugLibJars UP-TO-DATE
+> Task :react-native-screens:packageDebugAssets UP-TO-DATE
+> Task :react-native-gesture-handler:packageDebugAssets UP-TO-DATE
+> Task :react-native-safe-area-context:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-gesture-handler:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-screens:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:bundleDebugAar UP-TO-DATE
+> Task :react-native-image-crop-picker:copyDebugJniLibsProjectOnly
+> Task :react-native-image-crop-picker:bundleLibRuntimeToDirDebug
+> Task :react-native-gesture-handler:processDebugJavaRes UP-TO-DATE
+> Task :react-native-safe-area-context:processDebugJavaRes UP-TO-DATE
+> Task :react-native-screens:processDebugJavaRes UP-TO-DATE
+> Task :bam.tech_react-native-image-resizer:assembleDebug UP-TO-DATE
+> Task :react-native-image-crop-picker:stripDebugDebugSymbols NO-SOURCE
+> Task :react-native-image-crop-picker:copyDebugJniLibsProjectAndLocalJars
+> Task :react-native-ml-kit_text-recognition:stripDebugDebugSymbols NO-SOURCE
+> Task :react-native-ml-kit_text-recognition:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-safe-area-context:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :app:mergeDebugResources FROM-CACHE
+> Task :react-native-ml-kit_text-recognition:extractDebugAnnotations UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :react-native-image-crop-picker:extractDebugAnnotations FROM-CACHE
+> Task :react-native-reanimated:configureCMakeDebug[arm64-v8a]
+> Task :react-native-image-crop-picker:extractDeepLinksForAarDebug FROM-CACHE
+> Task :app:extractDeepLinksDebug FROM-CACHE
+> Task :react-native-image-crop-picker:mergeDebugGeneratedProguardFiles
+> Task :react-native-fs:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-gesture-handler:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-safe-area-context:mergeDebugJniLibFolders UP-TO-DATE
+> Task :react-native-image-crop-picker:mergeDebugConsumerProguardFiles
+> Task :react-native-fs:mergeDebugJavaResource UP-TO-DATE
+> Task :react-native-gesture-handler:mergeDebugJniLibFolders UP-TO-DATE
+> Task :react-native-screens:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-safe-area-context:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-fs:syncDebugLibJars UP-TO-DATE
+> Task :react-native-gesture-handler:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-safe-area-context:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-gesture-handler:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :react-native-gesture-handler:stripDebugDebugSymbols NO-SOURCE
+> Task :react-native-fs:bundleDebugAar UP-TO-DATE
+> Task :react-native-fs:assembleDebug UP-TO-DATE
+> Task :react-native-gesture-handler:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:prepareDebugArtProfile UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-gesture-handler:extractDebugAnnotations UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:mergeDebugJavaResource UP-TO-DATE
+> Task :react-native-gesture-handler:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :react-native-gesture-handler:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:syncDebugLibJars UP-TO-DATE
+> Task :react-native-gesture-handler:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:bundleDebugAar UP-TO-DATE
+> Task :react-native-ml-kit_text-recognition:assembleDebug UP-TO-DATE
+> Task :react-native-gesture-handler:prepareDebugArtProfile UP-TO-DATE
+> Task :react-native-nfc-manager:stripDebugDebugSymbols NO-SOURCE
+> Task :react-native-gesture-handler:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-nfc-manager:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-gesture-handler:mergeDebugJavaResource UP-TO-DATE
+> Task :react-native-gesture-handler:syncDebugLibJars UP-TO-DATE
+> Task :react-native-gesture-handler:bundleDebugAar UP-TO-DATE
+> Task :react-native-nfc-manager:extractDebugAnnotations UP-TO-DATE
+> Task :react-native-gesture-handler:assembleDebug UP-TO-DATE
+> Task :react-native-permissions:stripDebugDebugSymbols NO-SOURCE
+> Task :react-native-nfc-manager:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :react-native-permissions:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-nfc-manager:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-nfc-manager:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :react-native-nfc-manager:prepareDebugArtProfile UP-TO-DATE
+> Task :react-native-nfc-manager:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-image-crop-picker:prepareDebugArtProfile
+> Task :react-native-nfc-manager:mergeDebugJavaResource UP-TO-DATE
+> Task :react-native-permissions:extractDebugAnnotations UP-TO-DATE
+> Task :react-native-safe-area-context:stripDebugDebugSymbols NO-SOURCE
+> Task :react-native-reanimated:buildCMakeDebug[arm64-v8a]
+> Task :react-native-nfc-manager:syncDebugLibJars UP-TO-DATE
+> Task :react-native-safe-area-context:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-permissions:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :react-native-permissions:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-nfc-manager:bundleDebugAar UP-TO-DATE
+> Task :react-native-nfc-manager:assembleDebug UP-TO-DATE
+> Task :react-native-permissions:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :react-native-tts:stripDebugDebugSymbols NO-SOURCE
+> Task :react-native-permissions:prepareDebugArtProfile UP-TO-DATE
+> Task :react-native-tts:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :react-native-permissions:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-permissions:mergeDebugJavaResource UP-TO-DATE
+> Task :react-native-permissions:syncDebugLibJars UP-TO-DATE
+> Task :react-native-safe-area-context:extractDebugAnnotations UP-TO-DATE
+> Task :react-native-permissions:bundleDebugAar UP-TO-DATE
+> Task :react-native-image-crop-picker:prepareLintJarForPublish
+> Task :react-native-permissions:assembleDebug UP-TO-DATE
+> Task :react-native-safe-area-context:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :react-native-safe-area-context:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-safe-area-context:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :react-native-tts:extractDebugAnnotations UP-TO-DATE
+> Task :react-native-tts:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :react-native-safe-area-context:prepareDebugArtProfile UP-TO-DATE
+> Task :react-native-tts:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-safe-area-context:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-tts:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :react-native-tts:prepareDebugArtProfile UP-TO-DATE
+> Task :react-native-safe-area-context:mergeDebugJavaResource UP-TO-DATE
+> Task :react-native-screens:configureCMakeDebug[arm64-v8a]
+> Task :react-native-tts:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-safe-area-context:syncDebugLibJars UP-TO-DATE
+> Task :react-native-tts:mergeDebugJavaResource UP-TO-DATE
+> Task :react-native-safe-area-context:bundleDebugAar UP-TO-DATE
+> Task :react-native-tts:syncDebugLibJars UP-TO-DATE
+> Task :react-native-safe-area-context:assembleDebug UP-TO-DATE
+> Task :react-native-tts:bundleDebugAar UP-TO-DATE
+> Task :react-native-tts:assembleDebug UP-TO-DATE
+> Task :react-native-screens:buildCMakeDebug[arm64-v8a]
+> Task :react-native-screens:configureCMakeDebug[armeabi-v7a]
+> Task :app:processDebugMainManifest FROM-CACHE
+> Task :react-native-vision-camera:compileDebugKotlin UP-TO-DATE
+> Task :app:processDebugManifest FROM-CACHE
+> Task :app:processDebugManifestForPackage FROM-CACHE
+> Task :react-native-image-crop-picker:mergeDebugJavaResource
+> Task :react-native-image-crop-picker:syncDebugLibJars FROM-CACHE
+> Task :react-native-vision-camera:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-vision-camera:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-vision-camera:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-vision-camera:processDebugJavaRes UP-TO-DATE
+> Task :react-native-vision-camera:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-vision-camera:mergeDebugJniLibFolders UP-TO-DATE
+> Task :react-native-vision-camera:extractDebugAnnotations UP-TO-DATE
+> Task :react-native-vision-camera:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :react-native-vision-camera:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :react-native-vision-camera:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :react-native-vision-camera:prepareDebugArtProfile UP-TO-DATE
+> Task :react-native-vision-camera:prepareLintJarForPublish UP-TO-DATE
+> Task :react-native-image-crop-picker:bundleDebugAar
+> Task :react-native-image-crop-picker:assembleDebug
+> Task :react-native-vision-camera:mergeDebugJavaResource UP-TO-DATE
+> Task :react-native-vision-camera:syncDebugLibJars UP-TO-DATE
+> Task :app:processDebugResources FROM-CACHE
+> Task :react-native-screens:buildCMakeDebug[armeabi-v7a]
+> Task :react-native-worklets-core:configureCMakeDebug[arm64-v8a]
+> Task :react-native-worklets-core:buildCMakeDebug[arm64-v8a]
+> Task :react-native-reanimated:configureCMakeDebug[armeabi-v7a]
+
+> Task :app:compileDebugJavaWithJavac FAILED
+/Users/deneme/Documents/GitHub/ocr/android/app/build/generated/rncli/src/main/java/com/facebook/react/PackageList.java:17: error: package com.reactnativemlkit.textrecognition does not exist
+import com.reactnativemlkit.textrecognition.TextRecognitionPackage;
+                                           ^
+/Users/deneme/Documents/GitHub/ocr/android/app/src/main/java/com/ocr/modules/OCRModule.java:348: warning: [removal] onCatalystInstanceDestroy() in NativeModule has been deprecated and marked for removal
+    public void onCatalystInstanceDestroy() {
+                ^
+/Users/deneme/Documents/GitHub/ocr/android/app/src/main/java/com/ocr/modules/OCRModule.java:349: warning: [removal] onCatalystInstanceDestroy() in NativeModule has been deprecated and marked for removal
+        super.onCatalystInstanceDestroy();
+             ^
+/Users/deneme/Documents/GitHub/ocr/android/app/src/main/java/com/sdk/nfc/NfcReaderModule.java:470: warning: [removal] onCatalystInstanceDestroy() in NativeModule has been deprecated and marked for removal
+    public void onCatalystInstanceDestroy() {
+                ^
+/Users/deneme/Documents/GitHub/ocr/android/app/src/main/java/com/sdk/nfc/NfcReaderModule.java:471: warning: [removal] onCatalystInstanceDestroy() in NativeModule has been deprecated and marked for removal
+        super.onCatalystInstanceDestroy();
+             ^
+/Users/deneme/Documents/GitHub/ocr/android/app/build/generated/rncli/src/main/java/com/facebook/react/PackageList.java:86: error: cannot find symbol
+      new TextRecognitionPackage(),
+          ^
+  symbol:   class TextRecognitionPackage
+  location: class PackageList
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+2 errors
+4 warnings
+
+> Task :react-native-screens:configureCMakeDebug[x86]
+
+> Task :react-native-worklets-core:configureCMakeDebug[armeabi-v7a]
+C/C++: CMake Warning:
+C/C++:   Manually-specified variables were not used by the project:
+C/C++:     ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES
+
+> Task :react-native-reanimated:buildCMakeDebug[armeabi-v7a]
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.7/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUİLD FAILED in 16s
+376 actionable tasks: 30 executed, 13 from cache, 333 up-to-date
